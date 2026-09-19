@@ -3,6 +3,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
 } from "react";
@@ -16,7 +17,10 @@ import { TransactionEditor } from "@/components/TransactionEditor";
 import { TransactionForm } from "@/components/TransactionForm";
 import { TransactionList } from "@/components/TransactionList";
 import { useToast } from "@/components/ToastProvider";
-import { createTemplateFromTransaction } from "@/lib/db/crud";
+import {
+  createTemplateFromTransaction,
+  listTransactionsForMonth,
+} from "@/lib/db/crud";
 import { formatMoney } from "@/lib/format";
 import {
   useAccounts,
@@ -131,7 +135,7 @@ function SaveTemplateSheet({
 
 export function HomePage() {
   const ready = useSeedReady();
-  const { book } = useBook();
+  const { book, bookId } = useBook();
   const now = useMemo(() => new Date(), []);
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -141,10 +145,43 @@ export function HomePage() {
     "all",
   );
   const { show } = useToast();
+  const openedForBook = useRef<string | null>(null);
 
   const accounts = useAccounts();
   const categories = useCategories();
   const transactions = useMonthTransactions(year, month);
+
+  // Open the latest month that already has rows (e.g. 2026/9 after sync).
+  useEffect(() => {
+    if (!ready || !bookId) return;
+    if (openedForBook.current === bookId) return;
+    openedForBook.current = bookId;
+    let cancelled = false;
+    void (async () => {
+      const current = await listTransactionsForMonth(
+        bookId,
+        now.getFullYear(),
+        now.getMonth() + 1,
+      );
+      if (cancelled) return;
+      if (current.length > 0) return;
+      for (const [y, m] of [
+        [2026, 9],
+        [2026, 8],
+      ] as const) {
+        const rows = await listTransactionsForMonth(bookId, y, m);
+        if (cancelled) return;
+        if (rows.length > 0) {
+          setYear(y);
+          setMonth(m);
+          return;
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, bookId, now]);
 
   const visibleTransactions = useMemo(
     () =>
