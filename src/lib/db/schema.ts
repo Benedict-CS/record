@@ -10,7 +10,8 @@ import type {
   Transaction,
 } from "@/lib/types";
 
-export class LedgerDB extends Dexie {
+/** Record app database. IndexedDB name stays `ledger_db` so existing installs keep data. */
+export class RecordDB extends Dexie {
   books!: EntityTable<Book, "id">;
   accounts!: EntityTable<Account, "id">;
   categories!: EntityTable<Category, "id">;
@@ -183,7 +184,40 @@ export class LedgerDB extends Dexie {
         "id, book_id, user_id, kind, updated_at, sync_status, deleted_at, sort_order, [book_id+kind]",
       sync_state: "id",
     });
+    // v6: hold_status / release_transaction_id on transactions (no index change).
+    this.version(6)
+      .stores({
+        books:
+          "id, user_id, currency, updated_at, sync_status, deleted_at, sort_order",
+        accounts:
+          "id, book_id, user_id, updated_at, sync_status, deleted_at, sort_order",
+        categories:
+          "id, book_id, user_id, kind, updated_at, sync_status, deleted_at, sort_order, [book_id+kind]",
+        transactions:
+          "id, book_id, user_id, date, account_id, category_id, updated_at, sync_status, deleted_at, type, [book_id+date]",
+        budgets:
+          "id, book_id, user_id, year, month, category_id, updated_at, sync_status, deleted_at, [book_id+year+month]",
+        templates:
+          "id, book_id, user_id, updated_at, sync_status, deleted_at, sort_order, [book_id+sort_order]",
+        holdings:
+          "id, book_id, user_id, kind, updated_at, sync_status, deleted_at, sort_order, [book_id+kind]",
+        sync_state: "id",
+      })
+      .upgrade(async (tx) => {
+        const table = tx.table("transactions");
+        const rows = await table.toArray();
+        for (const row of rows) {
+          const patch: Record<string, unknown> = {};
+          if (row.hold_status === undefined) patch.hold_status = null;
+          if (row.release_transaction_id === undefined) {
+            patch.release_transaction_id = null;
+          }
+          if (Object.keys(patch).length > 0) {
+            await table.update(row.id, patch);
+          }
+        }
+      });
   }
 }
 
-export const db = new LedgerDB();
+export const db = new RecordDB();

@@ -80,6 +80,7 @@ type Props = {
     icon: string;
     color: string;
   }) => Promise<void> | void;
+  onDelete?: () => Promise<boolean | void> | boolean | void;
 };
 
 export function CategoryFormSheet({
@@ -87,6 +88,7 @@ export function CategoryFormSheet({
   category,
   onClose,
   onSubmit,
+  onDelete,
 }: Props) {
   const formId = useId();
   const kindLabelId = useId();
@@ -100,11 +102,12 @@ export function CategoryFormSheet({
   const [icon, setIcon] = useState(category?.icon || DEFAULT_ICON);
   const [color, setColor] = useState<string>(category?.color || DEFAULT_COLOR);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     const trimmed = name.trim();
-    if (!trimmed || saving) return;
+    if (!trimmed || saving || deleting) return;
     setSaving(true);
     try {
       await onSubmit({ name: trimmed, kind, icon, color });
@@ -116,6 +119,19 @@ export function CategoryFormSheet({
     }
   }
 
+  async function handleDelete() {
+    if (!onDelete || deleting || saving) return;
+    setDeleting(true);
+    try {
+      const deleted = await onDelete();
+      if (deleted !== false) onClose();
+    } catch {
+      // Caller shows toast.
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <BottomSheet
       open={open}
@@ -123,14 +139,26 @@ export function CategoryFormSheet({
       title={isEdit ? "編輯分類" : "新增分類"}
       leading={<CategoryIcon icon={icon} color={color} size="md" />}
       footer={
-        <button
-          type="submit"
-          form={formId}
-          disabled={!name.trim() || saving}
-          className="min-h-12 w-full rounded-xl bg-[var(--ink)] px-4 py-3 text-sm font-medium text-[var(--paper)] disabled:opacity-40"
-        >
-          {saving ? "儲存中…" : isEdit ? "儲存變更" : "新增分類"}
-        </button>
+        <div className="space-y-2">
+          <button
+            type="submit"
+            form={formId}
+            disabled={!name.trim() || saving || deleting}
+            className="min-h-12 w-full rounded-xl bg-[var(--ink)] px-4 py-3 text-sm font-medium text-[var(--paper)] disabled:opacity-40"
+          >
+            {saving ? "儲存中…" : isEdit ? "儲存變更" : "新增分類"}
+          </button>
+          {isEdit && onDelete ? (
+            <button
+              type="button"
+              disabled={saving || deleting}
+              onClick={() => void handleDelete()}
+              className="min-h-11 w-full rounded-xl text-sm font-medium text-rose-600 disabled:opacity-40"
+            >
+              {deleting ? "刪除中…" : "刪除分類"}
+            </button>
+          ) : null}
+        </div>
       }
     >
       <form id={formId} onSubmit={handleSubmit} className="space-y-5">

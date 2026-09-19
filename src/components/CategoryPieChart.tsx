@@ -37,6 +37,7 @@ export function CategoryPieChart({
               paddingAngle={1.5}
               stroke="var(--surface)"
               strokeWidth={2}
+              isAnimationActive={false}
             >
               {items.map((item) => (
                 <Cell

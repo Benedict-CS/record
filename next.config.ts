@@ -13,9 +13,10 @@ const withPWA = withPWAInit({
   reloadOnOnline: true,
   workboxOptions: {
     disableDevLogs: true,
-    // Let the new worker wait so PwaUpdatePrompt can ask before it takes over;
-    // the generated worker then listens for postMessage({ type: "SKIP_WAITING" }).
-    skipWaiting: false,
+    // Activate new builds immediately so UI fixes are not stuck behind a
+    // waiting service worker / "有新版本" prompt the user never taps.
+    skipWaiting: true,
+    clientsClaim: true,
   },
 });
 

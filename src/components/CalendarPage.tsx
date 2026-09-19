@@ -64,7 +64,12 @@ export function CalendarPage() {
   const dayMap = useMemo(() => {
     const map = new Map<
       string,
-      { income: number; expense: number; transactions: typeof transactions }
+      {
+        income: number;
+        expense: number;
+        held: number;
+        transactions: typeof transactions;
+      }
     >();
     for (const bucket of groupTransactionsByDay(transactions)) {
       map.set(bucket.date, bucket);
@@ -106,17 +111,17 @@ export function CalendarPage() {
       ) : (
         <div className="space-y-4">
           <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-3">
-            <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="mb-3 flex items-center justify-between gap-1">
               <button
                 type="button"
                 onClick={() => shiftMonth(-1)}
-                className="touch-target rounded-md px-3 text-sm text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]"
                 aria-label="上一個月"
+                className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-[var(--line)] bg-[var(--paper)] text-lg text-[var(--ink)] active:scale-[0.98]"
               >
-                上月
+                ‹
               </button>
               <p
-                className="text-sm font-medium tracking-wide text-[var(--ink)]"
+                className="text-sm font-semibold tracking-wide tabular-nums text-[var(--ink)]"
                 aria-live="polite"
               >
                 {year} 年 {month} 月
@@ -124,10 +129,10 @@ export function CalendarPage() {
               <button
                 type="button"
                 onClick={() => shiftMonth(1)}
-                className="touch-target rounded-md px-3 text-sm text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]"
                 aria-label="下一個月"
+                className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-[var(--line)] bg-[var(--paper)] text-lg text-[var(--ink)] active:scale-[0.98]"
               >
-                下月
+                ›
               </button>
             </div>
 
@@ -162,7 +167,12 @@ export function CalendarPage() {
                 if (isToday) labelParts.push("今天");
                 if (bucket && bucket.expense > 0) {
                   labelParts.push(
-                    `支出 ${formatMoney(bucket.expense, currency)}`,
+                    `實際花掉 ${formatMoney(bucket.expense, currency)}`,
+                  );
+                }
+                if (bucket && bucket.held > 0) {
+                  labelParts.push(
+                    `扣住 ${formatMoney(bucket.held, currency)}`,
                   );
                 }
                 if (bucket && bucket.income > 0) {
@@ -175,7 +185,15 @@ export function CalendarPage() {
                   <button
                     key={dateKey}
                     type="button"
-                    onClick={() => setSelectedDate(dateKey)}
+                    onClick={() => {
+                      setSelectedDate(dateKey);
+                      // Bring the day panel into view after selecting a cell.
+                      window.requestAnimationFrame(() => {
+                        document
+                          .getElementById("day-panel")
+                          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      });
+                    }}
                     aria-label={labelParts.join("，")}
                     aria-pressed={isSelected}
                     className={[
@@ -201,6 +219,11 @@ export function CalendarPage() {
                       {bucket && bucket.expense > 0 ? (
                         <span className="block truncate text-[10px] tabular-nums leading-tight text-rose-700">
                           -{compactMoney(bucket.expense, currency)}
+                        </span>
+                      ) : null}
+                      {bucket && bucket.held > 0 ? (
+                        <span className="block truncate text-[10px] tabular-nums leading-tight text-amber-800">
+                          扣{compactMoney(bucket.held, currency)}
                         </span>
                       ) : null}
                       {bucket && bucket.income > 0 ? (

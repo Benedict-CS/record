@@ -32,15 +32,26 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
   const summary = useMemo(() => {
     let income = 0;
     let expense = 0;
+    let held = 0;
     for (const tx of transactions) {
-      if (tx.type === "income" && tx.account_id === accountId) income += tx.amount;
-      if (tx.type === "expense" && tx.account_id === accountId) expense += tx.amount;
+      if (tx.type === "income" && tx.account_id === accountId) {
+        income += tx.amount;
+      }
+      if (tx.type === "expense" && tx.account_id === accountId) {
+        expense += tx.amount;
+      }
+      if (
+        tx.type === "hold" &&
+        tx.account_id === accountId
+      ) {
+        held += tx.amount;
+      }
       if (tx.type === "transfer") {
         if (tx.account_id === accountId) expense += tx.amount;
         if (tx.transfer_account_id === accountId) income += tx.amount;
       }
     }
-    return { income, expense };
+    return { income, expense, held };
   }, [transactions, accountId]);
 
   return (
@@ -65,7 +76,7 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
               期初 {formatMoney(account.opening_balance ?? 0, currency)}
             </p>
           </section>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5">
               <p className="text-[11px] text-[var(--muted)]">流入</p>
               <p className="mt-0.5 text-sm font-semibold tabular-nums text-emerald-700">
@@ -73,9 +84,15 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
               </p>
             </div>
             <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5">
-              <p className="text-[11px] text-[var(--muted)]">流出</p>
+              <p className="text-[11px] text-[var(--muted)]">實際花掉</p>
               <p className="mt-0.5 text-sm font-semibold tabular-nums text-rose-700">
                 {formatMoney(summary.expense, currency)}
+              </p>
+            </div>
+            <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5">
+              <p className="text-[11px] text-[var(--muted)]">被扣住</p>
+              <p className="mt-0.5 text-sm font-semibold tabular-nums text-amber-800">
+                {formatMoney(summary.held, currency)}
               </p>
             </div>
           </div>

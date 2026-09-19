@@ -4,27 +4,28 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { BookSwitcher } from "@/components/BookSwitcher";
-import { SyncBadge } from "@/components/SyncBadge";
+import { QuickAddFab } from "@/components/QuickAddFab";
+import { SyncBadge, SyncBootBanner } from "@/components/SyncBadge";
 import { useAuth } from "@/components/AuthProvider";
 
 const NAV = [
   { href: "/", label: "記帳", match: "exact" as const },
   { href: "/calendar", label: "日曆", match: "prefix" as const },
+  { href: "/holdings", label: "存款", match: "prefix" as const },
   { href: "/reports", label: "報表", match: "prefix" as const },
-  { href: "/search", label: "搜尋", match: "prefix" as const },
   { href: "/more", label: "更多", match: "more" as const },
 ];
 
 const MORE_PREFIXES = [
   "/more",
   "/accounts",
-  "/holdings",
   "/categories",
   "/budgets",
   "/login",
   "/settings",
   "/books",
   "/templates",
+  "/search",
 ];
 
 function isActive(pathname: string, item: (typeof NAV)[number]) {
@@ -83,6 +84,7 @@ export function AppShell({
           </div>
         </div>
         <BookSwitcher />
+        <SyncBootBanner />
       </header>
 
       <main
@@ -92,6 +94,8 @@ export function AppShell({
       >
         {children}
       </main>
+
+      <QuickAddFab />
 
       <nav
         className="bottom-nav fixed inset-x-0 bottom-0 z-40 border-t border-[var(--line)] bg-[var(--paper)]/95 backdrop-blur-md"

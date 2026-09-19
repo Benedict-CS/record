@@ -7,6 +7,10 @@ import { TransactionEditor } from "@/components/TransactionEditor";
 import { TransactionList } from "@/components/TransactionList";
 import { formatMoney } from "@/lib/format";
 import {
+  compareMonthTransactions,
+  compareSameDayTransactions,
+} from "@/lib/day-order";
+import {
   useAccounts,
   useCategories,
   useSearchTransactions,
@@ -22,6 +26,7 @@ const TYPE_OPTIONS: { id: TypeFilter; label: string }[] = [
   { id: "all", label: "全部" },
   { id: "expense", label: "支出" },
   { id: "income", label: "收入" },
+  { id: "hold", label: "扣住" },
 ];
 
 const SORT_OPTIONS: { id: SortKey; label: string }[] = [
@@ -145,20 +150,22 @@ export function SearchPage() {
       return true;
     });
 
+    const nameOf = (categoryId: string | null) => {
+      const hit = categories.find((row) => row.id === categoryId);
+      return hit?.name;
+    };
+
     return rows.sort((a, b) => {
       switch (sort) {
         case "date-asc":
-          return a.date === b.date
-            ? a.updated_at.localeCompare(b.updated_at)
-            : a.date.localeCompare(b.date);
+          if (a.date !== b.date) return a.date.localeCompare(b.date);
+          return compareSameDayTransactions(a, b, nameOf);
         case "amount-desc":
           return b.amount - a.amount;
         case "amount-asc":
           return a.amount - b.amount;
         default:
-          return a.date === b.date
-            ? b.updated_at.localeCompare(a.updated_at)
-            : b.date.localeCompare(a.date);
+          return compareMonthTransactions(a, b, nameOf);
       }
     });
   }, [
@@ -171,16 +178,19 @@ export function SearchPage() {
     amountMin,
     amountMax,
     sort,
+    categories,
   ]);
 
   const totals = useMemo(() => {
     let income = 0;
     let expense = 0;
+    let held = 0;
     for (const tx of results) {
       if (tx.type === "income") income += tx.amount;
       if (tx.type === "expense") expense += tx.amount;
+      if (tx.type === "hold") held += tx.amount;
     }
-    return { income, expense };
+    return { income, expense, held };
   }, [results]);
 
   function clearFilters() {
@@ -438,11 +448,17 @@ export function SearchPage() {
             </div>
 
             {searching && results.length > 0 ? (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5">
-                  <p className="text-[11px] text-[var(--muted)]">支出合計</p>
+                  <p className="text-[11px] text-[var(--muted)]">實際花掉</p>
                   <p className="mt-0.5 text-sm font-semibold tabular-nums text-rose-700">
                     {formatMoney(totals.expense, currency)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5">
+                  <p className="text-[11px] text-[var(--muted)]">被扣住</p>
+                  <p className="mt-0.5 text-sm font-semibold tabular-nums text-amber-800">
+                    {formatMoney(totals.held, currency)}
                   </p>
                 </div>
                 <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5">

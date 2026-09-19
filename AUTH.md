@@ -1,6 +1,6 @@
 # 登入／註冊／同步流程說明
 
-本文件記錄 **記帳本** 目前的帳號與同步行為。  
+本文件記錄 **Record（記帳本）** 目前的帳號與同步行為。  
 認證走 **Supabase Auth：Email + 密碼**（與 Google 無關）。
 
 正式網址：https://record.benedicttiong.site  
@@ -157,8 +157,9 @@
 
 ## 部署相關
 
-- 程式：GitHub `Benedict-CS/record` → Vercel 自動部署  
-- 自訂網域：`record.benedicttiong.site`（Cloudflare DNS → Vercel）  
+- 程式：GitHub `Benedict-CS/record`；上線以 **Vercel CLI** 為準（`npm run deploy`）
+- Hobby 私有庫時 Git 自動部署可能被擋，不必依賴 push 自動上線
+- 自訂網域：`record.benedicttiong.site`（Cloudflare DNS → Vercel）
 - 使用者密碼 **不會**、也 **不該** 出現在 repo 或 `.env`
 
 ---

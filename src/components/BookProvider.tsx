@@ -6,12 +6,12 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { liveQuery } from "dexie";
 import { listBooks } from "@/lib/db/crud";
-import { db } from "@/lib/db/schema";
 import { ensureSeedData } from "@/lib/db/seed";
 import type { Book } from "@/lib/types";
 
@@ -27,26 +27,14 @@ type BookContextValue = {
 
 const BookContext = createContext<BookContextValue | null>(null);
 
-async function countLiveTx(bookId: string) {
-  return db.transactions
-    .where("book_id")
-    .equals(bookId)
-    .filter((row) => !row.deleted_at)
-    .count();
-}
-
-/** Prefer the live book that actually has ledger rows. */
-async function pickBookId(rows: Book[], preferred: string | null) {
+/**
+ * Honor an explicit user preference whenever that book is still live.
+ * Otherwise default to TWD — never auto-steal to max-tx (that flipped TWD→MYR).
+ */
+function pickBookId(rows: Book[], preferred: string | null) {
   if (preferred && rows.some((row) => row.id === preferred)) {
-    const preferredCount = await countLiveTx(preferred);
-    if (preferredCount > 0) return preferred;
+    return preferred;
   }
-  let best: { id: string; count: number } | null = null;
-  for (const row of rows) {
-    const count = await countLiveTx(row.id);
-    if (!best || count > best.count) best = { id: row.id, count };
-  }
-  if (best && best.count > 0) return best.id;
   const twd = rows.find((row) => row.currency === "TWD");
   return twd?.id ?? rows[0]?.id ?? null;
 }
@@ -55,9 +43,18 @@ export function BookProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [books, setBooks] = useState<Book[]>([]);
   const [bookId, setBookIdState] = useState<string | null>(null);
+  const userPicked = useRef(false);
+  const pickGen = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
+    // One-shot: clear sticky MYR preference written by the old max-tx picker.
+    if (typeof window !== "undefined") {
+      if (localStorage.getItem("ledger_book_pref_v2") !== "1") {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.setItem("ledger_book_pref_v2", "1");
+      }
+    }
     void ensureSeedData().then(() => {
       if (!cancelled) setReady(true);
     });
@@ -74,30 +71,56 @@ export function BookProvider({ children }: { children: ReactNode }) {
       next: (rows) => {
         if (cancelled) return;
         setBooks(rows);
+        const gen = ++pickGen.current;
         const stored =
           typeof window !== "undefined"
             ? localStorage.getItem(STORAGE_KEY)
             : null;
-        void pickBookId(rows, stored).then((next) => {
-          if (cancelled || !next) return;
-          setBookIdState((current) => {
-            if (current === next) return current;
-            localStorage.setItem(STORAGE_KEY, next);
-            return next;
-          });
+
+        // Prefer in-memory selection after the user explicitly switched.
+        setBookIdState((current) => {
+          if (cancelled || gen !== pickGen.current) return current;
+
+          const preferred =
+            userPicked.current && current && rows.some((r) => r.id === current)
+              ? current
+              : stored;
+
+          const next = pickBookId(rows, preferred);
+          if (!next || current === next) {
+            // Still persist when preferred was invalid (soft-deleted twin).
+            if (next && stored !== next) {
+              localStorage.setItem(STORAGE_KEY, next);
+            }
+            return current ?? next;
+          }
+          localStorage.setItem(STORAGE_KEY, next);
+          return next;
         });
       },
       error: () => {
         if (!cancelled) setBooks([]);
       },
     });
+
+    // Sync engine may adopt KEEP after collapse in the same tab.
+    const onAdopt = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      if (!id || cancelled) return;
+      userPicked.current = false;
+      setBookIdState(id);
+    };
+    window.addEventListener("ledger-active-book", onAdopt);
+
     return () => {
       cancelled = true;
       sub.unsubscribe();
+      window.removeEventListener("ledger-active-book", onAdopt);
     };
   }, [ready]);
 
   const setBookId = useCallback((id: string) => {
+    userPicked.current = true;
     localStorage.setItem(STORAGE_KEY, id);
     setBookIdState(id);
   }, []);

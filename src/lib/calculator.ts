@@ -204,13 +204,13 @@ export function applyKey(expression: string, key: CalcKey): string {
   }
 }
 
-/** Absolute positive amount suitable for the ledger (or null if invalid). */
+/** Non-negative amount suitable for a transaction (or null if invalid). Zero is allowed (e.g. treated meals). */
 export function toAmountValue(expression: string): number | null {
   const src = expression.replace(/\s/g, "");
   if (!src || endsWithOperator(src)) return null;
   const result = evaluateExpression(src);
   if (result === null) return null;
   const abs = Math.abs(result);
-  if (!Number.isFinite(abs) || abs <= 0) return null;
+  if (!Number.isFinite(abs) || abs < 0) return null;
   return abs;
 }

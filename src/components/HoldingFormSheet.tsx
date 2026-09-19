@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { BottomSheet } from "@/components/BottomSheet";
 import { useBook } from "@/components/BookProvider";
 import { COMPOUNDING_OPTIONS, HOLDING_KINDS } from "@/lib/holding-kinds";
@@ -33,15 +33,20 @@ export function HoldingFormSheet({
 }) {
   const { book } = useBook();
   const currency = book?.currency ?? "TWD";
-  const [name, setName] = useState("");
-  const [kind, setKind] = useState<HoldingKind>("savings");
-  const [institution, setInstitution] = useState("");
-  const [amount, setAmount] = useState("");
-  const [rate, setRate] = useState("");
-  const [compounding, setCompounding] = useState<InterestCompounding>("none");
-  const [startDate, setStartDate] = useState(todayLocal());
-  const [maturity, setMaturity] = useState("");
-  const [note, setNote] = useState("");
+  // Caller remounts with a key on open, so these initials reset per open.
+  const [name, setName] = useState(holding?.name ?? "");
+  const [kind, setKind] = useState<HoldingKind>(holding?.kind ?? "savings");
+  const [institution, setInstitution] = useState(holding?.institution ?? "");
+  const [amount, setAmount] = useState(holding ? String(holding.amount) : "");
+  const [rate, setRate] = useState(holding ? String(holding.annual_rate) : "");
+  const [compounding, setCompounding] = useState<InterestCompounding>(
+    holding?.compounding ?? "none",
+  );
+  const [startDate, setStartDate] = useState(
+    holding?.start_date ?? todayLocal(),
+  );
+  const [maturity, setMaturity] = useState(holding?.maturity_date ?? "");
+  const [note, setNote] = useState(holding?.note ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -58,20 +63,6 @@ export function HoldingFormSheet({
       ? yearlyInterest(parsedAmount, parsedRate, previewCompounding)
       : 0;
 
-  useEffect(() => {
-    if (!open) return;
-    setName(holding?.name ?? "");
-    setKind(holding?.kind ?? "savings");
-    setInstitution(holding?.institution ?? "");
-    setAmount(holding ? String(holding.amount) : "");
-    setRate(holding ? String(holding.annual_rate) : "");
-    setCompounding(holding?.compounding ?? "none");
-    setStartDate(holding?.start_date ?? todayLocal());
-    setMaturity(holding?.maturity_date ?? "");
-    setNote(holding?.note ?? "");
-    setError(null);
-  }, [open, holding]);
-
   async function submit(event: FormEvent) {
     event.preventDefault();
     const trimmed = name.trim();
@@ -79,13 +70,13 @@ export function HoldingFormSheet({
       setError("請輸入名稱");
       return;
     }
-    const parsedAmount = Number(amount || 0);
-    const parsedRate = Number(rate || 0);
-    if (!Number.isFinite(parsedAmount) || parsedAmount < 0) {
+    const nextAmount = Number(amount || 0);
+    const nextRate = Number(rate || 0);
+    if (!Number.isFinite(nextAmount) || nextAmount < 0) {
       setError("金額無效");
       return;
     }
-    if (!Number.isFinite(parsedRate) || parsedRate < 0) {
+    if (!Number.isFinite(nextRate) || nextRate < 0) {
       setError("年利率無效");
       return;
     }
@@ -95,9 +86,10 @@ export function HoldingFormSheet({
         name: trimmed,
         kind,
         institution: institution.trim(),
-        amount: parsedAmount,
-        annual_rate: parsedRate,
-        compounding: parsedRate > 0 && compounding === "none" ? "simple" : compounding,
+        amount: nextAmount,
+        annual_rate: nextRate,
+        compounding:
+          nextRate > 0 && compounding === "none" ? "simple" : compounding,
         start_date: startDate,
         maturity_date: maturity.trim() ? maturity : null,
         note: note.trim(),

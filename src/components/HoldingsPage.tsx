@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { BottomSheet } from "@/components/BottomSheet";
 import { useBook } from "@/components/BookProvider";
+import { CategoryPieChart } from "@/components/CategoryPieChart";
 import { useConfirm } from "@/components/ConfirmProvider";
 import {
   HoldingFormSheet,
@@ -32,7 +33,11 @@ import {
 } from "@/lib/interest";
 import { useHoldings, useSeedReady } from "@/lib/hooks/useLedgerData";
 import { runSync } from "@/lib/sync/engine";
-import type { Holding, HoldingKind } from "@/lib/types";
+import type {
+  CategoryBreakdownItem,
+  Holding,
+  HoldingKind,
+} from "@/lib/types";
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
@@ -137,6 +142,7 @@ export function HoldingsPage() {
   const currency = book?.currency ?? "TWD";
 
   const [kindFilter, setKindFilter] = useState<HoldingKind | "all">("all");
+  const [allocMode, setAllocMode] = useState<"kind" | "item">("kind");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<Holding | null>(null);
   const [preview, setPreview] = useState<Holding | null>(null);
@@ -145,6 +151,54 @@ export function HoldingsPage() {
     () => holdingsInterestSummary(holdings),
     [holdings],
   );
+
+  const allocation = useMemo((): CategoryBreakdownItem[] => {
+    const total = holdings.reduce((sum, row) => sum + row.amount, 0);
+    if (total <= 0) return [];
+
+    if (allocMode === "item") {
+      return [...holdings]
+        .filter((row) => row.amount > 0)
+        .sort((a, b) => b.amount - a.amount)
+        .map((row) => ({
+          categoryId: row.id,
+          name: row.name,
+          color: row.color || "#7f8c8d",
+          icon: row.icon || "dots",
+          amount: row.amount,
+          percent: (row.amount / total) * 100,
+        }));
+    }
+
+    const byKind = new Map<
+      HoldingKind,
+      { amount: number; color: string; icon: string }
+    >();
+    for (const row of holdings) {
+      if (row.amount <= 0) continue;
+      const prev = byKind.get(row.kind);
+      if (prev) {
+        prev.amount += row.amount;
+      } else {
+        byKind.set(row.kind, {
+          amount: row.amount,
+          color: row.color || "#7f8c8d",
+          icon: row.icon || "dots",
+        });
+      }
+    }
+
+    return [...byKind.entries()]
+      .map(([kind, value]) => ({
+        categoryId: kind,
+        name: holdingKindLabel(kind),
+        color: value.color,
+        icon: value.icon,
+        amount: value.amount,
+        percent: (value.amount / total) * 100,
+      }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [holdings, allocMode]);
 
   const visible = useMemo(() => {
     const rows =
@@ -199,7 +253,7 @@ export function HoldingsPage() {
   async function handleDelete(holding: Holding) {
     const ok = await confirm({
       title: `刪除「${holding.name}」`,
-      message: "刪除後這筆存款不會列入淨資產。可在提示中復原。",
+      message: "刪除後這筆不會列入淨資產（存款／資產）。可在提示中復原。",
       confirmLabel: "刪除",
       destructive: true,
     });
@@ -287,6 +341,43 @@ export function HoldingsPage() {
               </div>
             </div>
           </section>
+
+          {summary.amount > 0 ? (
+            <section className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-medium text-[var(--ink)]">
+                  資產配置
+                </h2>
+                <div className="flex gap-1 rounded-xl bg-[var(--paper)] p-0.5">
+                  {(
+                    [
+                      ["kind", "依種類"],
+                      ["item", "依項目"],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setAllocMode(id)}
+                      className={[
+                        "min-h-9 rounded-lg px-2.5 text-xs font-medium",
+                        allocMode === id
+                          ? "bg-[var(--ink)] text-[var(--paper)]"
+                          : "text-[var(--muted)]",
+                      ].join(" ")}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <CategoryPieChart
+                items={allocation}
+                currency={currency}
+                emptyLabel="尚無存款資料"
+              />
+            </section>
+          ) : null}
 
           <button
             type="button"

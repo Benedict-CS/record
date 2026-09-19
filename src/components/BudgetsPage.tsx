@@ -176,17 +176,17 @@ export function BudgetsPage() {
       ) : (
         <div className="space-y-4">
           <section className="rounded-2xl bg-[var(--ink)] px-4 py-4 text-[var(--paper)]">
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-3 flex items-center justify-between gap-1">
               <button
                 type="button"
                 onClick={() => shiftMonth(-1)}
                 aria-label="上一個月"
-                className="touch-target -ml-2 inline-flex items-center justify-center rounded-md px-3 text-sm opacity-80 hover:opacity-100"
+                className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-lg text-[var(--paper)] opacity-80 hover:opacity-100"
               >
-                上月
+                ‹
               </button>
               <p
-                className="text-sm font-medium tracking-wide"
+                className="text-sm font-semibold tracking-wide tabular-nums"
                 aria-live="polite"
               >
                 {year} 年 {month} 月
@@ -195,12 +195,12 @@ export function BudgetsPage() {
                 type="button"
                 onClick={() => shiftMonth(1)}
                 aria-label="下一個月"
-                className="touch-target -mr-2 inline-flex items-center justify-center rounded-md px-3 text-sm opacity-80 hover:opacity-100"
+                className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-lg text-[var(--paper)] opacity-80 hover:opacity-100"
               >
-                下月
+                ›
               </button>
             </div>
-            <p className="text-[11px] opacity-70">本月支出</p>
+            <p className="text-[11px] opacity-70">本月實際花掉（不含扣住）</p>
             <p className="mt-1 text-xl font-semibold tabular-nums">
               {formatMoney(summary.expense, currency)}
               {overallBudget ? (
@@ -209,6 +209,15 @@ export function BudgetsPage() {
                 </span>
               ) : null}
             </p>
+            {summary.held > 0 ? (
+              <p className="mt-1 text-[11px] opacity-80">
+                另有暫時扣住{" "}
+                <span className="font-medium tabular-nums text-amber-200">
+                  {formatMoney(summary.held, currency)}
+                </span>
+                ，不計入預算
+              </p>
+            ) : null}
             {overallBudget ? (
               <ProgressBar
                 spent={summary.expense}

@@ -66,7 +66,7 @@ export function ReportsPage() {
   const categories = useCategories();
   const holdings = useHoldings();
   const monthTransactions = useMonthTransactions(year, month);
-  const yearTransactions = useYearTransactions(year);
+  const yearTransactions = useYearTransactions(year, scope === "year");
 
   const previousMonthRef = useMemo(
     () => shiftYearMonth(year, month, -1),
@@ -76,7 +76,10 @@ export function ReportsPage() {
     previousMonthRef.year,
     previousMonthRef.month,
   );
-  const previousYearTransactions = useYearTransactions(year - 1);
+  const previousYearTransactions = useYearTransactions(
+    year - 1,
+    scope === "year",
+  );
 
   const activeTransactions =
     scope === "month" ? monthTransactions : yearTransactions;
@@ -235,23 +238,35 @@ export function ReportsPage() {
                 ›
               </button>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-xl bg-[var(--paper)] px-1.5 py-2">
-                <p className="text-[11px] text-[var(--muted)]">收入</p>
-                <p className="mt-1 text-sm font-semibold tabular-nums text-emerald-700">
-                  {formatMoney(summary.income, currency)}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl bg-[var(--paper)] px-2.5 py-2.5 text-left">
+                <p className="text-[11px] text-[var(--muted)]">花費</p>
+                <p className="mt-1 truncate text-base font-semibold tabular-nums text-[var(--ink)]">
+                  {formatMoney(summary.outflow, currency)}
                 </p>
+                <p className="mt-0.5 text-[10px] text-[var(--muted)]">花掉＋扣住</p>
               </div>
-              <div className="rounded-xl bg-[var(--paper)] px-1.5 py-2">
-                <p className="text-[11px] text-[var(--muted)]">支出</p>
-                <p className="mt-1 text-sm font-semibold tabular-nums text-rose-700">
+              <div className="rounded-xl bg-amber-50 px-2.5 py-2.5 text-left">
+                <p className="text-[11px] text-amber-900/70">被扣住</p>
+                <p className="mt-1 truncate text-base font-semibold tabular-nums text-amber-900">
+                  {formatMoney(summary.held, currency)}
+                </p>
+                <p className="mt-0.5 text-[10px] text-amber-900/60">押金／預繳</p>
+              </div>
+              <div className="rounded-xl bg-[var(--paper)] px-2.5 py-2.5 text-left">
+                <p className="text-[11px] text-[var(--muted)]">實際花掉</p>
+                <p className="mt-1 truncate text-base font-semibold tabular-nums text-rose-700">
                   {formatMoney(summary.expense, currency)}
                 </p>
+                <p className="mt-0.5 text-[10px] text-[var(--muted)]">花費 − 被扣住</p>
               </div>
-              <div className="rounded-xl bg-[var(--paper)] px-1.5 py-2">
+              <div className="rounded-xl bg-[var(--paper)] px-2.5 py-2.5 text-left">
                 <p className="text-[11px] text-[var(--muted)]">結餘</p>
-                <p className="mt-1 text-sm font-semibold tabular-nums text-[var(--ink)]">
+                <p className="mt-1 truncate text-base font-semibold tabular-nums text-[var(--ink)]">
                   {formatMoney(summary.net, currency)}
+                </p>
+                <p className="mt-0.5 text-[10px] text-[var(--muted)]">
+                  收入 {formatMoney(summary.income, currency)}
                 </p>
               </div>
             </div>
@@ -268,7 +283,7 @@ export function ReportsPage() {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <DeltaCard
-                label="支出"
+                label="實際花掉"
                 delta={comparison.expenseDelta}
                 percent={comparison.expensePercent}
                 previous={previousSummary.expense}

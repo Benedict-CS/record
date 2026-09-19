@@ -1,6 +1,8 @@
 # 完整設定指南（Supabase + Vercel + 本機）
 
-本文件逐步說明：**要點哪裡、要複製哪個值、要貼到哪裡**。照著做即可完成雲端同步與部署。
+本文件逐步說明 **Record（記帳本）** 要怎麼接雲端與部署：**要點哪裡、要複製哪個值、要貼到哪裡**。照著做即可完成雲端同步與部署。
+
+英文專案名：**Record**（簡單好記；不要用 Ledger 這種難字）。中文介面名稱是「記帳本」。
 
 ---
 
@@ -25,7 +27,7 @@
 2. 登入（可用 GitHub / 信箱）。
 3. 進入 Dashboard 後，點 **New project**（新增專案）。
 4. 填寫：
-   - **Name**：專案名稱（例如 `ledger`）
+   - **Name**：專案名稱（例如 `record`）
    - **Database Password**：請自己設定並**妥善保存**（本 App 平常不需要這個密碼）
    - **Region**：選離你較近的區域
 5. 點 **Create new project**，等待專案建立完成（約 1–2 分鐘）。
@@ -75,6 +77,7 @@
 | 3 | `supabase/migrations/003_books.sql` |
 | 4 | `supabase/migrations/004_templates_and_balances.sql` |
 | 5 | `supabase/migrations/005_holdings.sql` |
+| 6 | `supabase/migrations/006_hold_transactions.sql` |
 
 **每個檔案的操作步驟：**
 
@@ -85,7 +88,7 @@
 5. 確認右下角顯示成功（Success / 無錯誤）。
 6. 再開一個 **New query**，對下一份檔案重複同樣步驟。
 
-執行完成後應有：`accounts`、`categories`、`transactions`、`budgets`、`books`、`templates`、`holdings`，以及各表的 RLS 政策；`003` 會替子表加上 `book_id`；`005` 是存款／資產（定存、基金、電子錢包）。如果專案早已跑過 001–003，只要補跑尚未執行的 004、005。
+執行完成後應有：`accounts`、`categories`、`transactions`、`budgets`、`books`、`templates`、`holdings`，以及各表的 RLS 政策；`003` 會替子表加上 `book_id`；`005` 是存款／資產（定存、基金、電子錢包）；`006` 為交易「扣住（hold）」欄位（`hold_status`、`release_transaction_id`）。如果專案早已跑過前面幾份，只要補跑尚未執行的遷移即可。
 
 ---
 
@@ -215,17 +218,33 @@ npm run dev
 
 ## 7. 之後如何重新部署
 
-一般流程：
+### 建議：Vercel CLI（本專案實際使用方式）
 
-1. 在本機改完程式，`git add` / `git commit` / `git push` 到已連線的 GitHub 分支（通常是 `main`）。
-2. Vercel 會**自動**偵測 push 並開始新一輪 Deploy。
-3. 到 Vercel Dashboard → 該專案 → **Deployments** 查看狀態（Building → Ready）。
-4. Ready 後開啟正式網域即可看到新版本。
+Hobby + 私有 GitHub repo 時，自動部署可能因 commit 作者與專案擁有者不對齊而被擋。因此上線以 CLI 為準：
+
+```bash
+npm run deploy
+```
+
+等同：
+
+```bash
+vercel deploy --yes --prod --scope team_sGRRuKcFWr48UE0zblZkTCCe
+```
+
+`git push` 仍可備份程式到 GitHub；真正上線以 CLI 部署為準。
+
+### Git 自動部署（可選）
+
+若身分已對齊（同一個 GitHub 連 Vercel，且 commit email 正確）：
+
+1. `git add` / `git commit` / `git push` 到連線分支（通常是 `main`）。
+2. Vercel → Deployments 查看 Building → Ready。
 
 若只改了環境變數、沒改程式：
 
 1. Vercel → Project → **Settings** → **Environment Variables** 更新後儲存。
-2. 再到 **Deployments**，對最新一筆點 **⋯** → **Redeploy**（或觸發一次新的 Deploy），讓新變數生效。
+2. 再到 **Deployments**，對最新一筆點 **⋯** → **Redeploy**（或再跑一次 `npm run deploy`），讓新變數生效。
 
 ---
 
@@ -245,9 +264,10 @@ npm run dev
 
 - [ ] Supabase 專案已建立  
 - [ ] 已複製 **Project URL** 與 **anon public**（不是 service_role）  
-- [ ] SQL Editor 已依序執行 `001` → `002` → `003`  
+- [ ] SQL Editor 已依序執行 `001` → `002` → `003` → `004` → `005` → `006`  
 - [ ] Authentication → Providers → Email 已啟用  
-- [ ] Redirect URLs 含 localhost 與 Vercel `/auth/callback`  
+- [ ] Redirect URLs 含 localhost 與正式網域 `/auth/callback`  
 - [ ] 本機 `.env.local` 已填兩行 `NEXT_PUBLIC_*`  
 - [ ] Vercel 已設定相同兩行環境變數（Production + Preview）  
-- [ ] 部署後已把 Vercel 網域加回 Supabase Redirect URLs  
+- [ ] 部署後已把正式網域加回 Supabase Redirect URLs  
+- [ ] 上線用 `npm run deploy`（或等同 CLI）確認 Ready 

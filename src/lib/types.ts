@@ -1,6 +1,9 @@
 export type SyncStatus = "synced" | "pending" | "conflict";
 
-export type TransactionType = "income" | "expense" | "transfer";
+export type TransactionType = "income" | "expense" | "transfer" | "hold";
+
+/** Only for type === "hold": money locked until refunded. */
+export type HoldStatus = "held" | "released";
 
 export type CategoryKind = "income" | "expense";
 
@@ -48,6 +51,10 @@ export interface Transaction extends SyncMeta {
   account_id: string;
   category_id: string | null;
   transfer_account_id: string | null;
+  /** null for normal rows; held/released for type=hold */
+  hold_status: HoldStatus | null;
+  /** Income tx created when marking 已退回 */
+  release_transaction_id: string | null;
 }
 
 export interface Budget extends SyncMeta {
@@ -98,12 +105,21 @@ export interface DayBucket {
   date: string;
   income: number;
   expense: number;
+  held: number;
   transactions: Transaction[];
 }
 
 export interface PeriodSummary {
   income: number;
+  /** Actual spending (excludes 扣住). */
   expense: number;
+  /**
+   * Holds dated in this period (押金／預繳), including later-released rows.
+   * Outstanding-only totals use outstandingHeldTotal() for net worth.
+   */
+  held: number;
+  /** Money that left accounts this period: expense + held. */
+  outflow: number;
   net: number;
 }
 

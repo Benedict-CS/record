@@ -14,6 +14,11 @@ const LINKS: {
   description: string;
 }[] = [
   {
+    href: "/search",
+    title: "搜尋",
+    description: "依備註、分類、金額或日期找紀錄",
+  },
+  {
     href: "/settings",
     title: "設定",
     description: "記帳提醒與安裝說明",
@@ -26,12 +31,7 @@ const LINKS: {
   {
     href: "/accounts",
     title: "帳戶",
-    description: "現金、銀行與信用卡",
-  },
-  {
-    href: "/holdings",
-    title: "存款／資產",
-    description: "現金、定存、基金、電子錢包",
+    description: "現金、銀行與信用卡（日常流水）",
   },
   {
     href: "/categories",
@@ -66,7 +66,7 @@ export function MorePage() {
     <AppShell title="更多">
       <div className="space-y-3">
         <p className="text-sm text-[var(--muted)]">
-          管理帳本、帳戶、存款、分類與備份設定。
+          管理帳本、帳戶、分類與備份設定。
         </p>
 
         <ul className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">

@@ -13,6 +13,10 @@ import {
   softDeleteCategory,
   updateCategory,
 } from "@/lib/db/crud";
+import {
+  isPinnedLastCategory,
+  sortCategories,
+} from "@/lib/category-order";
 import { useCategories, useSeedReady } from "@/lib/hooks/useLedgerData";
 import { runSync } from "@/lib/sync/engine";
 import type { Category, CategoryKind } from "@/lib/types";
@@ -87,7 +91,11 @@ function CategorySection({
                     <button
                       type="button"
                       onClick={() => onMove(items, index, -1)}
-                      disabled={busy || index === 0}
+                      disabled={
+                        busy ||
+                        index === 0 ||
+                        isPinnedLastCategory(category)
+                      }
                       aria-label={`將 ${category.name} 上移`}
                       className="min-h-11 min-w-11 rounded-xl text-base text-[var(--ink)] hover:bg-[var(--paper)] disabled:opacity-30"
                     >
@@ -96,13 +104,22 @@ function CategorySection({
                     <button
                       type="button"
                       onClick={() => onMove(items, index, 1)}
-                      disabled={busy || index === items.length - 1}
+                      disabled={
+                        busy ||
+                        index === items.length - 1 ||
+                        isPinnedLastCategory(category) ||
+                        isPinnedLastCategory(items[index + 1]!)
+                      }
                       aria-label={`將 ${category.name} 下移`}
                       className="min-h-11 min-w-11 rounded-xl text-base text-[var(--ink)] hover:bg-[var(--paper)] disabled:opacity-30"
                     >
                       <span aria-hidden>↓</span>
                     </button>
                   </div>
+                ) : isPinnedLastCategory(category) ? (
+                  <span className="min-w-11 shrink-0 px-1 text-center text-[10px] text-[var(--muted)]">
+                    固定
+                  </span>
                 ) : (
                   <button
                     type="button"
@@ -137,16 +154,12 @@ export function CategoriesPage() {
 
   const expense = useMemo(
     () =>
-      categories
-        .filter((item) => item.kind === "expense")
-        .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, "zh-Hant")),
+      sortCategories(categories.filter((item) => item.kind === "expense")),
     [categories],
   );
   const income = useMemo(
     () =>
-      categories
-        .filter((item) => item.kind === "income")
-        .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, "zh-Hant")),
+      sortCategories(categories.filter((item) => item.kind === "income")),
     [categories],
   );
 
@@ -188,7 +201,11 @@ export function CategoriesPage() {
     }
   }
 
-  async function handleDelete(category: Category) {
+  async function handleDelete(category: Category): Promise<boolean> {
+    if (isPinnedLastCategory(category)) {
+      show("「其他」分類需保留在最下面，無法刪除", { variant: "error" });
+      return false;
+    }
     const ok = await confirm({
       title: `刪除「${category.name}」`,
       message:
@@ -196,13 +213,15 @@ export function CategoriesPage() {
       confirmLabel: "刪除",
       destructive: true,
     });
-    if (!ok) return;
+    if (!ok) return false;
     try {
       await softDeleteCategory(category.id);
       show(`已刪除「${category.name}」`, { variant: "success" });
       void runSync();
+      return true;
     } catch (error) {
       show(errorMessage(error, "刪除分類失敗"), { variant: "error" });
+      throw error;
     }
   }
 
@@ -211,9 +230,10 @@ export function CategoriesPage() {
    * can share or skip values, which would make a neighbour swap a no-op.
    */
   async function normalizeOrder(list: Category[]) {
+    const ordered = sortCategories(list);
     let changed = 0;
-    for (let index = 0; index < list.length; index += 1) {
-      const category = list[index];
+    for (let index = 0; index < ordered.length; index += 1) {
+      const category = ordered[index];
       if (category.sort_order === index) continue;
       await updateCategory(category.id, { sort_order: index });
       changed += 1;
@@ -248,6 +268,10 @@ export function CategoriesPage() {
     const target = items[index];
     const neighbour = items[index + direction];
     if (!target || !neighbour) return;
+    // Keep catch-all tags pinned at the bottom.
+    if (isPinnedLastCategory(target) || isPinnedLastCategory(neighbour)) {
+      return;
+    }
 
     setBusy(true);
     try {
@@ -333,6 +357,7 @@ export function CategoriesPage() {
         category={editing}
         onClose={closeSheet}
         onSubmit={handleSubmit}
+        onDelete={editing ? () => handleDelete(editing) : undefined}
       />
     </AppShell>
   );

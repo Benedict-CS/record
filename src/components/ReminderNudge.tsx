@@ -91,7 +91,7 @@ export function ReminderNudge() {
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <Link
-            href="/"
+            href="/#quick-add"
             className="inline-flex min-h-11 items-center rounded-xl bg-[var(--accent)] px-3 text-sm font-semibold text-[var(--surface)] active:scale-[0.98]"
           >
             現在記一筆

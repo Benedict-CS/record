@@ -1,8 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState } from "react";
+import {
+  AccountFormSheet,
+  type AccountFormValues,
+} from "@/components/AccountFormSheet";
 import { AppShell } from "@/components/AppShell";
+import { BottomSheet } from "@/components/BottomSheet";
 import { useBook } from "@/components/BookProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import {
@@ -10,7 +15,7 @@ import {
   softDeleteAccount,
   updateAccount,
 } from "@/lib/db/crud";
-import { currencyLabel, formatMoney } from "@/lib/format";
+import { formatMoney } from "@/lib/format";
 import {
   useAccountBalances,
   useAccounts,
@@ -30,12 +35,6 @@ function typeLabel(type: Account["type"]) {
   return TYPE_OPTIONS.find((item) => item.value === type)?.label ?? type;
 }
 
-/** Empty input counts as 0; anything unparseable keeps the previous value out. */
-function parseAmount(input: string) {
-  const value = Number(input.trim());
-  return Number.isFinite(value) ? value : 0;
-}
-
 export function AccountsPage() {
   const { book, bookId } = useBook();
   const ready = useSeedReady();
@@ -43,14 +42,9 @@ export function AccountsPage() {
   const accounts = useAccounts();
   const balances = useAccountBalances();
 
-  const [name, setName] = useState("");
-  const [type, setType] = useState<Account["type"]>("cash");
-  const [opening, setOpening] = useState("");
-
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editType, setEditType] = useState<Account["type"]>("cash");
-  const [editOpening, setEditOpening] = useState("");
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editing, setEditing] = useState<Account | null>(null);
+  const [menuAccount, setMenuAccount] = useState<Account | null>(null);
 
   const bookCurrency = book?.currency ?? "TWD";
 
@@ -64,49 +58,57 @@ export function AccountsPage() {
     [balances],
   );
 
-  // Same figure as `bookTotals`, reusing the live balances already subscribed.
   const total = useMemo(
     () => balances.reduce((sum, item) => sum + item.balance, 0),
     [balances],
   );
 
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    if (!name.trim() || !bookId) return;
-    await createAccount(bookId, {
-      name,
-      type,
-      currency: book?.currency,
-      opening_balance: parseAmount(opening),
-    });
-    setName("");
-    setOpening("");
+  function openCreate() {
+    setMenuAccount(null);
+    setEditing(null);
+    setSheetOpen(true);
+  }
+
+  function openEdit(account: Account) {
+    setMenuAccount(null);
+    setEditing(account);
+    setSheetOpen(true);
+  }
+
+  function closeSheet() {
+    setSheetOpen(false);
+    setEditing(null);
+  }
+
+  async function handleSubmit(values: AccountFormValues) {
+    if (editing) {
+      await updateAccount(editing.id, {
+        name: values.name,
+        type: values.type,
+        opening_balance: values.opening_balance,
+      });
+    } else {
+      if (!bookId) throw new Error("尚未選擇帳本，請稍後再試");
+      await createAccount(bookId, {
+        name: values.name,
+        type: values.type,
+        currency: book?.currency,
+        opening_balance: values.opening_balance,
+      });
+    }
     void runSync();
   }
 
-  function startEdit(account: Account) {
-    setEditingId(account.id);
-    setEditName(account.name);
-    setEditType(account.type);
-    setEditOpening(String(account.opening_balance ?? 0));
-  }
-
-  function cancelEdit() {
-    setEditingId(null);
-    setEditName("");
-    setEditType("cash");
-    setEditOpening("");
-  }
-
-  async function saveEdit(event: FormEvent) {
-    event.preventDefault();
-    if (!editingId || !editName.trim()) return;
-    await updateAccount(editingId, {
-      name: editName.trim(),
-      type: editType,
-      opening_balance: parseAmount(editOpening),
+  async function handleDelete(account: Account) {
+    setMenuAccount(null);
+    const ok = await confirm({
+      title: `刪除「${account.name}」？`,
+      message: "帳戶會從列表隱藏，既有交易仍會保留。",
+      confirmLabel: "刪除",
+      destructive: true,
     });
-    cancelEdit();
+    if (!ok) return;
+    await softDeleteAccount(account.id);
     void runSync();
   }
 
@@ -115,228 +117,145 @@ export function AccountsPage() {
       {!ready ? (
         <p className="text-sm text-[var(--muted)]">載入本機資料…</p>
       ) : (
-        <div className="space-y-3">
-          <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3.5">
+        <div className="space-y-4">
+          <section className="px-0.5">
             <p className="text-xs text-[var(--muted)]">
-              {book?.name ?? "帳本"}總資產（淨額）
+              {book?.name ?? "帳本"} · 帳戶淨額
             </p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums text-[var(--ink)]">
+            <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums text-[var(--ink)]">
               {formatMoney(total, bookCurrency)}
-            </p>
-            <p className="mt-1 text-xs text-[var(--muted)]">
-              {sorted.length} 個帳戶 · 不含存款／資產，完整淨值見存款頁
             </p>
           </section>
 
-          <form
-            onSubmit={onSubmit}
-            className="space-y-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-3 sm:p-4"
-          >
-            <label className="block">
-              <span className="mb-1 block text-xs text-[var(--muted)]">
-                帳戶名稱
+          <div className="flex items-center justify-between gap-3 px-0.5">
+            <p className="text-sm font-medium text-[var(--ink)]">
+              全部帳戶
+              <span className="ml-1.5 font-normal text-[var(--muted)]">
+                {sorted.length}
               </span>
-              <input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                className="min-h-11 w-full rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-                placeholder="例如：玉山銀行"
-              />
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <label className="block">
-                <span className="mb-1 block text-xs text-[var(--muted)]">
-                  類型
-                </span>
-                <select
-                  value={type}
-                  onChange={(event) =>
-                    setType(event.target.value as Account["type"])
-                  }
-                  className="min-h-11 w-full rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-                >
-                  {TYPE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-xs text-[var(--muted)]">
-                  期初餘額
-                </span>
-                <input
-                  value={opening}
-                  onChange={(event) => setOpening(event.target.value)}
-                  type="number"
-                  step="any"
-                  className="min-h-11 w-full rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-sm tabular-nums outline-none focus:border-[var(--accent)]"
-                  placeholder="0"
-                />
-              </label>
-            </div>
-            <p className="text-xs text-[var(--muted)]">
-              期初餘額是開始記帳前就有的金額，信用卡欠款可以填負數。
             </p>
             <button
-              type="submit"
-              className="min-h-11 w-full rounded-md bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-[var(--paper)]"
+              type="button"
+              onClick={openCreate}
+              aria-label="新增帳戶"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl bg-[var(--ink)] text-lg leading-none text-[var(--paper)]"
             >
-              新增帳戶
+              <span aria-hidden>+</span>
             </button>
-          </form>
+          </div>
 
           {sorted.length === 0 ? (
-            <p className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-6 text-center text-sm text-[var(--muted)]">
-              還沒有帳戶，先新增一個吧。
-            </p>
+            <div className="rounded-2xl border border-dashed border-[var(--line)] bg-[var(--surface)]/70 px-5 py-10 text-center">
+              <p className="text-sm font-medium text-[var(--ink)]">
+                還沒有帳戶
+              </p>
+              <p className="mt-1.5 text-xs leading-relaxed text-[var(--muted)]">
+                先加一個現金或銀行帳戶，之後記帳才能選付款來源。
+              </p>
+              <button
+                type="button"
+                onClick={openCreate}
+                className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-[var(--ink)] px-5 text-sm font-medium text-[var(--paper)]"
+              >
+                新增第一個帳戶
+              </button>
+            </div>
           ) : (
-            <ul className="space-y-2">
-              {sorted.map((account) => {
+            <ul className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">
+              {sorted.map((account, index) => {
                 const balance = balanceMap.get(account.id);
-                const accountCurrency =
-                  account.currency || bookCurrency;
+                const accountCurrency = account.currency || bookCurrency;
                 return (
                   <li
                     key={account.id}
-                    className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5"
+                    className={
+                      index > 0 ? "border-t border-[var(--line)]" : undefined
+                    }
                   >
-                    {editingId === account.id ? (
-                      <form onSubmit={saveEdit} className="space-y-2.5">
-                        <label className="block">
-                          <span className="mb-1 block text-xs text-[var(--muted)]">
-                            帳戶名稱
+                    <div className="flex items-stretch">
+                      <Link
+                        href={`/accounts/${account.id}`}
+                        className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-3.5 py-3 text-left active:bg-[var(--paper)]"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-[var(--ink)]">
+                            {account.name}
                           </span>
-                          <input
-                            value={editName}
-                            onChange={(event) =>
-                              setEditName(event.target.value)
-                            }
-                            className="min-h-11 w-full rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-                            autoFocus
-                          />
-                        </label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <label className="block">
-                            <span className="mb-1 block text-xs text-[var(--muted)]">
-                              類型
-                            </span>
-                            <select
-                              value={editType}
-                              onChange={(event) =>
-                                setEditType(
-                                  event.target.value as Account["type"],
-                                )
-                              }
-                              className="min-h-11 w-full rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-                            >
-                              {TYPE_OPTIONS.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="block">
-                            <span className="mb-1 block text-xs text-[var(--muted)]">
-                              期初餘額
-                            </span>
-                            <input
-                              value={editOpening}
-                              onChange={(event) =>
-                                setEditOpening(event.target.value)
-                              }
-                              type="number"
-                              step="any"
-                              className="min-h-11 w-full rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-sm tabular-nums outline-none focus:border-[var(--accent)]"
-                              placeholder="0"
-                            />
-                          </label>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={cancelEdit}
-                            className="min-h-11 rounded-md border border-[var(--line)] px-3 text-sm text-[var(--muted)]"
-                          >
-                            取消
-                          </button>
-                          <button
-                            type="submit"
-                            className="min-h-11 rounded-md bg-[var(--accent)] px-3 text-sm font-medium text-[var(--paper)]"
-                          >
-                            儲存
-                          </button>
-                        </div>
-                      </form>
-                    ) : (
-                      <>
-                        <div className="flex items-start justify-between gap-2">
-                          <Link
-                            href={`/accounts/${account.id}`}
-                            className="min-w-0 text-left"
-                          >
-                            <p className="truncate text-sm font-medium text-[var(--ink)]">
-                              {account.name}
-                            </p>
-                            <p className="mt-0.5 text-xs text-[var(--muted)]">
-                              {typeLabel(account.type)} ·{" "}
-                              {currencyLabel(accountCurrency)}
-                            </p>
-                          </Link>
-                          <div className="shrink-0 text-right">
-                            <p className="text-sm font-semibold tabular-nums text-[var(--ink)]">
-                              {balance === undefined
-                                ? "—"
-                                : formatMoney(balance, accountCurrency)}
-                            </p>
-                            <p className="mt-0.5 text-[11px] text-[var(--muted)] tabular-nums">
-                              期初{" "}
-                              {formatMoney(
-                                account.opening_balance ?? 0,
-                                accountCurrency,
-                              )}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            type="button"
-                            className="touch-target inline-flex items-center justify-center px-2 text-xs text-[var(--accent)]"
-                            onClick={() => startEdit(account)}
-                          >
-                            編輯
-                          </button>
-                          <button
-                            type="button"
-                            className="touch-target inline-flex items-center justify-center px-2 text-xs text-[var(--muted)] active:text-rose-600"
-                            onClick={() => {
-                              void (async () => {
-                                const ok = await confirm({
-                                  title: `刪除「${account.name}」？`,
-                                  message: "帳戶會從列表隱藏，既有交易仍會保留。",
-                                  confirmLabel: "刪除",
-                                  destructive: true,
-                                });
-                                if (!ok) return;
-                                await softDeleteAccount(account.id);
-                                void runSync();
-                              })();
-                            }}
-                          >
-                            刪除
-                          </button>
-                        </div>
-                      </>
-                    )}
+                          <span className="mt-0.5 block text-xs text-[var(--muted)]">
+                            {typeLabel(account.type)}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-sm font-semibold tabular-nums text-[var(--ink)]">
+                          {balance === undefined
+                            ? "—"
+                            : formatMoney(balance, accountCurrency)}
+                        </span>
+                      </Link>
+                      <button
+                        type="button"
+                        aria-label={`${account.name} 更多操作`}
+                        onClick={() => setMenuAccount(account)}
+                        className="inline-flex min-h-14 min-w-11 shrink-0 items-center justify-center text-[var(--muted)] active:bg-[var(--paper)] active:text-[var(--ink)]"
+                      >
+                        <span aria-hidden className="text-lg leading-none">
+                          ···
+                        </span>
+                      </button>
+                    </div>
                   </li>
                 );
               })}
             </ul>
           )}
+
+          <p className="px-0.5 text-xs leading-relaxed text-[var(--muted)]">
+            點帳戶看明細；右上角 + 新增。存款／資產請到存款頁。
+          </p>
         </div>
       )}
+
+      <BottomSheet
+        open={Boolean(menuAccount)}
+        onClose={() => setMenuAccount(null)}
+        title={menuAccount?.name ?? "帳戶"}
+        description={
+          menuAccount ? typeLabel(menuAccount.type) : undefined
+        }
+      >
+        {menuAccount ? (
+          <div className="space-y-2">
+            <Link
+              href={`/accounts/${menuAccount.id}`}
+              onClick={() => setMenuAccount(null)}
+              className="flex min-h-12 items-center rounded-xl bg-[var(--paper)] px-4 text-sm font-medium text-[var(--ink)]"
+            >
+              查看明細
+            </Link>
+            <button
+              type="button"
+              onClick={() => openEdit(menuAccount)}
+              className="flex min-h-12 w-full items-center rounded-xl bg-[var(--paper)] px-4 text-sm font-medium text-[var(--ink)]"
+            >
+              編輯
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDelete(menuAccount)}
+              className="flex min-h-12 w-full items-center rounded-xl bg-[var(--paper)] px-4 text-sm font-medium text-rose-700"
+            >
+              刪除
+            </button>
+          </div>
+        ) : null}
+      </BottomSheet>
+
+      <AccountFormSheet
+        key={sheetOpen ? (editing?.id ?? "new") : "closed"}
+        open={sheetOpen}
+        account={editing}
+        onClose={closeSheet}
+        onSubmit={handleSubmit}
+      />
     </AppShell>
   );
 }

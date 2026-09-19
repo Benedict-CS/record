@@ -1,5 +1,13 @@
 import Dexie from "dexie";
+import {
+  isPinnedLastCategory,
+  sortCategories,
+} from "@/lib/category-order";
 import { getClientId } from "@/lib/client-id";
+import {
+  compareMonthTransactions,
+  compareSameDayTransactions,
+} from "@/lib/day-order";
 import { db } from "@/lib/db/schema";
 import { monthlyInterest, yearlyInterest } from "@/lib/interest";
 import type {
@@ -15,6 +23,7 @@ import type {
   DayBucket,
   Holding,
   HoldingKind,
+  HoldStatus,
   InterestCompounding,
   PeriodSummary,
   SummaryComparison,
@@ -152,7 +161,9 @@ export async function listCategories(
         .where("[book_id+kind]")
         .between([bookId, Dexie.minKey], [bookId, Dexie.maxKey]);
   const rows = await collection.filter((row) => !row.deleted_at).sortBy("sort_order");
-  return uniqueByKey(rows, (row) => `${row.kind}:${row.name.trim()}`);
+  return sortCategories(
+    uniqueByKey(rows, (row) => `${row.kind}:${row.name.trim()}`),
+  );
 }
 
 export async function listTransactionsForMonth(
@@ -169,13 +180,12 @@ export async function listTransactionsForMonth(
     .reverse()
     .toArray();
 
-  // The index already delivers date-descending; sorting only breaks same-day ties.
-  return rows.sort((a, b) => {
-    if (a.date === b.date) {
-      return b.updated_at.localeCompare(a.updated_at);
-    }
-    return b.date.localeCompare(a.date);
-  });
+  const categories = await listCategories(bookId);
+  const names = new Map(categories.map((row) => [row.id, row.name]));
+  const nameOf = (categoryId: string | null) =>
+    categoryId ? names.get(categoryId) : null;
+
+  return rows.sort((a, b) => compareMonthTransactions(a, b, nameOf));
 }
 
 export async function listTransactionsForYear(
@@ -202,7 +212,13 @@ export async function listTransactionsForDate(
     .equals([bookId, date])
     .filter((row) => !row.deleted_at && row.type !== "transfer")
     .toArray();
-  return rows.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+
+  const categories = await listCategories(bookId);
+  const names = new Map(categories.map((row) => [row.id, row.name]));
+  const nameOf = (categoryId: string | null) =>
+    categoryId ? names.get(categoryId) : null;
+
+  return rows.sort((a, b) => compareSameDayTransactions(a, b, nameOf));
 }
 
 export async function searchTransactions(
@@ -305,7 +321,12 @@ export async function createCategory(
     .where("book_id")
     .equals(bookId)
     .filter((row) => row.kind === input.kind && !row.deleted_at)
-    .count();
+    .toArray();
+  const pinned = sameKind.find((row) => isPinnedLastCategory(row));
+  // Keep 其他支出 / 其他收入 at the end: insert before the pinned catch-all.
+  const sort_order = pinned
+    ? pinned.sort_order
+    : sameKind.filter((row) => !isPinnedLastCategory(row)).length;
   const category: Category = {
     ...baseMeta(),
     book_id: bookId,
@@ -313,9 +334,17 @@ export async function createCategory(
     kind: input.kind,
     icon: input.icon ?? "dots",
     color: input.color ?? "#0f7a5f",
-    sort_order: sameKind,
+    sort_order,
   };
   await db.categories.add(category);
+  if (pinned) {
+    await db.categories.update(pinned.id, {
+      sort_order: sort_order + 1,
+      updated_at: nowIso(),
+      client_id: getClientId(),
+      sync_status: "pending",
+    });
+  }
   return category;
 }
 
@@ -356,8 +385,11 @@ export async function createTransaction(
     account_id: string;
     category_id?: string | null;
     transfer_account_id?: string | null;
+    hold_status?: HoldStatus | null;
+    release_transaction_id?: string | null;
   },
 ): Promise<Transaction> {
+  const isHold = input.type === "hold";
   const tx: Transaction = {
     ...baseMeta(),
     book_id: bookId,
@@ -368,6 +400,10 @@ export async function createTransaction(
     account_id: input.account_id,
     category_id: input.category_id ?? null,
     transfer_account_id: input.transfer_account_id ?? null,
+    hold_status: isHold ? (input.hold_status ?? "held") : null,
+    release_transaction_id: isHold
+      ? (input.release_transaction_id ?? null)
+      : null,
   };
   await db.transactions.add(tx);
   return tx;
@@ -385,15 +421,27 @@ export async function updateTransaction(
       | "account_id"
       | "category_id"
       | "transfer_account_id"
+      | "hold_status"
+      | "release_transaction_id"
     >
   >,
 ): Promise<void> {
   const existing = await db.transactions.get(id);
   if (!existing || existing.deleted_at) return;
+  const nextType = patch.type ?? existing.type;
+  const isHold = nextType === "hold";
   await db.transactions.update(id, {
     ...patch,
     amount:
       patch.amount !== undefined ? Math.abs(patch.amount) : existing.amount,
+    hold_status: isHold
+      ? (patch.hold_status ?? existing.hold_status ?? "held")
+      : null,
+    release_transaction_id: isHold
+      ? (patch.release_transaction_id !== undefined
+          ? patch.release_transaction_id
+          : existing.release_transaction_id)
+      : null,
     updated_at: nowIso(),
     client_id: getClientId(),
     sync_status: "pending",
@@ -403,11 +451,42 @@ export async function updateTransaction(
 export async function softDeleteTransaction(id: string): Promise<void> {
   const existing = await db.transactions.get(id);
   if (!existing || existing.deleted_at) return;
-  await db.transactions.update(id, {
-    deleted_at: nowIso(),
-    updated_at: nowIso(),
+
+  const stamp = nowIso();
+  const tombstone = {
+    deleted_at: stamp,
+    updated_at: stamp,
     client_id: getClientId(),
-    sync_status: "pending",
+    sync_status: "pending" as const,
+  };
+
+  await db.transaction("rw", db.transactions, async () => {
+    const row = await db.transactions.get(id);
+    if (!row || row.deleted_at) return;
+
+    // Keep hold ↔ release income paired so account balances stay consistent.
+    if (row.type === "hold" && row.release_transaction_id) {
+      const income = await db.transactions.get(row.release_transaction_id);
+      if (income && !income.deleted_at) {
+        await db.transactions.update(income.id, tombstone);
+      }
+    } else if (row.type === "income") {
+      const hold = await db.transactions
+        .where("book_id")
+        .equals(row.book_id)
+        .filter(
+          (tx) =>
+            !tx.deleted_at &&
+            tx.type === "hold" &&
+            tx.release_transaction_id === row.id,
+        )
+        .first();
+      if (hold) {
+        await db.transactions.update(hold.id, tombstone);
+      }
+    }
+
+    await db.transactions.update(row.id, tombstone);
   });
 }
 
@@ -442,7 +521,56 @@ export async function duplicateTransaction(
     account_id: existing.account_id,
     category_id: existing.category_id,
     transfer_account_id: existing.transfer_account_id,
+    hold_status: existing.type === "hold" ? "held" : null,
   });
+}
+
+/** Mark a hold as refunded: creates matching income and links it. */
+export async function releaseHold(
+  id: string,
+  releaseDate = todayIso(),
+): Promise<Transaction | undefined> {
+  let income: Transaction | undefined;
+
+  await db.transaction("rw", db.transactions, async () => {
+    const existing = await db.transactions.get(id);
+    if (
+      !existing ||
+      existing.deleted_at ||
+      existing.type !== "hold" ||
+      (existing.hold_status ?? "held") !== "held"
+    ) {
+      return;
+    }
+
+    const note = existing.note.trim()
+      ? `退回：${existing.note.trim()}`
+      : "退回：扣住款項";
+
+    income = {
+      ...baseMeta(),
+      book_id: existing.book_id,
+      type: "income",
+      amount: existing.amount,
+      date: releaseDate,
+      note,
+      account_id: existing.account_id,
+      category_id: null,
+      transfer_account_id: null,
+      hold_status: null,
+      release_transaction_id: null,
+    };
+    await db.transactions.add(income);
+    await db.transactions.update(existing.id, {
+      hold_status: "released",
+      release_transaction_id: income.id,
+      updated_at: nowIso(),
+      client_id: getClientId(),
+      sync_status: "pending",
+    });
+  });
+
+  return income;
 }
 
 export async function listTransactionsForAccount(
@@ -457,12 +585,14 @@ export async function listTransactionsForAccount(
     )
     .reverse()
     .toArray();
+
+  const categories = await listCategories(bookId);
+  const names = new Map(categories.map((row) => [row.id, row.name]));
+  const nameOf = (categoryId: string | null) =>
+    categoryId ? names.get(categoryId) : null;
+
   return rows
-    .sort((a, b) =>
-      a.date === b.date
-        ? b.updated_at.localeCompare(a.updated_at)
-        : b.date.localeCompare(a.date),
-    )
+    .sort((a, b) => compareMonthTransactions(a, b, nameOf))
     .slice(0, 300);
 }
 
@@ -657,7 +787,7 @@ export async function accountBalances(
   for (const tx of transactions) {
     if (tx.type === "income") {
       add(tx.account_id, tx.amount);
-    } else if (tx.type === "expense") {
+    } else if (tx.type === "expense" || tx.type === "hold") {
       add(tx.account_id, -tx.amount);
     } else {
       // Transfer: account_id is the source, transfer_account_id the destination.
@@ -672,19 +802,37 @@ export async function accountBalances(
   }));
 }
 
+/** Sum of live 扣住 rows that have not been refunded yet. */
+export async function outstandingHeldTotal(bookId: string): Promise<number> {
+  const rows = await bookTransactions(bookId)
+    .filter(
+      (row) =>
+        !row.deleted_at &&
+        row.type === "hold" &&
+        (row.hold_status ?? "held") === "held",
+    )
+    .toArray();
+  return rows.reduce((sum, row) => sum + row.amount, 0);
+}
+
 export async function bookTotals(
   bookId: string,
-): Promise<{ total: number; accounts: number; holdings: number }> {
-  const [balances, holdings] = await Promise.all([
+): Promise<{ total: number; accounts: number; holdings: number; held: number }> {
+  const [balances, holdings, held] = await Promise.all([
     accountBalances(bookId),
     listHoldings(bookId),
+    outstandingHeldTotal(bookId),
   ]);
   const accounts = balances.reduce((sum, item) => sum + item.balance, 0);
   const holdingSum = holdings.reduce((sum, item) => sum + item.amount, 0);
   return {
     accounts,
     holdings: holdingSum,
-    total: accounts + holdingSum,
+    held,
+    // Wealth headline = deposits only. Outstanding holds are cash still yours
+    // but already reflected in day-to-day accounts when refunded; do not add held
+    // here or 淨資產 drops on 已退回.
+    total: holdingSum,
   };
 }
 
@@ -782,7 +930,7 @@ export async function restoreHolding(id: string): Promise<void> {
 
 /**
  * Books an income transaction for estimated interest. Principal on the
- * holding is unchanged — this is a ledger entry, not a balance rewrite.
+ * holding is unchanged — this is a normal income row, not a balance rewrite.
  */
 export async function recordHoldingInterest(
   holdingId: string,
@@ -845,8 +993,9 @@ export async function claimLocalRowsForUser(userId: string): Promise<void> {
         db.holdings,
       ] as const;
       for (const table of tables) {
+        // Only adopt unowned local rows — never reassign another user's data.
         const orphans = await table
-          .filter((row) => !row.user_id || row.user_id !== userId)
+          .filter((row) => !row.user_id)
           .toArray();
         for (const row of orphans) {
           await table.update(row.id, {
@@ -862,15 +1011,35 @@ export async function claimLocalRowsForUser(userId: string): Promise<void> {
 }
 
 export function monthSummary(transactions: Transaction[]): PeriodSummary {
+  // Same-period holds point at their refund income; cross-month refunds use the note prefix.
+  const releaseIncomeIds = new Set(
+    transactions
+      .filter((tx) => tx.type === "hold" && tx.release_transaction_id)
+      .map((tx) => tx.release_transaction_id as string),
+  );
+
   let income = 0;
   let expense = 0;
+  let held = 0;
   for (const tx of transactions) {
-    if (tx.type === "income") income += tx.amount;
+    if (tx.type === "income") {
+      if (
+        releaseIncomeIds.has(tx.id) ||
+        tx.note.startsWith("退回：")
+      ) {
+        continue;
+      }
+      income += tx.amount;
+    }
     if (tx.type === "expense") expense += tx.amount;
+    // Count every hold in-period so later「已退回」does not erase that month's 花費.
+    if (tx.type === "hold") held += tx.amount;
   }
   return {
     income,
     expense,
+    held,
+    outflow: expense + held,
     net: income - expense,
   };
 }
@@ -916,10 +1085,12 @@ export function groupTransactionsByDay(
       date: tx.date,
       income: 0,
       expense: 0,
+      held: 0,
       transactions: [],
     };
     if (tx.type === "income") bucket.income += tx.amount;
     if (tx.type === "expense") bucket.expense += tx.amount;
+    if (tx.type === "hold") bucket.held += tx.amount;
     bucket.transactions.push(tx);
     map.set(tx.date, bucket);
   }

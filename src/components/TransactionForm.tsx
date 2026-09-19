@@ -3,35 +3,48 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { AmountKeypad } from "@/components/AmountKeypad";
 import { useBook } from "@/components/BookProvider";
+import { CategoryPickerGrid } from "@/components/CategoryPickerGrid";
 import { createTransaction, updateTransaction } from "@/lib/db/crud";
 import { formatCalcNumber } from "@/lib/calculator";
 import { formatMoney, todayLocal } from "@/lib/format";
 import { runSync } from "@/lib/sync/engine";
-import type { Account, Category, Transaction } from "@/lib/types";
+import type { Account, Category, Transaction, TransactionType } from "@/lib/types";
 
-type LedgerType = "income" | "expense";
+type FormType = "income" | "expense" | "hold";
+
+function toFormType(type: TransactionType | undefined): FormType {
+  if (type === "income") return "income";
+  if (type === "hold") return "hold";
+  return "expense";
+}
 
 export function TransactionForm({
   accounts,
   categories,
   initial,
   onSaved,
+  bare = false,
+  defaultDate,
 }: {
   accounts: Account[];
   categories: Category[];
   initial?: Transaction | null;
   onSaved?: () => void;
+  /** Drop the outer card chrome when the form lives inside a sheet. */
+  bare?: boolean;
+  /** Prefill date when creating (e.g. calendar day). */
+  defaultDate?: string;
 }) {
   const { book, bookId } = useBook();
   const isEdit = Boolean(initial?.id);
 
-  const initialType: LedgerType =
-    initial?.type === "income" ? "income" : "expense";
-  const [type, setType] = useState<LedgerType>(initialType);
+  const [type, setType] = useState<FormType>(toFormType(initial?.type));
   const [amount, setAmount] = useState<number | null>(
-    initial?.amount && initial.amount > 0 ? initial.amount : null,
+    initial && Number.isFinite(initial.amount) ? initial.amount : null,
   );
-  const [date, setDate] = useState(initial?.date ?? todayLocal);
+  const [date, setDate] = useState(
+    initial?.date ?? defaultDate ?? todayLocal(),
+  );
   const [note, setNote] = useState(initial?.note ?? "");
   const [accountId, setAccountId] = useState(
     initial?.account_id ?? accounts[0]?.id ?? "",
@@ -46,8 +59,8 @@ export function TransactionForm({
   if (seededFrom !== initial) {
     setSeededFrom(initial);
     if (initial) {
-      setType(initial.type === "income" ? "income" : "expense");
-      setAmount(initial.amount > 0 ? initial.amount : null);
+      setType(toFormType(initial.type));
+      setAmount(Number.isFinite(initial.amount) ? initial.amount : null);
       setDate(initial.date);
       setNote(initial.note);
       setAccountId(initial.account_id);
@@ -55,28 +68,40 @@ export function TransactionForm({
     }
   }
 
-  const filteredCategories = useMemo(
-    () => categories.filter((category) => category.kind === type),
-    [categories, type],
-  );
+  const filteredCategories = useMemo(() => {
+    if (type === "hold") {
+      return categories.filter((category) => category.kind === "expense");
+    }
+    return categories.filter((category) => category.kind === type);
+  }, [categories, type]);
 
   const effectiveAccountId = accountId || accounts[0]?.id || "";
   const effectiveCategoryId =
-    categoryId || filteredCategories[0]?.id || "";
+    type === "hold"
+      ? categoryId || null
+      : categoryId || filteredCategories[0]?.id || "";
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
 
-    if (amount === null || !Number.isFinite(amount) || amount <= 0) {
-      setError("請輸入有效金額");
+    if (amount === null || !Number.isFinite(amount) || amount < 0) {
+      setError("請輸入金額（請客可填 0）");
+      return;
+    }
+    if (type === "hold" && amount <= 0) {
+      setError("扣住金額需大於 0");
       return;
     }
     if (!effectiveAccountId) {
       setError("請先建立帳戶");
       return;
     }
-    if (!effectiveCategoryId) {
+    if (type === "hold" && !note.trim()) {
+      setError("請寫明扣住項目，例如：宿舍押金");
+      return;
+    }
+    if (type !== "hold" && !effectiveCategoryId) {
       setError("請選擇分類");
       return;
     }
@@ -93,10 +118,11 @@ export function TransactionForm({
         type,
         amount,
         date,
-        note,
+        note: note.trim(),
         account_id: effectiveAccountId,
-        category_id: String(effectiveCategoryId),
+        category_id: effectiveCategoryId ? String(effectiveCategoryId) : null,
         transfer_account_id: null,
+        hold_status: type === "hold" ? ("held" as const) : null,
       };
 
       if (isEdit && initial) {
@@ -124,13 +150,18 @@ export function TransactionForm({
     <>
       <form
         onSubmit={onSubmit}
-        className="space-y-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4"
+        className={
+          bare
+            ? "space-y-3"
+            : "space-y-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4"
+        }
       >
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {(
             [
               ["expense", "支出"],
               ["income", "收入"],
+              ["hold", "扣住"],
             ] as const
           ).map(([value, label]) => (
             <button
@@ -145,7 +176,9 @@ export function TransactionForm({
                 type === value
                   ? value === "expense"
                     ? "bg-rose-600 text-white"
-                    : "bg-emerald-700 text-white"
+                    : value === "income"
+                      ? "bg-emerald-700 text-white"
+                      : "bg-amber-700 text-white"
                   : "bg-[var(--paper)] text-[var(--muted)]",
               ].join(" ")}
             >
@@ -154,8 +187,16 @@ export function TransactionForm({
           ))}
         </div>
 
+        {type === "hold" ? (
+          <p className="text-[11px] leading-relaxed text-[var(--muted)]">
+            錢被扣住、之後會退或結算（押金、電費預繳）。不計入「實際花掉」。
+          </p>
+        ) : null}
+
         <div className="block">
-          <span className="mb-1 block text-xs text-[var(--muted)]">金額</span>
+          <span className="mb-1 block text-xs text-[var(--muted)]">
+            金額{type === "hold" ? "" : "（請客可填 0）"}
+          </span>
           <button
             type="button"
             onClick={() => setKeypadOpen(true)}
@@ -172,14 +213,35 @@ export function TransactionForm({
         </div>
 
         <label className="block">
-          <span className="mb-1 block text-xs text-[var(--muted)]">備註</span>
+          <span className="mb-1 block text-xs text-[var(--muted)]">
+            {type === "hold" ? "扣住項目" : "備註"}
+          </span>
           <input
             value={note}
             onChange={(event) => setNote(event.target.value)}
-            placeholder="例：午餐便當"
+            placeholder={
+              type === "hold" ? "例：宿舍押金、電費預繳" : "例：便當、請客"
+            }
             className="min-h-12 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-3 text-base outline-none focus:border-[var(--accent)]"
           />
         </label>
+
+        {type !== "hold" ? (
+          <div className="block">
+            <span className="mb-1.5 block text-xs text-[var(--muted)]">分類</span>
+            {filteredCategories.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-[var(--line)] px-3 py-4 text-center text-xs text-[var(--muted)]">
+                還沒有分類，請先到「分類」頁新增。
+              </p>
+            ) : (
+              <CategoryPickerGrid
+                categories={filteredCategories}
+                value={String(effectiveCategoryId)}
+                onChange={setCategoryId}
+              />
+            )}
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
@@ -207,21 +269,6 @@ export function TransactionForm({
           </label>
         </div>
 
-        <label className="block">
-          <span className="mb-1 block text-xs text-[var(--muted)]">分類</span>
-          <select
-            value={effectiveCategoryId}
-            onChange={(event) => setCategoryId(event.target.value)}
-            className="min-h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-          >
-            {filteredCategories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
         {error ? <p className="text-sm text-rose-600">{error}</p> : null}
 
         <button
@@ -229,7 +276,13 @@ export function TransactionForm({
           disabled={saving}
           className="min-h-12 w-full rounded-xl bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-[var(--paper)] disabled:opacity-60"
         >
-          {saving ? "儲存中…" : isEdit ? "更新" : "記一筆"}
+          {saving
+            ? "儲存中…"
+            : isEdit
+              ? "更新"
+              : type === "hold"
+                ? "記一筆扣住"
+                : "記一筆"}
         </button>
       </form>
 

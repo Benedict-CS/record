@@ -42,6 +42,7 @@ const TYPE_BADGE: Record<TransactionType, string> = {
   expense: "bg-rose-50 text-rose-700",
   income: "bg-emerald-50 text-emerald-700",
   transfer: "bg-[var(--paper)] text-[var(--muted)]",
+  hold: "bg-amber-50 text-amber-900",
 };
 
 type TemplateDraft = {
@@ -73,7 +74,7 @@ function TemplateForm({
   const [name, setName] = useState(initial?.name ?? "");
   const [type, setType] = useState<TransactionType>(initial?.type ?? "expense");
   const [amount, setAmount] = useState<number | null>(
-    initial && initial.amount > 0 ? initial.amount : null,
+    initial && Number.isFinite(initial.amount) ? initial.amount : null,
   );
   const [note, setNote] = useState(initial?.note ?? "");
   const [accountId, setAccountId] = useState(
@@ -107,8 +108,8 @@ function TemplateForm({
       setError("請輸入範本名稱");
       return;
     }
-    if (amount === null || !Number.isFinite(amount) || amount <= 0) {
-      setError("請輸入有效金額");
+    if (amount === null || !Number.isFinite(amount) || amount < 0) {
+      setError("請輸入金額（請客可填 0）");
       return;
     }
     if (!effectiveAccountId) {

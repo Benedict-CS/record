@@ -13,6 +13,7 @@ const TYPE_SIGN: Record<Template["type"], string> = {
   income: "+",
   expense: "-",
   transfer: "",
+  hold: "-",
 };
 
 /** One-tap reuse of saved templates, shown above the home entry form. */

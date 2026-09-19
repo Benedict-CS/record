@@ -82,7 +82,7 @@ assert(evaluateExpression("100+") === 100, "trailing operator preview");
 assert(applyKey("", "1") === "1", "first digit");
 assert(applyKey("0", "5") === "5", "replace leading zero");
 assert(toAmountValue("12.5") === 12.5, "amount parse");
-assert(toAmountValue("0") === null, "zero is not a ledger amount");
+assert(toAmountValue("0") === 0, "zero is a valid amount");
 assert(toAmountValue("10+") === null, "incomplete expression");
 
 console.log("money tests passed");

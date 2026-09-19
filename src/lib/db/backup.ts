@@ -14,7 +14,7 @@ import type {
 
 export const BACKUP_VERSION = 2;
 
-export interface LedgerBackup {
+export interface RecordBackup {
   version: number;
   exported_at: string;
   books: CloudBook[];
@@ -60,7 +60,7 @@ export async function exportBackup(): Promise<string> {
       db.holdings.toArray(),
     ]);
 
-  const payload: LedgerBackup = {
+  const payload: RecordBackup = {
     version: BACKUP_VERSION,
     exported_at: new Date().toISOString(),
     books: books.map(stripSyncStatus),

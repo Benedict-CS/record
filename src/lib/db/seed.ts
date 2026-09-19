@@ -1,4 +1,5 @@
 import { getClientId } from "@/lib/client-id";
+import { sortCategories } from "@/lib/category-order";
 import { db } from "@/lib/db/schema";
 import type { Account, Book, BookCurrency, Category, Holding } from "@/lib/types";
 
@@ -36,7 +37,9 @@ function expenseCategories(): Omit<
     { name: "娛樂", kind: "expense", icon: "smile", color: "#8e44ad", sort_order: 11 },
     { name: "醫療", kind: "expense", icon: "heart", color: "#c0392b", sort_order: 12 },
     { name: "學習", kind: "expense", icon: "book", color: "#2980b9", sort_order: 13 },
-    { name: "其他支出", kind: "expense", icon: "dots", color: "#7f8c8d", sort_order: 14 },
+    { name: "請客", kind: "expense", icon: "cup", color: "#e67e22", sort_order: 14 },
+    { name: "水果", kind: "expense", icon: "leaf", color: "#27ae60", sort_order: 15 },
+    { name: "其他支出", kind: "expense", icon: "dots", color: "#7f8c8d", sort_order: 16 },
   ];
 }
 
@@ -105,15 +108,72 @@ type HoldingSeed = Pick<
 function defaultHoldings(currency: BookCurrency): HoldingSeed[] {
   if (currency === "MYR") {
     return [
-      { name: "現金", kind: "cash", institution: "", amount: 0, annual_rate: 0, compounding: "none", icon: "wallet", color: "#27ae60", sort_order: 0 },
-      { name: "Maybank 活存", kind: "savings", institution: "Maybank", amount: 0, annual_rate: 0.25, compounding: "simple", icon: "building", color: "#f39c12", sort_order: 1 },
-      { name: "定存 Fixed Deposit", kind: "deposit", institution: "Maybank", amount: 0, annual_rate: 3.1, compounding: "yearly", icon: "building", color: "#16a085", sort_order: 2 },
-      { name: "Touch 'n Go eWallet", kind: "ewallet", institution: "Touch 'n Go", amount: 0, annual_rate: 0, compounding: "none", icon: "phone", color: "#1abc9c", sort_order: 3 },
-      { name: "ShopeePay", kind: "ewallet", institution: "Shopee", amount: 0, annual_rate: 0, compounding: "none", icon: "bag", color: "#e67e22", sort_order: 4 },
-      { name: "MAE", kind: "ewallet", institution: "Maybank", amount: 0, annual_rate: 0, compounding: "none", icon: "phone", color: "#f1c40f", sort_order: 5 },
-      { name: "Boost", kind: "ewallet", institution: "Boost", amount: 0, annual_rate: 0, compounding: "none", icon: "bag", color: "#e74c3c", sort_order: 6 },
-      { name: "ASNB 基金", kind: "fund", institution: "ASNB", amount: 0, annual_rate: 4.5, compounding: "yearly", icon: "chart", color: "#8e44ad", sort_order: 7 },
-      { name: "Public Mutual", kind: "fund", institution: "Public Mutual", amount: 0, annual_rate: 5, compounding: "yearly", icon: "chart", color: "#9b59b6", sort_order: 8 },
+      {
+        name: "ASM1",
+        kind: "fund",
+        institution: "ASNB",
+        amount: 0,
+        annual_rate: 5,
+        compounding: "simple",
+        icon: "chart",
+        color: "#8e44ad",
+        sort_order: 0,
+      },
+      {
+        name: "ASM2",
+        kind: "fund",
+        institution: "ASNB",
+        amount: 0,
+        annual_rate: 5,
+        compounding: "simple",
+        icon: "chart",
+        color: "#9b59b6",
+        sort_order: 1,
+      },
+      {
+        name: "ASM3",
+        kind: "fund",
+        institution: "ASNB",
+        amount: 0,
+        annual_rate: 4.75,
+        compounding: "simple",
+        icon: "chart",
+        color: "#6c3483",
+        sort_order: 2,
+      },
+      {
+        name: "Shopee Money+",
+        kind: "ewallet",
+        institution: "Shopee",
+        amount: 0,
+        annual_rate: 3.6,
+        compounding: "simple",
+        icon: "bag",
+        color: "#e67e22",
+        sort_order: 3,
+      },
+      {
+        name: "Maybank Saving",
+        kind: "savings",
+        institution: "Maybank",
+        amount: 0,
+        annual_rate: 0,
+        compounding: "none",
+        icon: "building",
+        color: "#f39c12",
+        sort_order: 4,
+      },
+      {
+        name: "eGold (TNG)",
+        kind: "other",
+        institution: "Touch 'n Go",
+        amount: 0,
+        annual_rate: 0,
+        compounding: "none",
+        icon: "wallet",
+        color: "#d4ac0d",
+        sort_order: 5,
+      },
     ];
   }
   return [
@@ -127,6 +187,29 @@ function defaultHoldings(currency: BookCurrency): HoldingSeed[] {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+/** Rewrite catch-all category sort_order so they stay last within each kind. */
+async function pinCatchAllCategories(
+  bookId: string,
+  clientId: string,
+  stamp: string,
+) {
+  const rows = (await db.categories.where("book_id").equals(bookId).toArray())
+    .filter((row) => !row.deleted_at);
+  for (const kind of ["expense", "income"] as const) {
+    const ofKind = sortCategories(rows.filter((row) => row.kind === kind));
+    for (let index = 0; index < ofKind.length; index += 1) {
+      const row = ofKind[index];
+      if (row.sort_order === index) continue;
+      await db.categories.update(row.id, {
+        sort_order: index,
+        updated_at: stamp,
+        client_id: clientId,
+        sync_status: "pending",
+      });
+    }
+  }
 }
 
 function tombstone() {
@@ -178,29 +261,44 @@ async function seedBookContents(book: Book, clientId: string, stamp: string) {
   }
 
   if (existingCategories === 0) {
-    const cats = [...expenseCategories(), ...incomeCategories()];
-    await db.categories.bulkAdd(
-      cats.map((item) => ({
-        ...item,
-        id: crypto.randomUUID(),
-        book_id: book.id,
-        user_id: null,
-        updated_at: stamp,
-        deleted_at: null,
-        client_id: clientId,
-        sync_status: "pending" as const,
-      })),
-    );
-  } else {
-    // Add newly introduced defaults (e.g. 運動 / 機車) without wiping user cats.
+    // Still respect soft-deleted names so wiping every live tag cannot
+    // resurrect the full default set on the next seed/sync.
     const existing = await db.categories
       .where("book_id")
       .equals(book.id)
-      .filter((row) => !row.deleted_at)
       .toArray();
-    const have = new Set(existing.map((row) => `${row.kind}:${row.name}`));
+    const have = new Set(
+      existing.map((row) => `${row.kind}:${row.name.trim()}`),
+    );
     const missing = [...expenseCategories(), ...incomeCategories()].filter(
-      (item) => !have.has(`${item.kind}:${item.name}`),
+      (item) => !have.has(`${item.kind}:${item.name.trim()}`),
+    );
+    if (missing.length) {
+      await db.categories.bulkAdd(
+        missing.map((item) => ({
+          ...item,
+          id: crypto.randomUUID(),
+          book_id: book.id,
+          user_id: null,
+          updated_at: stamp,
+          deleted_at: null,
+          client_id: clientId,
+          sync_status: "pending" as const,
+        })),
+      );
+    }
+  } else {
+    // Add newly introduced defaults (e.g. 運動 / 機車) without wiping user cats.
+    // Include soft-deleted names so user deletions are not resurrected on every boot.
+    const existing = await db.categories
+      .where("book_id")
+      .equals(book.id)
+      .toArray();
+    const have = new Set(
+      existing.map((row) => `${row.kind}:${row.name.trim()}`),
+    );
+    const missing = [...expenseCategories(), ...incomeCategories()].filter(
+      (item) => !have.has(`${item.kind}:${item.name.trim()}`),
     );
     if (missing.length) {
       await db.categories.bulkAdd(
@@ -217,6 +315,9 @@ async function seedBookContents(book: Book, clientId: string, stamp: string) {
       );
     }
   }
+
+  // Keep catch-all tags at the end even if newer defaults were inserted after them.
+  await pinCatchAllCategories(book.id, clientId, stamp);
 
   const existingHoldings = await db.holdings
     .where("book_id")
@@ -297,6 +398,12 @@ async function dedupeSeedDuplicates() {
         }
       }
       await db.books.update(extra.book.id, mark);
+      if (
+        typeof localStorage !== "undefined" &&
+        localStorage.getItem("ledger_active_book_id") === extra.book.id
+      ) {
+        localStorage.setItem("ledger_active_book_id", keep.id);
+      }
     }
   }
 
@@ -311,8 +418,34 @@ async function dedupeSeedDuplicates() {
     );
     for (const group of accountGroups.values()) {
       if (group.length < 2) continue;
-      const keep = group[0];
-      for (const extra of group.slice(1)) {
+      // Prefer synced / most-referenced account so collapse does not tombstone
+      // the cloud KEEP cash/bank ids.
+      const scored = await Promise.all(
+        group.map(async (account) => {
+          const txCount = await db.transactions
+            .where("book_id")
+            .equals(book.id)
+            .filter(
+              (row) =>
+                !row.deleted_at &&
+                (row.account_id === account.id ||
+                  row.transfer_account_id === account.id),
+            )
+            .count();
+          return {
+            account,
+            txCount,
+            synced: account.sync_status === "synced" ? 1 : 0,
+          };
+        }),
+      );
+      scored.sort((a, b) => {
+        if (b.txCount !== a.txCount) return b.txCount - a.txCount;
+        if (b.synced !== a.synced) return b.synced - a.synced;
+        return a.account.sort_order - b.account.sort_order;
+      });
+      const keep = scored[0].account;
+      for (const { account: extra } of scored.slice(1)) {
         const txs = await db.transactions
           .where("book_id")
           .equals(book.id)
@@ -427,6 +560,25 @@ async function runSeed(): Promise<void> {
             row.currency === def.currency && row.name.trim() === def.name,
         );
         if (exists) continue;
+
+        // Restore a soft-deleted twin instead of minting a new empty UUID
+        // (orphans accounts/txs on the tombstoned id and breaks web sync).
+        const tombstoned = books.find(
+          (row) =>
+            row.deleted_at &&
+            row.currency === def.currency &&
+            row.name.trim() === def.name,
+        );
+        if (tombstoned) {
+          await db.books.update(tombstoned.id, {
+            deleted_at: null,
+            updated_at: stamp,
+            client_id: clientId,
+            sync_status: "pending",
+          });
+          continue;
+        }
+
         await db.books.add({
           ...def,
           id: crypto.randomUUID(),

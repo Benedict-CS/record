@@ -1,5 +1,9 @@
 "use client";
 
+/**
+ * Live-query hooks for Record (記帳本) local data.
+ * File name still says LedgerData for older imports; product name is Record.
+ */
 import { liveQuery } from "dexie";
 import { useEffect, useState } from "react";
 import { useBook } from "@/components/BookProvider";
@@ -14,6 +18,7 @@ import {
   listTransactionsForYear,
   listTransactionsForAccount,
   listHoldings,
+  outstandingHeldTotal,
   searchTransactions,
 } from "@/lib/db/crud";
 import type {
@@ -76,12 +81,14 @@ export function useMonthTransactions(year: number, month: number) {
   );
 }
 
-export function useYearTransactions(year: number) {
+export function useYearTransactions(year: number, enabled = true) {
   const { bookId } = useBook();
   return useLiveList(
     () =>
-      bookId ? listTransactionsForYear(bookId, year) : Promise.resolve([]),
-    [bookId, year],
+      enabled && bookId
+        ? listTransactionsForYear(bookId, year)
+        : Promise.resolve([]),
+    [bookId, year, enabled],
   );
 }
 
@@ -123,6 +130,32 @@ export function useAccountBalances() {
   const { bookId } = useBook();
   return useLiveList<AccountBalance>(
     () => (bookId ? accountBalances(bookId) : Promise.resolve([])),
+    [bookId],
+  );
+}
+
+function useLiveValue<T>(factory: () => Promise<T>, fallback: T, deps: unknown[]) {
+  const [value, setValue] = useState<T>(fallback);
+
+  useEffect(() => {
+    const observable = liveQuery(() => factory());
+    const subscription = observable.subscribe({
+      next: (next) => setValue(next),
+      error: () => setValue(fallback),
+    });
+    return () => subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+
+  return value;
+}
+
+/** Outstanding 扣住 amount (not yet refunded). */
+export function useOutstandingHeld() {
+  const { bookId } = useBook();
+  return useLiveValue(
+    () => (bookId ? outstandingHeldTotal(bookId) : Promise.resolve(0)),
+    0,
     [bookId],
   );
 }
