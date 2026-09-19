@@ -99,8 +99,9 @@ async function collapseDuplicateBooks() {
       }),
     );
     scored.sort((a, b) => {
-      if (b.txCount !== a.txCount) return b.txCount - a.txCount;
+      // Prefer the cloud-synced twin so local random UUIDs do not stay active.
       if (b.synced !== a.synced) return b.synced - a.synced;
+      if (b.txCount !== a.txCount) return b.txCount - a.txCount;
       return a.book.sort_order - b.book.sort_order;
     });
 
@@ -133,6 +134,12 @@ async function collapseDuplicateBooks() {
         client_id: clientId,
         sync_status: "pending",
       });
+      if (
+        typeof localStorage !== "undefined" &&
+        localStorage.getItem("ledger_active_book_id") === extra.id
+      ) {
+        localStorage.setItem("ledger_active_book_id", keep.id);
+      }
     }
   }
 }
@@ -382,11 +389,8 @@ async function pullAll(userId: string) {
     await mergeRemoteHoldings((data ?? []) as CloudHolding[]);
   }
 
-  await db.sync_state.put({
-    id: "default",
-    last_pulled_at: new Date().toISOString(),
-    last_pushed_at: state?.last_pushed_at ?? null,
-  });
+  // Defer last_pulled_at until push succeeds so a failed push can re-pull.
+  return new Date().toISOString();
 }
 
 async function pushPending(userId: string) {
@@ -538,10 +542,16 @@ export async function runSync(): Promise<void> {
     }
 
     await claimLocalRowsForUser(user.id);
-    await pullAll(user.id);
+    const pulledAt = await pullAll(user.id);
     await collapseDuplicateBooks();
     await retireTransfersLocally();
     await pushPending(user.id);
+    const syncState = await db.sync_state.get("default");
+    await db.sync_state.put({
+      id: "default",
+      last_pulled_at: pulledAt,
+      last_pushed_at: syncState?.last_pushed_at ?? new Date().toISOString(),
+    });
     setStatus("synced");
   } catch (error) {
     const table =

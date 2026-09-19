@@ -823,7 +823,9 @@ export async function claimLocalRowsForUser(userId: string): Promise<void> {
         db.holdings,
       ] as const;
       for (const table of tables) {
-        const orphans = await table.filter((row) => !row.user_id).toArray();
+        const orphans = await table
+          .filter((row) => !row.user_id || row.user_id !== userId)
+          .toArray();
         for (const row of orphans) {
           await table.update(row.id, {
             user_id: userId,
