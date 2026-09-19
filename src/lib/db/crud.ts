@@ -91,10 +91,32 @@ function uniqueByKey<T>(rows: T[], keyOf: (row: T) => string): T[] {
 
 export async function listBooks(): Promise<Book[]> {
   const rows = await db.books.orderBy("sort_order").toArray();
-  return uniqueByKey(
-    uniqueById(rows.filter((row) => !row.deleted_at)),
-    (row) => `${row.currency}:${row.name.trim()}`,
-  );
+  const live = uniqueById(rows.filter((row) => !row.deleted_at));
+
+  // When duplicate currency+name books exist, keep the one with the most txs.
+  const best = new Map<string, Book>();
+  for (const book of live) {
+    const key = `${book.currency}:${book.name.trim()}`;
+    const current = best.get(key);
+    if (!current) {
+      best.set(key, book);
+      continue;
+    }
+    const [a, b] = await Promise.all([
+      db.transactions
+        .where("book_id")
+        .equals(current.id)
+        .filter((row) => !row.deleted_at)
+        .count(),
+      db.transactions
+        .where("book_id")
+        .equals(book.id)
+        .filter((row) => !row.deleted_at)
+        .count(),
+    ]);
+    if (b > a) best.set(key, book);
+  }
+  return [...best.values()].sort((a, b) => a.sort_order - b.sort_order);
 }
 
 export async function createBook(input: {

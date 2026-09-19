@@ -168,6 +168,36 @@ async function retireTransfersLocally() {
   }
 }
 
+/** Remove invented/demo local rows that cloud cleanup cannot match by id. */
+async function purgeInventedLocalData() {
+  const stamp = new Date().toISOString();
+  const junk = await db.transactions
+    .filter((row) => {
+      if (row.deleted_at) return false;
+      if (row.note.includes("示範")) return true;
+      // No real August ledger was provided — wipe any Aug rows still sitting locally.
+      if (row.date >= "2026-08-01" && row.date < "2026-09-01") return true;
+      // Aug/Sep income must stay 0 until the user provides real income.
+      if (
+        row.type === "income" &&
+        row.date >= "2026-08-01" &&
+        row.date < "2026-10-01"
+      ) {
+        return true;
+      }
+      return false;
+    })
+    .toArray();
+
+  for (const row of junk) {
+    await db.transactions.update(row.id, {
+      deleted_at: stamp,
+      updated_at: stamp,
+      sync_status: "pending",
+    });
+  }
+}
+
 async function mergeRemoteBooks(remoteRows: CloudBook[]) {
   for (const remote of remoteRows) {
     const local = await db.books.get(remote.id);
@@ -230,7 +260,8 @@ async function mergeRemoteTransactions(remoteRows: CloudTransaction[]) {
       });
       continue;
     }
-    if (local.sync_status === "pending") continue;
+    // Cloud wins when newer (including soft-deletes). Pending local must not
+    // block cleanup of invented/demo rows already removed remotely.
     if (remote.updated_at >= local.updated_at) {
       await db.transactions.put({
         ...remote,
@@ -342,13 +373,13 @@ async function pullAll(userId: string) {
   }
 
   {
-    let query = supabase
+    // Always full-pull transactions so tombstones and Sep imports are not missed
+    // when last_pulled_at advanced past a failed/partial sync.
+    const { data, error } = await supabase
       .from("transactions")
       .select("*")
       .eq("user_id", userId)
       .order("updated_at", { ascending: true });
-    if (since) query = query.gt("updated_at", since);
-    const { data, error } = await query;
     if (error) throw error;
     await mergeRemoteTransactions((data ?? []) as CloudTransaction[]);
   }
@@ -545,6 +576,7 @@ export async function runSync(): Promise<void> {
     const pulledAt = await pullAll(user.id);
     await collapseDuplicateBooks();
     await retireTransfersLocally();
+    await purgeInventedLocalData();
     await pushPending(user.id);
     const syncState = await db.sync_state.get("default");
     await db.sync_state.put({
