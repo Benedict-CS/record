@@ -213,40 +213,44 @@ export function ReportsPage() {
             ))}
           </div>
 
-          <section className="rounded-2xl bg-[var(--ink)] px-4 py-4 text-[var(--paper)]">
-            <div className="mb-3 flex items-center justify-between">
+          <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-4">
+            <div className="mb-3 flex items-center justify-between gap-1">
               <button
                 type="button"
                 onClick={() => shiftPeriod(-1)}
-                className="min-h-11 rounded-md px-2 py-1 text-sm opacity-80 hover:opacity-100"
+                aria-label={scope === "month" ? "上一期" : "上一年"}
+                className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-[var(--line)] bg-[var(--paper)] text-lg text-[var(--ink)]"
               >
-                {scope === "month" ? "上月" : "上年"}
+                ‹
               </button>
-              <p className="text-sm font-medium tracking-wide">{periodLabel}</p>
+              <p className="text-sm font-semibold tracking-wide text-[var(--ink)]">
+                {periodLabel}
+              </p>
               <button
                 type="button"
                 onClick={() => shiftPeriod(1)}
-                className="min-h-11 rounded-md px-2 py-1 text-sm opacity-80 hover:opacity-100"
+                aria-label={scope === "month" ? "下一期" : "下一年"}
+                className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-[var(--line)] bg-[var(--paper)] text-lg text-[var(--ink)]"
               >
-                {scope === "month" ? "下月" : "下年"}
+                ›
               </button>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center">
-              <div>
-                <p className="text-[11px] opacity-70">收入</p>
-                <p className="mt-1 text-sm font-semibold text-emerald-300">
+              <div className="rounded-xl bg-[var(--paper)] px-1.5 py-2">
+                <p className="text-[11px] text-[var(--muted)]">收入</p>
+                <p className="mt-1 text-sm font-semibold tabular-nums text-emerald-700">
                   {formatMoney(summary.income, currency)}
                 </p>
               </div>
-              <div>
-                <p className="text-[11px] opacity-70">支出</p>
-                <p className="mt-1 text-sm font-semibold text-rose-300">
+              <div className="rounded-xl bg-[var(--paper)] px-1.5 py-2">
+                <p className="text-[11px] text-[var(--muted)]">支出</p>
+                <p className="mt-1 text-sm font-semibold tabular-nums text-rose-700">
                   {formatMoney(summary.expense, currency)}
                 </p>
               </div>
-              <div>
-                <p className="text-[11px] opacity-70">結餘</p>
-                <p className="mt-1 text-sm font-semibold">
+              <div className="rounded-xl bg-[var(--paper)] px-1.5 py-2">
+                <p className="text-[11px] text-[var(--muted)]">結餘</p>
+                <p className="mt-1 text-sm font-semibold tabular-nums text-[var(--ink)]">
                   {formatMoney(summary.net, currency)}
                 </p>
               </div>
