@@ -21,7 +21,7 @@ const body = Source_Sans_3({
 
 export const metadata: Metadata = {
   title: "記帳本",
-  description: "Offline-first personal ledger with TWD / MYR books",
+  description: "離線優先的個人記帳本，支援台幣／馬幣雙帳本",
   applicationName: "記帳本",
   manifest: "/manifest.webmanifest",
   appleWebApp: {

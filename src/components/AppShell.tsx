@@ -58,8 +58,8 @@ export function AppShell({
       <header className="mb-3 space-y-2">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] tracking-[0.2em] text-[var(--muted)] uppercase">
-              Ledger
+            <p className="text-[10px] tracking-[0.18em] text-[var(--muted)]">
+              記帳本
             </p>
             <h1 className="mt-0.5 text-xl font-semibold tracking-tight text-[var(--ink)] sm:text-2xl">
               {title}

@@ -51,8 +51,8 @@ export function ExportCsvButton({
     const csv = transactionsToCsv(transactions, accounts, categories);
     const filename =
       scope === "month"
-        ? `ledger-${year}-${String(month).padStart(2, "0")}.csv`
-        : `ledger-${year}.csv`;
+        ? `記帳-${year}-${String(month).padStart(2, "0")}.csv`
+        : `記帳-${year}.csv`;
     downloadCsv(filename, csv);
   }
 

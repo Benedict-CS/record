@@ -1,6 +1,6 @@
 # 登入／註冊／同步流程說明
 
-本文件記錄 **記帳本（Ledger）** 目前的帳號與同步行為。  
+本文件記錄 **記帳本** 目前的帳號與同步行為。  
 認證走 **Supabase Auth：Email + 密碼**（與 Google 無關）。
 
 正式網址：https://record.benedicttiong.site  

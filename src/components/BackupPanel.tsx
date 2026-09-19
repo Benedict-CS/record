@@ -51,7 +51,7 @@ export function BackupPanel() {
     setError(null);
     try {
       const json = await exportBackup();
-      downloadJson(`ledger-backup-${todayLocal()}.json`, json);
+      downloadJson(`記帳備份-${todayLocal()}.json`, json);
       setMessage("備份檔已下載。");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "匯出失敗，請再試一次。");

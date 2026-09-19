@@ -78,24 +78,6 @@ export function AmountKeypad({
     }
   }
 
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
-  const live = evaluateExpression(expression);
-  const liveLabel =
-    live === null ? "—" : formatCalcNumber(Math.abs(live));
-
   function handleConfirm() {
     const amount = toAmountValue(expression);
     if (amount === null) return;
@@ -115,6 +97,80 @@ export function AmountKeypad({
     setExpression((prev) => applyKey(prev, key));
   }
 
+  useEffect(() => {
+    if (!open) return;
+
+    const mapKeyboardKey = (event: KeyboardEvent): CalcKey | "escape" | null => {
+      if (event.key === "Escape") return "escape";
+      if (event.key === "Enter" || event.key === "=") return "equals";
+      if (event.key === "Backspace") return "backspace";
+      if (event.key === "Delete" || event.key === "Clear") return "clear";
+
+      const digit = event.code.startsWith("Numpad")
+        ? event.code.replace("Numpad", "")
+        : event.key;
+
+      if (digit >= "0" && digit <= "9") return digit as CalcKey;
+      if (
+        event.key === "." ||
+        event.key === "Decimal" ||
+        event.code === "NumpadDecimal"
+      ) {
+        return ".";
+      }
+      if (event.key === "+" || event.code === "NumpadAdd") return "+";
+      if (event.key === "-" || event.code === "NumpadSubtract") return "-";
+      if (event.key === "*" || event.code === "NumpadMultiply") return "*";
+      if (event.key === "/" || event.code === "NumpadDivide") return "/";
+      return null;
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      const mapped = mapKeyboardKey(event);
+      if (!mapped) return;
+      event.preventDefault();
+
+      if (mapped === "escape") {
+        onClose();
+        return;
+      }
+
+      if (mapped === "equals") {
+        setExpression((prev) => {
+          const amount = toAmountValue(prev);
+          if (amount !== null) {
+            // Confirm on the next tick so we don't update state during the
+            // functional updater while still reading the latest expression.
+            queueMicrotask(() => onConfirm(amount));
+            return prev;
+          }
+          return applyKey(prev, "equals");
+        });
+        return;
+      }
+
+      setExpression((prev) => applyKey(prev, mapped));
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose, onConfirm]);
+
+  if (!open) return null;
+
+  const live = evaluateExpression(expression);
+  const liveLabel =
+    live === null ? "—" : formatCalcNumber(Math.abs(live));
   const canConfirm = toAmountValue(expression) !== null;
 
   return (
