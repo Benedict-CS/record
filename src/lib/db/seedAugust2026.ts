@@ -209,15 +209,27 @@ export async function seedDemoMonths2026(bookId: string): Promise<{
 }> {
   const august = await seedMonthDemo(bookId, 2026, 8, AUGUST_ROWS);
   const september = await seedMonthDemo(bookId, 2026, 9, SEPTEMBER_ROWS);
-
-  const state = await db.sync_state.get("default");
-  await db.sync_state.put({
-    id: "default",
-    last_pulled_at: null,
-    last_pushed_at: state?.last_pushed_at ?? null,
-  });
-
   return { august, september };
+}
+
+/** Seed once per book when no live demo rows exist yet. */
+export async function seedDemoMonthsIfEmpty(bookId: string): Promise<{
+  didSeed: boolean;
+  august: number;
+  september: number;
+}> {
+  const existing = await db.transactions
+    .where("book_id")
+    .equals(bookId)
+    .filter((row) => !row.deleted_at && row.note.includes(DEMO_MARK))
+    .count();
+
+  if (existing > 0) {
+    return { didSeed: false, august: 0, september: 0 };
+  }
+
+  const result = await seedDemoMonths2026(bookId);
+  return { didSeed: true, ...result };
 }
 
 /** @deprecated use seedDemoMonths2026 */
