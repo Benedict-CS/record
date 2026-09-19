@@ -50,3 +50,4 @@ public/swe-worker-*.js
 # supabase cli local state
 supabase/.temp/
 
+.vercel
