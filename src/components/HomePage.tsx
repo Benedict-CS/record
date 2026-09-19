@@ -3,7 +3,6 @@
 import {
   useEffect,
   useMemo,
-  useRef,
   useState,
   type FormEvent,
 } from "react";
@@ -17,11 +16,7 @@ import { TransactionEditor } from "@/components/TransactionEditor";
 import { TransactionForm } from "@/components/TransactionForm";
 import { TransactionList } from "@/components/TransactionList";
 import { useToast } from "@/components/ToastProvider";
-import {
-  createTemplateFromTransaction,
-  listTransactionsForMonth,
-} from "@/lib/db/crud";
-import { seedDemoMonthsIfEmpty } from "@/lib/db/seedAugust2026";
+import { createTemplateFromTransaction } from "@/lib/db/crud";
 import { formatMoney } from "@/lib/format";
 import {
   useAccounts,
@@ -158,7 +153,7 @@ function SaveTemplateSheet({
 
 export function HomePage() {
   const ready = useSeedReady();
-  const { book, bookId } = useBook();
+  const { book } = useBook();
   const now = useMemo(() => new Date(), []);
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -168,54 +163,10 @@ export function HomePage() {
     "all" | Transaction["type"]
   >("all");
   const { show } = useToast();
-  const demoReadyForBook = useRef<string | null>(null);
 
   const accounts = useAccounts();
   const categories = useCategories();
   const transactions = useMonthTransactions(year, month);
-
-  // Auto-fill Aug/Sep 2026 demos once, then open a month that actually has rows.
-  useEffect(() => {
-    if (!ready || !bookId) return;
-    if (demoReadyForBook.current === bookId) return;
-    demoReadyForBook.current = bookId;
-
-    let cancelled = false;
-    void (async () => {
-      try {
-        const seeded = await seedDemoMonthsIfEmpty(bookId);
-        if (seeded.didSeed) void runSync();
-
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth() + 1;
-        const currentRows = await listTransactionsForMonth(
-          bookId,
-          currentYear,
-          currentMonth,
-        );
-        if (cancelled) return;
-
-        if (seeded.didSeed || currentRows.length === 0) {
-          const september = await listTransactionsForMonth(bookId, 2026, 9);
-          const august = await listTransactionsForMonth(bookId, 2026, 8);
-          if (cancelled) return;
-          if (september.length > 0) {
-            setYear(2026);
-            setMonth(9);
-          } else if (august.length > 0) {
-            setYear(2026);
-            setMonth(8);
-          }
-        }
-      } catch {
-        // Keep the current calendar month if seeding fails (e.g. missing accounts).
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ready, bookId, now]);
 
   const visibleTransactions = useMemo(
     () =>

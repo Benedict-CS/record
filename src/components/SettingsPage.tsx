@@ -9,11 +9,8 @@ import {
   useSyncExternalStore,
 } from "react";
 import { AppShell } from "@/components/AppShell";
-import { useBook } from "@/components/BookProvider";
 import { ReminderNudge } from "@/components/ReminderNudge";
 import { useToast } from "@/components/ToastProvider";
-import { seedDemoMonths2026 } from "@/lib/db/seedAugust2026";
-import { runSync } from "@/lib/sync/engine";
 import {
   getNotificationPermission,
   getNotificationPermissionServerSnapshot,
@@ -52,8 +49,6 @@ const PERMISSION_LABEL: Record<NotificationOutcome, string> = {
 
 export function SettingsPage() {
   const { show } = useToast();
-  const { book, bookId } = useBook();
-  const [seeding, setSeeding] = useState(false);
   // Both values live outside React (localStorage / the Notification API), so
   // they hydrate from the server snapshot and then swap to the real value.
   const settings = useSyncExternalStore(
@@ -75,29 +70,6 @@ export function SettingsPage() {
     },
     [],
   );
-
-  async function onSeedAugust() {
-    if (!bookId) {
-      show("找不到目前帳本", { variant: "error" });
-      return;
-    }
-    setSeeding(true);
-    try {
-      const result = await seedDemoMonths2026(bookId);
-      void runSync();
-      show(
-        `已寫入示範資料：8月 ${result.august} 筆、9月 ${result.september} 筆（${book?.name ?? "帳本"}）`,
-        { variant: "success" },
-      );
-    } catch (caught) {
-      show(
-        caught instanceof Error ? caught.message : "寫入示範資料失敗",
-        { variant: "error" },
-      );
-    } finally {
-      setSeeding(false);
-    }
-  }
 
   const save = useCallback(
     (next: ReminderSettings, message: string) => {
@@ -249,22 +221,6 @@ export function SettingsPage() {
               </li>
             ))}
           </ul>
-        </section>
-
-        <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3">
-          <h2 className="text-sm font-medium text-[var(--ink)]">示範資料</h2>
-          <p className="mt-1.5 text-xs leading-relaxed text-[var(--muted)]">
-            把 2026 年 8–9
-            月的範例收支寫進「目前這個帳本」。備註會標示「示範」，可重複點擊覆蓋。
-          </p>
-          <button
-            type="button"
-            disabled={seeding || !bookId}
-            onClick={() => void onSeedAugust()}
-            className="mt-3 min-h-11 w-full rounded-xl bg-[var(--ink)] px-4 text-sm font-medium text-[var(--paper)] disabled:opacity-60"
-          >
-            {seeding ? "寫入中…" : "填入 2026/8–9 示範帳本"}
-          </button>
         </section>
 
         <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3">
