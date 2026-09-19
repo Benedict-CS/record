@@ -36,7 +36,6 @@ import type {
 const TYPE_OPTIONS: { value: TransactionType; label: string }[] = [
   { value: "expense", label: "支出" },
   { value: "income", label: "收入" },
-  { value: "transfer", label: "轉帳" },
 ];
 
 const TYPE_BADGE: Record<TransactionType, string> = {
@@ -298,7 +297,7 @@ function TemplateForm({
 export function TemplatesPage() {
   const { book, bookId } = useBook();
   const ready = useSeedReady();
-  const templates = useTemplates();
+  const templates = useTemplates().filter((row) => row.type !== "transfer");
   const accounts = useAccounts();
   const categories = useCategories();
 

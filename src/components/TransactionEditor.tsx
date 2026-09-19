@@ -7,27 +7,10 @@ import { formatCalcNumber } from "@/lib/calculator";
 import { updateTransaction } from "@/lib/db/crud";
 import { formatMoney } from "@/lib/format";
 import { runSync } from "@/lib/sync/engine";
-import type {
-  Account,
-  Category,
-  Transaction,
-  TransactionType,
-} from "@/lib/types";
+import type { Account, Category, Transaction } from "@/lib/types";
 
-/**
- * Bottom-sheet editor for an existing transaction.
- *
- * HomePage integration (mobile-ux / parent agent):
- * 1. `const [editing, setEditing] = useState<Transaction | null>(null)`
- * 2. Pass `onEdit={setEditing}` to `<TransactionList … />`
- * 3. When `editing` is set, render:
- *    `<TransactionEditor
- *       transaction={editing}
- *       accounts={accounts}
- *       categories={categories}
- *       onClose={() => setEditing(null)}
- *     />`
- */
+type LedgerType = "income" | "expense";
+
 export function TransactionEditor({
   transaction,
   accounts,
@@ -40,7 +23,9 @@ export function TransactionEditor({
   onClose: () => void;
 }) {
   const { book } = useBook();
-  const [type, setType] = useState<TransactionType>(transaction.type);
+  const [type, setType] = useState<LedgerType>(
+    transaction.type === "income" ? "income" : "expense",
+  );
   const [amount, setAmount] = useState<number | null>(
     transaction.amount > 0 ? transaction.amount : null,
   );
@@ -48,27 +33,20 @@ export function TransactionEditor({
   const [note, setNote] = useState(transaction.note);
   const [accountId, setAccountId] = useState(transaction.account_id);
   const [categoryId, setCategoryId] = useState(transaction.category_id ?? "");
-  const [transferAccountId, setTransferAccountId] = useState(
-    transaction.transfer_account_id ?? "",
-  );
   const [keypadOpen, setKeypadOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Reset the fields when a different transaction is passed in. Done during
-  // render (React's "adjust state when a prop changes" pattern) rather than
-  // from an effect, since the parent owns the prop and cannot be re-keyed here.
   const [seededFrom, setSeededFrom] = useState(transaction);
 
   if (seededFrom !== transaction) {
     setSeededFrom(transaction);
-    setType(transaction.type);
+    setType(transaction.type === "income" ? "income" : "expense");
     setAmount(transaction.amount > 0 ? transaction.amount : null);
     setDate(transaction.date);
     setNote(transaction.note);
     setAccountId(transaction.account_id);
     setCategoryId(transaction.category_id ?? "");
-    setTransferAccountId(transaction.transfer_account_id ?? "");
     setError(null);
   }
 
@@ -81,18 +59,13 @@ export function TransactionEditor({
   }, []);
 
   const filteredCategories = useMemo(
-    () =>
-      categories.filter((category) =>
-        type === "transfer" ? false : category.kind === type,
-      ),
+    () => categories.filter((category) => category.kind === type),
     [categories, type],
   );
 
   const effectiveAccountId = accountId || accounts[0]?.id || "";
   const effectiveCategoryId =
-    categoryId ||
-    filteredCategories[0]?.id ||
-    (type === "transfer" ? null : "");
+    categoryId || filteredCategories[0]?.id || "";
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -106,12 +79,8 @@ export function TransactionEditor({
       setError("請先建立帳戶");
       return;
     }
-    if (type !== "transfer" && !effectiveCategoryId) {
+    if (!effectiveCategoryId) {
       setError("請選擇分類");
-      return;
-    }
-    if (type === "transfer" && !transferAccountId) {
-      setError("請選擇轉入帳戶");
       return;
     }
 
@@ -123,8 +92,8 @@ export function TransactionEditor({
         date,
         note,
         account_id: effectiveAccountId,
-        category_id: type === "transfer" ? null : String(effectiveCategoryId),
-        transfer_account_id: type === "transfer" ? transferAccountId : null,
+        category_id: String(effectiveCategoryId),
+        transfer_account_id: null,
       });
       void runSync();
       onClose();
@@ -158,19 +127,18 @@ export function TransactionEditor({
             <button
               type="button"
               onClick={onClose}
-              className="text-sm text-[var(--muted)] hover:text-[var(--ink)]"
+              className="min-h-11 px-2 text-sm text-[var(--muted)] hover:text-[var(--ink)]"
             >
               關閉
             </button>
           </div>
 
           <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {(
                 [
                   ["expense", "支出"],
                   ["income", "收入"],
-                  ["transfer", "轉帳"],
                 ] as const
               ).map(([value, label]) => (
                 <button
@@ -181,9 +149,11 @@ export function TransactionEditor({
                     setCategoryId("");
                   }}
                   className={[
-                    "rounded-md px-2 py-2 text-sm",
+                    "min-h-11 rounded-xl px-2 py-2 text-sm font-medium",
                     type === value
-                      ? "bg-[var(--accent)] text-white"
+                      ? value === "expense"
+                        ? "bg-rose-600 text-white"
+                        : "bg-emerald-700 text-white"
                       : "bg-[var(--paper)] text-[var(--muted)]",
                   ].join(" ")}
                 >
@@ -198,7 +168,7 @@ export function TransactionEditor({
                 type="button"
                 onClick={() => setKeypadOpen(true)}
                 className={[
-                  "flex min-h-14 w-full items-center justify-between rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-left outline-none focus:border-[var(--accent)]",
+                  "flex min-h-14 w-full items-center justify-between rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-left outline-none focus:border-[var(--accent)]",
                   amount === null ? "text-[var(--muted)]" : "text-[var(--ink)]",
                 ].join(" ")}
               >
@@ -216,17 +186,15 @@ export function TransactionEditor({
                   type="date"
                   value={date}
                   onChange={(event) => setDate(event.target.value)}
-                  className="w-full rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                  className="min-h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                 />
               </label>
               <label className="block">
-                <span className="mb-1 block text-xs text-[var(--muted)]">
-                  {type === "transfer" ? "轉出帳戶" : "帳戶"}
-                </span>
+                <span className="mb-1 block text-xs text-[var(--muted)]">帳戶</span>
                 <select
                   value={effectiveAccountId}
                   onChange={(event) => setAccountId(event.target.value)}
-                  className="w-full rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                  className="min-h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                 >
                   {accounts.map((account) => (
                     <option key={account.id} value={account.id}>
@@ -237,42 +205,20 @@ export function TransactionEditor({
               </label>
             </div>
 
-            {type === "transfer" ? (
-              <label className="block">
-                <span className="mb-1 block text-xs text-[var(--muted)]">
-                  轉入帳戶
-                </span>
-                <select
-                  value={transferAccountId}
-                  onChange={(event) => setTransferAccountId(event.target.value)}
-                  className="w-full rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-                >
-                  <option value="">選擇帳戶</option>
-                  {accounts
-                    .filter((account) => account.id !== effectiveAccountId)
-                    .map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                      </option>
-                    ))}
-                </select>
-              </label>
-            ) : (
-              <label className="block">
-                <span className="mb-1 block text-xs text-[var(--muted)]">分類</span>
-                <select
-                  value={effectiveCategoryId ?? ""}
-                  onChange={(event) => setCategoryId(event.target.value)}
-                  className="w-full rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-                >
-                  {filteredCategories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
+            <label className="block">
+              <span className="mb-1 block text-xs text-[var(--muted)]">分類</span>
+              <select
+                value={effectiveCategoryId}
+                onChange={(event) => setCategoryId(event.target.value)}
+                className="min-h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+              >
+                {filteredCategories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </label>
 
             <label className="block">
               <span className="mb-1 block text-xs text-[var(--muted)]">備註</span>
@@ -280,7 +226,7 @@ export function TransactionEditor({
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 placeholder="可選"
-                className="w-full rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                className="min-h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
               />
             </label>
 
@@ -289,7 +235,7 @@ export function TransactionEditor({
             <button
               type="submit"
               disabled={saving}
-              className="w-full rounded-md bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-[var(--paper)] disabled:opacity-60"
+              className="min-h-12 w-full rounded-xl bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-[var(--paper)] disabled:opacity-60"
             >
               {saving ? "儲存中…" : "儲存變更"}
             </button>

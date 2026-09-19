@@ -56,7 +56,8 @@ export function BookProvider({ children }: { children: ReactNode }) {
           if (preferred && rows.some((row) => row.id === preferred)) {
             return preferred;
           }
-          return rows[0]?.id ?? null;
+          const twd = rows.find((row) => row.currency === "TWD");
+          return twd?.id ?? rows[0]?.id ?? null;
         });
       },
       error: () => setBooks([]),

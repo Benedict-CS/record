@@ -63,6 +63,12 @@ export function SyncBadge() {
   }
 
   const detail = message ? `，${message}` : "";
+  const shortError =
+    status === "error" && message
+      ? message.length > 28
+        ? `${message.slice(0, 28)}…`
+        : message
+      : null;
 
   return (
     <button
@@ -70,14 +76,26 @@ export function SyncBadge() {
       onClick={() => void onSync()}
       aria-label={`同步狀態：${LABELS[status]}${detail}。點擊立即同步`}
       aria-busy={status === "syncing" || busy}
-      className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-1 text-xs text-[var(--muted)] active:bg-[var(--paper)]"
+      className={[
+        "inline-flex min-h-11 max-w-[13rem] flex-col items-end justify-center rounded-xl border px-3 py-1.5 text-left active:bg-[var(--paper)]",
+        status === "error"
+          ? "border-rose-300 bg-rose-50 text-rose-800"
+          : "border-[var(--line)] bg-[var(--surface)] text-[var(--muted)]",
+      ].join(" ")}
       title={message ?? LABELS[status]}
     >
-      <span
-        className={`h-1.5 w-1.5 rounded-full ${DOTS[status]}`}
-        aria-hidden
-      />
-      <span aria-hidden>{LABELS[status]}</span>
+      <span className="inline-flex items-center gap-2 text-xs font-medium">
+        <span
+          className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOTS[status]}`}
+          aria-hidden
+        />
+        <span aria-hidden>{busy ? "同步中" : LABELS[status]}</span>
+      </span>
+      {shortError ? (
+        <span className="mt-0.5 max-w-full truncate text-[10px] leading-tight opacity-90">
+          {shortError}
+        </span>
+      ) : null}
     </button>
   );
 }

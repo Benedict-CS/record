@@ -22,7 +22,6 @@ const TYPE_OPTIONS: { id: TypeFilter; label: string }[] = [
   { id: "all", label: "全部" },
   { id: "expense", label: "支出" },
   { id: "income", label: "收入" },
-  { id: "transfer", label: "轉帳" },
 ];
 
 const SORT_OPTIONS: { id: SortKey; label: string }[] = [

@@ -38,12 +38,127 @@ function setStatus(status: SyncUiStatus, message?: string) {
   listeners.forEach((listener) => listener(status, message));
 }
 
+function formatSyncError(error: unknown, context?: string): string {
+  const prefix = context ? `${context}：` : "";
+  if (!error || typeof error !== "object") {
+    return `${prefix}同步失敗，請稍後再試`;
+  }
+  const row = error as {
+    message?: string;
+    details?: string;
+    hint?: string;
+    code?: string;
+  };
+  const parts = [row.message, row.details, row.hint, row.code ? `(${row.code})` : ""]
+    .map((part) => (typeof part === "string" ? part.trim() : ""))
+    .filter(Boolean);
+  if (parts.length) return `${prefix}${parts.join(" ")}`;
+  if (error instanceof Error && error.message) {
+    return `${prefix}${error.message}`;
+  }
+  return `${prefix}同步失敗，請稍後再試`;
+}
+
 function stripSyncStatus<T extends { sync_status: SyncStatus }>(
   row: T,
 ): Omit<T, "sync_status"> {
   const { sync_status, ...rest } = row;
   void sync_status; // Pulled out of the object only to discard it.
   return rest;
+}
+
+/** Keep one book per currency+name; re-point children so push does not fork ledgers. */
+async function collapseDuplicateBooks() {
+  const books = (await db.books.toArray()).filter((row) => !row.deleted_at);
+  const groups = new Map<string, typeof books>();
+  for (const book of books) {
+    const key = `${book.currency}\0${book.name.trim()}`;
+    const list = groups.get(key) ?? [];
+    list.push(book);
+    groups.set(key, list);
+  }
+
+  const stamp = new Date().toISOString();
+  const clientId = "sync-collapse";
+
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+
+    const scored = await Promise.all(
+      group.map(async (book) => {
+        const txCount = await db.transactions
+          .where("book_id")
+          .equals(book.id)
+          .filter((row) => !row.deleted_at)
+          .count();
+        return {
+          book,
+          txCount,
+          synced: book.sync_status === "synced" ? 1 : 0,
+        };
+      }),
+    );
+    scored.sort((a, b) => {
+      if (b.txCount !== a.txCount) return b.txCount - a.txCount;
+      if (b.synced !== a.synced) return b.synced - a.synced;
+      return a.book.sort_order - b.book.sort_order;
+    });
+
+    const keep = scored[0].book;
+    for (const { book: extra } of scored.slice(1)) {
+      for (const table of [
+        db.accounts,
+        db.categories,
+        db.transactions,
+        db.budgets,
+        db.templates,
+        db.holdings,
+      ] as const) {
+        const children = await table
+          .where("book_id")
+          .equals(extra.id)
+          .toArray();
+        for (const child of children) {
+          await table.update(child.id, {
+            book_id: keep.id,
+            updated_at: stamp,
+            client_id: clientId,
+            sync_status: "pending",
+          });
+        }
+      }
+      await db.books.update(extra.id, {
+        deleted_at: stamp,
+        updated_at: stamp,
+        client_id: clientId,
+        sync_status: "pending",
+      });
+    }
+  }
+}
+
+async function retireTransfersLocally() {
+  const stamp = new Date().toISOString();
+  const transfers = await db.transactions
+    .filter((row) => !row.deleted_at && row.type === "transfer")
+    .toArray();
+  for (const row of transfers) {
+    await db.transactions.update(row.id, {
+      deleted_at: stamp,
+      updated_at: stamp,
+      sync_status: "pending",
+    });
+  }
+  const transferTemplates = await db.templates
+    .filter((row) => !row.deleted_at && row.type === "transfer")
+    .toArray();
+  for (const row of transferTemplates) {
+    await db.templates.update(row.id, {
+      deleted_at: stamp,
+      updated_at: stamp,
+      sync_status: "pending",
+    });
+  }
 }
 
 async function mergeRemoteBooks(remoteRows: CloudBook[]) {
@@ -329,77 +444,62 @@ async function pushPending(userId: string) {
       annual_rate: row.annual_rate,
     }));
 
-  if (ownedBooks.length) {
-    const { error } = await supabase.from("books").upsert(ownedBooks);
-    if (error) throw error;
-    await Promise.all(
-      ownedBooks.map((row) =>
-        db.books.update(row.id, { sync_status: "synced" }),
-      ),
-    );
+  async function upsertTable(
+    table: string,
+    rows: Record<string, unknown>[],
+    markSynced: (id: string) => Promise<unknown>,
+  ) {
+    if (!rows.length) return;
+    const { error } = await supabase.from(table).upsert(rows);
+    if (error) throw Object.assign(error, { __table: table });
+    await Promise.all(rows.map((row) => markSynced(String(row.id))));
   }
 
-  if (ownedAccounts.length) {
-    const { error } = await supabase.from("accounts").upsert(ownedAccounts);
-    if (error) throw error;
-    await Promise.all(
-      ownedAccounts.map((row) =>
-        db.accounts.update(row.id, { sync_status: "synced" }),
-      ),
-    );
-  }
+  await upsertTable("books", ownedBooks as Record<string, unknown>[], (id) =>
+    db.books.update(id, { sync_status: "synced" }),
+  );
+  await upsertTable(
+    "accounts",
+    ownedAccounts as Record<string, unknown>[],
+    (id) => db.accounts.update(id, { sync_status: "synced" }),
+  );
+  await upsertTable(
+    "categories",
+    ownedCategories as Record<string, unknown>[],
+    (id) => db.categories.update(id, { sync_status: "synced" }),
+  );
+  await upsertTable(
+    "transactions",
+    ownedTransactions as Record<string, unknown>[],
+    (id) => db.transactions.update(id, { sync_status: "synced" }),
+  );
+  await upsertTable(
+    "budgets",
+    ownedBudgets as Record<string, unknown>[],
+    (id) => db.budgets.update(id, { sync_status: "synced" }),
+  );
+  await upsertTable(
+    "templates",
+    ownedTemplates as Record<string, unknown>[],
+    (id) => db.templates.update(id, { sync_status: "synced" }),
+  );
 
-  if (ownedCategories.length) {
-    const { error } = await supabase.from("categories").upsert(ownedCategories);
-    if (error) throw error;
-    await Promise.all(
-      ownedCategories.map((row) =>
-        db.categories.update(row.id, { sync_status: "synced" }),
-      ),
-    );
-  }
-
-  if (ownedTransactions.length) {
-    const { error } = await supabase
-      .from("transactions")
-      .upsert(ownedTransactions);
-    if (error) throw error;
-    await Promise.all(
-      ownedTransactions.map((row) =>
-        db.transactions.update(row.id, { sync_status: "synced" }),
-      ),
-    );
-  }
-
-  if (ownedBudgets.length) {
-    const { error } = await supabase.from("budgets").upsert(ownedBudgets);
-    if (error) throw error;
-    await Promise.all(
-      ownedBudgets.map((row) =>
-        db.budgets.update(row.id, { sync_status: "synced" }),
-      ),
-    );
-  }
-
-  if (ownedTemplates.length) {
-    const { error } = await supabase.from("templates").upsert(ownedTemplates);
-    if (error) throw error;
-    await Promise.all(
-      ownedTemplates.map((row) =>
-        db.templates.update(row.id, { sync_status: "synced" }),
-      ),
-    );
-  }
-
-  if (ownedHoldings.length) {
-    const { error } = await supabase.from("holdings").upsert(ownedHoldings);
-    if (error) throw error;
-    await Promise.all(
-      ownedHoldings.map((row) =>
-        db.holdings.update(row.id, { sync_status: "synced" }),
-      ),
-    );
-  }
+  const holdingsPayload = ownedHoldings.map((row) => ({
+    ...row,
+    start_date: row.start_date || new Date().toISOString().slice(0, 10),
+    maturity_date: row.maturity_date ?? null,
+    note: row.note ?? "",
+    color: row.color || "#0f7a5f",
+    icon: row.icon || "dots",
+    compounding: row.compounding || "none",
+    amount: Number(row.amount ?? 0),
+    annual_rate: Number(row.annual_rate ?? 0),
+  }));
+  await upsertTable(
+    "holdings",
+    holdingsPayload as Record<string, unknown>[],
+    (id) => db.holdings.update(id, { sync_status: "synced" }),
+  );
 
   const state = await db.sync_state.get("default");
   await db.sync_state.put({
@@ -439,12 +539,16 @@ export async function runSync(): Promise<void> {
 
     await claimLocalRowsForUser(user.id);
     await pullAll(user.id);
+    await collapseDuplicateBooks();
+    await retireTransfersLocally();
     await pushPending(user.id);
     setStatus("synced");
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "同步失敗，請稍後再試";
-    setStatus("error", message);
+    const table =
+      error && typeof error === "object" && "__table" in error
+        ? String((error as { __table?: string }).__table)
+        : undefined;
+    setStatus("error", formatSyncError(error, table));
   } finally {
     syncing = false;
   }

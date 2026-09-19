@@ -3,6 +3,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
 } from "react";
@@ -16,7 +17,10 @@ import { TransactionEditor } from "@/components/TransactionEditor";
 import { TransactionForm } from "@/components/TransactionForm";
 import { TransactionList } from "@/components/TransactionList";
 import { useToast } from "@/components/ToastProvider";
-import { createTemplateFromTransaction } from "@/lib/db/crud";
+import {
+  createTemplateFromTransaction,
+  listTransactionsForMonth,
+} from "@/lib/db/crud";
 import { formatMoney } from "@/lib/format";
 import {
   useAccounts,
@@ -153,20 +157,46 @@ function SaveTemplateSheet({
 
 export function HomePage() {
   const ready = useSeedReady();
-  const { book } = useBook();
+  const { book, bookId } = useBook();
   const now = useMemo(() => new Date(), []);
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year, setYear] = useState(2026);
+  const [month, setMonth] = useState(9);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [templateSource, setTemplateSource] = useState<Transaction | null>(null);
-  const [typeFilter, setTypeFilter] = useState<
-    "all" | Transaction["type"]
-  >("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "expense" | "income">(
+    "all",
+  );
   const { show } = useToast();
+  const openedRef = useRef(false);
 
   const accounts = useAccounts();
   const categories = useCategories();
   const transactions = useMonthTransactions(year, month);
+
+  // First open: prefer Sep 2026 (then Aug) when those months have rows.
+  useEffect(() => {
+    if (!ready || !bookId || openedRef.current) return;
+    openedRef.current = true;
+    let cancelled = false;
+    void (async () => {
+      const september = await listTransactionsForMonth(bookId, 2026, 9);
+      const august = await listTransactionsForMonth(bookId, 2026, 8);
+      if (cancelled) return;
+      if (september.length > 0) {
+        setYear(2026);
+        setMonth(9);
+      } else if (august.length > 0) {
+        setYear(2026);
+        setMonth(8);
+      } else {
+        setYear(now.getFullYear());
+        setMonth(now.getMonth() + 1);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, bookId, now]);
 
   const visibleTransactions = useMemo(
     () =>
@@ -205,6 +235,30 @@ export function HomePage() {
             onPrev={() => shiftMonth(-1)}
             onNext={() => shiftMonth(1)}
           />
+          {!(year === 2026 && (month === 8 || month === 9)) ? (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setYear(2026);
+                  setMonth(8);
+                }}
+                className="min-h-10 flex-1 rounded-xl border border-[var(--line)] bg-[var(--surface)] text-xs font-medium text-[var(--ink)]"
+              >
+                看 2026/8
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setYear(2026);
+                  setMonth(9);
+                }}
+                className="min-h-10 flex-1 rounded-xl border border-[var(--line)] bg-[var(--surface)] text-xs font-medium text-[var(--ink)]"
+              >
+                看 2026/9
+              </button>
+            </div>
+          ) : null}
           <NetWorthCard />
           <QuickTemplateBar />
           <div id="quick-add" className="scroll-mt-4">
@@ -217,13 +271,12 @@ export function HomePage() {
                 {visibleTransactions.length} 筆
               </span>
             </div>
-            <div className="grid grid-cols-4 gap-1.5">
+            <div className="grid grid-cols-3 gap-1.5">
               {(
                 [
                   ["all", "全部"],
                   ["expense", "支出"],
                   ["income", "收入"],
-                  ["transfer", "轉帳"],
                 ] as const
               ).map(([id, label]) => (
                 <button
@@ -251,7 +304,7 @@ export function HomePage() {
               groupByDay
               emptyMessage={
                 typeFilter === "all"
-                  ? "這個月還沒有紀錄，離線也能先記一筆。"
+                  ? "這個月還沒有紀錄。登入後點右上角同步，或切到 2026/8、2026/9。"
                   : "這個篩選目前沒有紀錄"
               }
             />

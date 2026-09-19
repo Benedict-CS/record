@@ -143,7 +143,7 @@ export async function listTransactionsForMonth(
   const rows = await db.transactions
     .where("[book_id+date]")
     .between([bookId, start], [bookId, end], true, false)
-    .filter((row) => !row.deleted_at)
+    .filter((row) => !row.deleted_at && row.type !== "transfer")
     .reverse()
     .toArray();
 
@@ -165,7 +165,7 @@ export async function listTransactionsForYear(
   const rows = await db.transactions
     .where("[book_id+date]")
     .between([bookId, start], [bookId, end], true, false)
-    .filter((row) => !row.deleted_at)
+    .filter((row) => !row.deleted_at && row.type !== "transfer")
     .reverse()
     .toArray();
   return rows;
@@ -178,7 +178,7 @@ export async function listTransactionsForDate(
   const rows = await db.transactions
     .where("[book_id+date]")
     .equals([bookId, date])
-    .filter((row) => !row.deleted_at)
+    .filter((row) => !row.deleted_at && row.type !== "transfer")
     .toArray();
   return rows.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 }
@@ -202,6 +202,7 @@ export async function searchTransactions(
     .reverse()
     .filter((row) => {
       if (row.deleted_at) return false;
+      if (row.type === "transfer") return false;
       const note = row.note.toLowerCase();
       const cat = row.category_id
         ? (categoryMap.get(row.category_id) ?? "")
