@@ -27,14 +27,16 @@ function expenseCategories(): Omit<
     { name: "晚餐", kind: "expense", icon: "moon", color: "#d35400", sort_order: 2 },
     { name: "飲料零食", kind: "expense", icon: "cup", color: "#e74c3c", sort_order: 3 },
     { name: "交通", kind: "expense", icon: "bus", color: "#3498db", sort_order: 4 },
-    { name: "電話費", kind: "expense", icon: "phone", color: "#9b59b6", sort_order: 5 },
-    { name: "住宿費", kind: "expense", icon: "home", color: "#1abc9c", sort_order: 6 },
-    { name: "房租水電", kind: "expense", icon: "building", color: "#16a085", sort_order: 7 },
-    { name: "購物", kind: "expense", icon: "bag", color: "#e91e63", sort_order: 8 },
-    { name: "娛樂", kind: "expense", icon: "smile", color: "#8e44ad", sort_order: 9 },
-    { name: "醫療", kind: "expense", icon: "heart", color: "#c0392b", sort_order: 10 },
-    { name: "學習", kind: "expense", icon: "book", color: "#2980b9", sort_order: 11 },
-    { name: "其他支出", kind: "expense", icon: "dots", color: "#7f8c8d", sort_order: 12 },
+    { name: "機車", kind: "expense", icon: "car", color: "#2c3e50", sort_order: 5 },
+    { name: "運動", kind: "expense", icon: "bolt", color: "#27ae60", sort_order: 6 },
+    { name: "電話費", kind: "expense", icon: "phone", color: "#9b59b6", sort_order: 7 },
+    { name: "住宿費", kind: "expense", icon: "home", color: "#1abc9c", sort_order: 8 },
+    { name: "房租水電", kind: "expense", icon: "building", color: "#16a085", sort_order: 9 },
+    { name: "購物", kind: "expense", icon: "bag", color: "#e91e63", sort_order: 10 },
+    { name: "娛樂", kind: "expense", icon: "smile", color: "#8e44ad", sort_order: 11 },
+    { name: "醫療", kind: "expense", icon: "heart", color: "#c0392b", sort_order: 12 },
+    { name: "學習", kind: "expense", icon: "book", color: "#2980b9", sort_order: 13 },
+    { name: "其他支出", kind: "expense", icon: "dots", color: "#7f8c8d", sort_order: 14 },
   ];
 }
 
@@ -189,6 +191,31 @@ async function seedBookContents(book: Book, clientId: string, stamp: string) {
         sync_status: "pending" as const,
       })),
     );
+  } else {
+    // Add newly introduced defaults (e.g. 運動 / 機車) without wiping user cats.
+    const existing = await db.categories
+      .where("book_id")
+      .equals(book.id)
+      .filter((row) => !row.deleted_at)
+      .toArray();
+    const have = new Set(existing.map((row) => `${row.kind}:${row.name}`));
+    const missing = [...expenseCategories(), ...incomeCategories()].filter(
+      (item) => !have.has(`${item.kind}:${item.name}`),
+    );
+    if (missing.length) {
+      await db.categories.bulkAdd(
+        missing.map((item) => ({
+          ...item,
+          id: crypto.randomUUID(),
+          book_id: book.id,
+          user_id: null,
+          updated_at: stamp,
+          deleted_at: null,
+          client_id: clientId,
+          sync_status: "pending" as const,
+        })),
+      );
+    }
   }
 
   const existingHoldings = await db.holdings
