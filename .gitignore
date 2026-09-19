@@ -46,3 +46,7 @@ public/sw.js
 public/workbox-*.js
 public/fallback-*.js
 public/swe-worker-*.js
+
+# supabase cli local state
+supabase/.temp/
+
