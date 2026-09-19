@@ -17,7 +17,15 @@ type AuthContextValue = {
   user: User | null;
   loading: boolean;
   configured: boolean;
-  signInWithEmail: (email: string) => Promise<{ error?: string }>;
+  signInWithPassword: (
+    email: string,
+    password: string,
+  ) => Promise<{ error?: string }>;
+  signUpWithPassword: (
+    email: string,
+    password: string,
+  ) => Promise<{ error?: string; needsEmailConfirm?: boolean }>;
+  setPassword: (password: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
 };
 
@@ -60,16 +68,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [configured]);
 
-  const signInWithEmail = useCallback(async (email: string) => {
+  const signInWithPassword = useCallback(
+    async (email: string, password: string) => {
+      if (!isSupabaseConfigured()) {
+        return { error: "尚未設定 Supabase 環境變數" };
+      }
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) return { error: error.message };
+      return {};
+    },
+    [],
+  );
+
+  const signUpWithPassword = useCallback(
+    async (email: string, password: string) => {
+      if (!isSupabaseConfigured()) {
+        return { error: "尚未設定 Supabase 環境變數" };
+      }
+      const supabase = createClient();
+      const redirectTo = `${window.location.origin}/auth/callback`;
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: redirectTo },
+      });
+      if (error) return { error: error.message };
+      // When "Confirm email" is on, session may be null until the user clicks
+      // the confirmation link. When it is off, session is present immediately.
+      return { needsEmailConfirm: !data.session };
+    },
+    [],
+  );
+
+  const setPassword = useCallback(async (password: string) => {
     if (!isSupabaseConfigured()) {
       return { error: "尚未設定 Supabase 環境變數" };
     }
     const supabase = createClient();
-    const redirectTo = `${window.location.origin}/auth/callback`;
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: redirectTo },
-    });
+    const { error } = await supabase.auth.updateUser({ password });
     if (error) return { error: error.message };
     return {};
   }, []);
@@ -82,8 +122,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, configured, signInWithEmail, signOut }),
-    [user, loading, configured, signInWithEmail, signOut],
+    () => ({
+      user,
+      loading,
+      configured,
+      signInWithPassword,
+      signUpWithPassword,
+      setPassword,
+      signOut,
+    }),
+    [
+      user,
+      loading,
+      configured,
+      signInWithPassword,
+      signUpWithPassword,
+      setPassword,
+      signOut,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
