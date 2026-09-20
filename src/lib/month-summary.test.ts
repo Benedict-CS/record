@@ -23,6 +23,8 @@ function tx(
     transfer_account_id: null,
     hold_status: null,
     release_transaction_id: null,
+    reimbursable_amount: null,
+    reimbursement_status: null,
     ...patch,
   };
 }
@@ -53,9 +55,32 @@ const summary = monthSummary([
 
 assert(summary.expense === 100, "expense excludes holds");
 assert(summary.held === 70, "held includes released holds in-period");
-assert(summary.outflow === 170, "outflow = expense + held");
+assert(summary.outflow === 170, "outflow = selfPay + held");
 assert(summary.income === 200, "release income excluded from income");
 assert(summary.net === 100, "net ignores release refund income");
+assert(summary.reimbursablePending === 0, "no pending reimbursable by default");
+assert(summary.selfPay === 100, "selfPay equals expense when no reimbursable");
+
+const withReimb = monthSummary([
+  tx({
+    type: "expense",
+    amount: 1088,
+    date: "2026-08-10",
+    reimbursable_amount: 400,
+    reimbursement_status: "pending",
+  }),
+  tx({
+    type: "expense",
+    amount: 500,
+    date: "2026-08-11",
+    reimbursable_amount: 100,
+    reimbursement_status: "received",
+  }),
+]);
+assert(withReimb.reimbursablePending === 400, "only pending reimbursable counted");
+assert(withReimb.expense === 1588, "full expense still counted");
+assert(withReimb.selfPay === 1488, "selfPay subtracts only received reimbursable");
+assert(withReimb.outflow === 1488, "outflow follows selfPay when no holds");
 
 const crossMonth = monthSummary([
   tx({

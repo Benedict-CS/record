@@ -5,6 +5,9 @@ export type TransactionType = "income" | "expense" | "transfer" | "hold";
 /** Only for type === "hold": money locked until refunded. */
 export type HoldStatus = "held" | "released";
 
+/** Expense only: company will reimburse part of this spend later. */
+export type ReimbursementStatus = "pending" | "received";
+
 export type CategoryKind = "income" | "expense";
 
 export type BookCurrency = "TWD" | "MYR";
@@ -55,6 +58,10 @@ export interface Transaction extends SyncMeta {
   hold_status: HoldStatus | null;
   /** Income tx created when marking 已退回 */
   release_transaction_id: string | null;
+  /** Expense only: amount expected back from company (null = none). */
+  reimbursable_amount: number | null;
+  /** Expense only: pending until marked received with salary. */
+  reimbursement_status: ReimbursementStatus | null;
 }
 
 export interface Budget extends SyncMeta {
@@ -111,16 +118,26 @@ export interface DayBucket {
 
 export interface PeriodSummary {
   income: number;
-  /** Actual spending (excludes 扣住). */
+  /** Full cash expenses (excludes 扣住). Used for account net. */
   expense: number;
   /**
    * Holds dated in this period (押金／預繳), including later-released rows.
    * Outstanding-only totals use outstandingHeldTotal() for net worth.
    */
   held: number;
-  /** Money that left accounts this period: expense + held. */
+  /**
+   * Display「花費」= selfPay + held (after 銷帳, reimbursed portion is excluded).
+   */
   outflow: number;
+  /** income − full cash expense (not selfPay). */
   net: number;
+  /** Pending reimbursable amounts still awaiting 銷帳. */
+  reimbursablePending: number;
+  /**
+   * Expense minus received reimbursable (matches list / day「花」).
+   * Pending reimbursable still counts in full until 銷帳.
+   */
+  selfPay: number;
 }
 
 export interface SummaryComparison {

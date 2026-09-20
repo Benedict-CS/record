@@ -70,41 +70,49 @@ export function MorePage() {
         </p>
 
         <ul className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">
-          {LINKS.map((item, index) => (
-            <li key={item.href}>
-              <Link
-                href={item.href}
-                className={[
-                  "flex min-h-14 items-center justify-between gap-3 px-4 py-3 active:bg-[rgba(28,43,36,0.04)]",
-                  index > 0 ? "border-t border-[var(--line)]" : "",
-                ].join(" ")}
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-[var(--ink)]">
-                    {item.title}
-                    {item.href === "/login" && user ? (
-                      <span className="ml-2 text-xs font-normal text-[var(--accent)]">
-                        已登入
-                      </span>
-                    ) : null}
-                    {item.href === "/books" && book ? (
-                      <span className="ml-2 text-xs font-normal text-[var(--accent)]">
-                        {book.name}
-                      </span>
-                    ) : null}
-                  </p>
-                  <p className="mt-0.5 text-xs text-[var(--muted)]">
-                    {item.href === "/login" && !configured
-                      ? "尚未設定雲端，可先本機使用"
-                      : item.description}
-                  </p>
-                </div>
-                <span className="text-[var(--muted)]" aria-hidden>
-                  ›
-                </span>
-              </Link>
-            </li>
-          ))}
+          {LINKS.map((item, index) => {
+            const href =
+              item.href === "/login" && user ? "/settings" : item.href;
+            return (
+              <li key={item.href}>
+                <Link
+                  href={href}
+                  className={[
+                    "flex min-h-14 items-center justify-between gap-3 px-4 py-3 active:bg-[rgba(28,43,36,0.04)]",
+                    index > 0 ? "border-t border-[var(--line)]" : "",
+                  ].join(" ")}
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-[var(--ink)]">
+                      {item.href === "/login" && user
+                        ? "帳號與同步"
+                        : item.title}
+                      {item.href === "/login" && user ? (
+                        <span className="ml-2 text-xs font-normal text-[var(--accent)]">
+                          已登入
+                        </span>
+                      ) : null}
+                      {item.href === "/books" && book ? (
+                        <span className="ml-2 text-xs font-normal text-[var(--accent)]">
+                          {book.name}
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="mt-0.5 text-xs text-[var(--muted)]">
+                      {item.href === "/login" && !configured
+                        ? "尚未設定雲端，可先本機使用"
+                        : item.href === "/login" && user
+                          ? "改密碼、登出"
+                          : item.description}
+                    </p>
+                  </div>
+                  <span className="text-[var(--muted)]" aria-hidden>
+                    ›
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
 
         <section className="space-y-2">

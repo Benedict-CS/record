@@ -78,6 +78,7 @@
 | 4 | `supabase/migrations/004_templates_and_balances.sql` |
 | 5 | `supabase/migrations/005_holdings.sql` |
 | 6 | `supabase/migrations/006_hold_transactions.sql` |
+| 7 | `supabase/migrations/007_reimbursable_expense.sql` |
 
 **每個檔案的操作步驟：**
 

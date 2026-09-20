@@ -39,6 +39,7 @@ type ToastContextValue = {
 
 const MAX_VISIBLE = 3;
 const DEFAULT_DURATION = 2500;
+const ERROR_DURATION = 5000;
 /** Must stay in sync with the toast-out animation in globals.css. */
 const EXIT_MS = 180;
 
@@ -96,6 +97,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       const text = message.trim();
       if (!text) return;
 
+      const variant = options?.variant ?? "info";
       const id = nextId.current;
       nextId.current += 1;
 
@@ -105,7 +107,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           {
             id,
             message: text,
-            variant: options?.variant ?? "info",
+            variant,
             action: options?.action,
             leaving: false,
           },
@@ -118,7 +120,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
       const timer = setTimeout(
         () => dismiss(id),
-        options?.duration ?? DEFAULT_DURATION,
+        options?.duration ??
+          (variant === "error" ? ERROR_DURATION : DEFAULT_DURATION),
       );
       timers.current.set(id, timer);
     },
@@ -147,6 +150,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((toast) => (
           <div
             key={toast.id}
+            role={toast.variant === "error" ? "alert" : undefined}
+            aria-live={toast.variant === "error" ? "assertive" : undefined}
             className={[
               "toast pointer-events-auto flex items-center gap-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 shadow-lg shadow-black/5",
               toast.leaving ? "toast-leave" : "toast-enter",

@@ -72,23 +72,17 @@ function HoldingProjectionSheet({
               ? ` · 年利率 ${formatRate(holding.annual_rate)} · ${compoundingLabel(holding.compounding)}`
               : " · 無利息"}
           </p>
-          <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="grid grid-cols-2 gap-2 text-center">
             <div className="rounded-xl bg-[var(--paper)] px-2 py-2">
-              <p className="text-[10px] text-[var(--muted)]">月利息</p>
+              <p className="text-[10px] text-[var(--muted)]">約月息</p>
               <p className="mt-0.5 text-xs font-semibold tabular-nums text-[var(--ink)]">
                 {formatMoney(interest.monthly, currency)}
               </p>
             </div>
             <div className="rounded-xl bg-[var(--paper)] px-2 py-2">
-              <p className="text-[10px] text-[var(--muted)]">年利息</p>
+              <p className="text-[10px] text-[var(--muted)]">約年息</p>
               <p className="mt-0.5 text-xs font-semibold tabular-nums text-[var(--ink)]">
                 {formatMoney(interest.yearly, currency)}
-              </p>
-            </div>
-            <div className="rounded-xl bg-[var(--paper)] px-2 py-2">
-              <p className="text-[10px] text-[var(--muted)]">已累計</p>
-              <p className="mt-0.5 text-xs font-semibold tabular-nums text-[var(--ink)]">
-                {formatMoney(interest.accrued, currency)}
               </p>
             </div>
           </div>
@@ -320,23 +314,17 @@ export function HoldingsPage() {
             <p className="mt-1 text-2xl font-semibold tabular-nums text-[var(--ink)]">
               {formatMoney(summary.amount, currency)}
             </p>
-            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+            <div className="mt-3 grid grid-cols-2 gap-2 text-center">
               <div>
-                <p className="text-[10px] text-[var(--muted)]">月利息</p>
+                <p className="text-[10px] text-[var(--muted)]">約月息</p>
                 <p className="mt-0.5 text-xs font-semibold tabular-nums text-[var(--ink)]">
                   {formatMoney(summary.monthly, currency)}
                 </p>
               </div>
               <div>
-                <p className="text-[10px] text-[var(--muted)]">年利息</p>
+                <p className="text-[10px] text-[var(--muted)]">約年息</p>
                 <p className="mt-0.5 text-xs font-semibold tabular-nums text-[var(--ink)]">
                   {formatMoney(summary.yearly, currency)}
-                </p>
-              </div>
-              <div>
-                <p className="text-[10px] text-[var(--muted)]">已累計</p>
-                <p className="mt-0.5 text-xs font-semibold tabular-nums text-[var(--ink)]">
-                  {formatMoney(summary.accrued, currency)}
                 </p>
               </div>
             </div>
@@ -468,7 +456,7 @@ export function HoldingsPage() {
                         </span>
                         {interest.monthly > 0 ? (
                           <span className="mt-0.5 block text-[11px] tabular-nums text-[var(--muted)]">
-                            月 {formatMoney(interest.monthly, currency)}
+                            約月 {formatMoney(interest.monthly, currency)}
                           </span>
                         ) : null}
                       </span>
@@ -518,9 +506,8 @@ export function HoldingsPage() {
           )}
 
           <p className="text-[11px] leading-relaxed text-[var(--muted)]">
-            計息方式：
-            {COMPOUNDING_OPTIONS.map((item) => item.label).join("、")}
-            。已累計是從起息日算到今天（若已到期則算到到期日）。
+            約月息／約年息依你填的年利率估算（本金 × 年利率）。實際入帳可能一年一次或不同規則，僅供參考。計息方式：
+            {COMPOUNDING_OPTIONS.map((item) => item.label).join("、")}。
           </p>
         </div>
       )}

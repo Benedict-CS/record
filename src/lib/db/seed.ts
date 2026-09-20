@@ -1,7 +1,7 @@
 import { getClientId } from "@/lib/client-id";
 import { sortCategories } from "@/lib/category-order";
 import { db } from "@/lib/db/schema";
-import type { Account, Book, BookCurrency, Category, Holding } from "@/lib/types";
+import type { Account, Book, BookCurrency, Category } from "@/lib/types";
 
 const BOOK_DEFS: {
   name: string;
@@ -89,99 +89,6 @@ function defaultAccounts(currency: BookCurrency): Omit<
       sort_order: 2,
       opening_balance: 0,
     },
-  ];
-}
-
-type HoldingSeed = Pick<
-  Holding,
-  | "name"
-  | "kind"
-  | "institution"
-  | "amount"
-  | "annual_rate"
-  | "compounding"
-  | "icon"
-  | "color"
-  | "sort_order"
->;
-
-function defaultHoldings(currency: BookCurrency): HoldingSeed[] {
-  if (currency === "MYR") {
-    return [
-      {
-        name: "ASM1",
-        kind: "fund",
-        institution: "ASNB",
-        amount: 0,
-        annual_rate: 5,
-        compounding: "simple",
-        icon: "chart",
-        color: "#8e44ad",
-        sort_order: 0,
-      },
-      {
-        name: "ASM2",
-        kind: "fund",
-        institution: "ASNB",
-        amount: 0,
-        annual_rate: 5,
-        compounding: "simple",
-        icon: "chart",
-        color: "#9b59b6",
-        sort_order: 1,
-      },
-      {
-        name: "ASM3",
-        kind: "fund",
-        institution: "ASNB",
-        amount: 0,
-        annual_rate: 4.75,
-        compounding: "simple",
-        icon: "chart",
-        color: "#6c3483",
-        sort_order: 2,
-      },
-      {
-        name: "Shopee Money+",
-        kind: "ewallet",
-        institution: "Shopee",
-        amount: 0,
-        annual_rate: 3.6,
-        compounding: "simple",
-        icon: "bag",
-        color: "#e67e22",
-        sort_order: 3,
-      },
-      {
-        name: "Maybank Saving",
-        kind: "savings",
-        institution: "Maybank",
-        amount: 0,
-        annual_rate: 0,
-        compounding: "none",
-        icon: "building",
-        color: "#f39c12",
-        sort_order: 4,
-      },
-      {
-        name: "eGold (TNG)",
-        kind: "other",
-        institution: "Touch 'n Go",
-        amount: 0,
-        annual_rate: 0,
-        compounding: "none",
-        icon: "wallet",
-        color: "#d4ac0d",
-        sort_order: 5,
-      },
-    ];
-  }
-  return [
-    { name: "現金", kind: "cash", institution: "", amount: 0, annual_rate: 0, compounding: "none", icon: "wallet", color: "#27ae60", sort_order: 0 },
-    { name: "銀行活存", kind: "savings", institution: "玉山銀行", amount: 0, annual_rate: 0.4, compounding: "simple", icon: "building", color: "#3498db", sort_order: 1 },
-    { name: "銀行定存", kind: "deposit", institution: "中華郵政", amount: 0, annual_rate: 1.6, compounding: "yearly", icon: "building", color: "#16a085", sort_order: 2 },
-    { name: "郵局活儲", kind: "savings", institution: "中華郵政", amount: 0, annual_rate: 0.2, compounding: "simple", icon: "building", color: "#1abc9c", sort_order: 3 },
-    { name: "台股基金", kind: "fund", institution: "", amount: 0, annual_rate: 5, compounding: "yearly", icon: "chart", color: "#8e44ad", sort_order: 4 },
   ];
 }
 
@@ -319,29 +226,8 @@ async function seedBookContents(book: Book, clientId: string, stamp: string) {
   // Keep catch-all tags at the end even if newer defaults were inserted after them.
   await pinCatchAllCategories(book.id, clientId, stamp);
 
-  const existingHoldings = await db.holdings
-    .where("book_id")
-    .equals(book.id)
-    .filter((row) => !row.deleted_at)
-    .count();
-
-  if (existingHoldings === 0) {
-    await db.holdings.bulkAdd(
-      defaultHoldings(book.currency).map((item) => ({
-        ...item,
-        id: crypto.randomUUID(),
-        book_id: book.id,
-        user_id: null,
-        updated_at: stamp,
-        deleted_at: null,
-        client_id: clientId,
-        sync_status: "pending" as const,
-        start_date: stamp.slice(0, 10),
-        maturity_date: null,
-        note: "",
-      })),
-    );
-  }
+  // Do not seed empty placeholder holdings (郵局活儲 / ASM1 @ $0). Users add
+  // real deposits themselves; empty shells just clutter the list and duplicate.
 }
 
 /**

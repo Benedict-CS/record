@@ -10,7 +10,6 @@ import { YearBarChart } from "@/components/YearBarChart";
 import {
   categoryBreakdown,
   compareSummaries,
-  dailyAverageExpense,
   dailyTrend,
   monthSummary,
   monthlyTotalsForYear,
@@ -19,13 +18,11 @@ import {
 import { formatMoney, shiftYearMonth, type MoneyCurrency } from "@/lib/format";
 import {
   useCategories,
-  useHoldings,
   useMonthTransactions,
   useSeedReady,
   useYearTransactions,
 } from "@/lib/hooks/useLedgerData";
 import type { CategoryBreakdownItem, CategoryKind } from "@/lib/types";
-import { holdingsInterestSummary } from "@/lib/interest";
 
 type ReportScope = "month" | "year";
 
@@ -35,21 +32,6 @@ function pad2(value: number) {
 
 function daysInMonth(year: number, month: number) {
   return new Date(year, month, 0).getDate();
-}
-
-function daysInYear(year: number) {
-  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
-  return leap ? 366 : 365;
-}
-
-function dayOfYear(date: Date) {
-  const start = Date.UTC(date.getFullYear(), 0, 1);
-  const current = Date.UTC(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate(),
-  );
-  return Math.floor((current - start) / 86_400_000) + 1;
 }
 
 export function ReportsPage() {
@@ -64,7 +46,6 @@ export function ReportsPage() {
   const [detail, setDetail] = useState<CategoryBreakdownItem | null>(null);
 
   const categories = useCategories();
-  const holdings = useHoldings();
   const monthTransactions = useMonthTransactions(year, month);
   const yearTransactions = useYearTransactions(year, scope === "year");
 
@@ -115,28 +96,6 @@ export function ReportsPage() {
     [yearTransactions],
   );
 
-  // Days already spent in the period: elapsed days for the ongoing month/year,
-  // the full month for past months, and 365/366 for past years.
-  const periodDays = useMemo(() => {
-    const todayYear = now.getFullYear();
-    const todayMonth = now.getMonth() + 1;
-    if (scope === "month") {
-      if (year > todayYear || (year === todayYear && month > todayMonth)) {
-        return 0;
-      }
-      if (year === todayYear && month === todayMonth) return now.getDate();
-      return daysInMonth(year, month);
-    }
-    if (year > todayYear) return 0;
-    if (year === todayYear) return dayOfYear(now);
-    return daysInYear(year);
-  }, [scope, year, month, now]);
-
-  const averageExpense = useMemo(
-    () => dailyAverageExpense(activeTransactions, periodDays),
-    [activeTransactions, periodDays],
-  );
-
   const trendPoints = useMemo<TrendPoint[]>(() => {
     if (scope === "month") {
       const byDate = new Map(
@@ -165,10 +124,6 @@ export function ReportsPage() {
   const topExpense = expenseBreakdown[0];
   const topExpenseTitle = scope === "month" ? "本月消費最多" : "本年消費最多";
   const rankingTitle = `${pieKind === "expense" ? "支出" : "收入"}排行 TOP 5`;
-  const interestForecast = useMemo(
-    () => holdingsInterestSummary(holdings),
-    [holdings],
-  );
 
   function shiftPeriod(delta: number) {
     if (scope === "month") {
@@ -244,7 +199,11 @@ export function ReportsPage() {
                 <p className="mt-1 truncate text-base font-semibold tabular-nums text-[var(--ink)]">
                   {formatMoney(summary.outflow, currency)}
                 </p>
-                <p className="mt-0.5 text-[10px] text-[var(--muted)]">花掉＋扣住</p>
+                <p className="mt-0.5 text-[10px] text-[var(--muted)]">
+                  {summary.selfPay < summary.expense
+                    ? `已核銷後 · 帳戶實付 ${formatMoney(summary.expense + summary.held, currency)}`
+                    : "花掉＋扣住"}
+                </p>
               </div>
               <div className="rounded-xl bg-amber-50 px-2.5 py-2.5 text-left">
                 <p className="text-[11px] text-amber-900/70">被扣住</p>
@@ -256,9 +215,13 @@ export function ReportsPage() {
               <div className="rounded-xl bg-[var(--paper)] px-2.5 py-2.5 text-left">
                 <p className="text-[11px] text-[var(--muted)]">實際花掉</p>
                 <p className="mt-1 truncate text-base font-semibold tabular-nums text-rose-700">
-                  {formatMoney(summary.expense, currency)}
+                  {formatMoney(summary.selfPay, currency)}
                 </p>
-                <p className="mt-0.5 text-[10px] text-[var(--muted)]">花費 − 被扣住</p>
+                <p className="mt-0.5 text-[10px] text-[var(--muted)]">
+                  {summary.selfPay < summary.expense
+                    ? `帳戶實付 ${formatMoney(summary.expense, currency)}`
+                    : "花費 − 被扣住"}
+                </p>
               </div>
               <div className="rounded-xl bg-[var(--paper)] px-2.5 py-2.5 text-left">
                 <p className="text-[11px] text-[var(--muted)]">結餘</p>
@@ -301,51 +264,14 @@ export function ReportsPage() {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3.5">
-            <div className="flex items-baseline justify-between gap-3">
-              <h2 className="text-sm font-medium text-[var(--ink)]">
-                存款預估利息
-              </h2>
-              <p className="text-[11px] text-[var(--muted)]">依目前年利率</p>
-            </div>
-            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-              <div>
-                <p className="text-[10px] text-[var(--muted)]">本金</p>
-                <p className="mt-0.5 text-xs font-semibold tabular-nums text-[var(--ink)]">
-                  {formatMoney(interestForecast.amount, currency)}
-                </p>
-              </div>
-              <div>
-                <p className="text-[10px] text-[var(--muted)]">每月</p>
-                <p className="mt-0.5 text-xs font-semibold tabular-nums text-[var(--ink)]">
-                  {formatMoney(interestForecast.monthly, currency)}
-                </p>
-              </div>
-              <div>
-                <p className="text-[10px] text-[var(--muted)]">每年</p>
-                <p className="mt-0.5 text-xs font-semibold tabular-nums text-[var(--ink)]">
-                  {formatMoney(interestForecast.yearly, currency)}
-                </p>
-              </div>
-            </div>
-          </section>
-
-          <section className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3.5">
-            <div>
-              <p className="text-sm font-medium text-[var(--ink)]">日均支出</p>
-              <p className="mt-0.5 text-[11px] text-[var(--muted)]">
-                {periodDays > 0 ? `以 ${periodDays} 天計算` : "此期間尚未開始"}
-              </p>
-            </div>
-            <p className="shrink-0 text-lg font-semibold tabular-nums text-[var(--ink)]">
-              {formatMoney(averageExpense, currency)}
-            </p>
-          </section>
-
           {topExpense ? (
-            <section className="rounded-2xl border-2 border-[var(--accent)] bg-[var(--surface)] px-4 py-4">
+            <button
+              type="button"
+              onClick={() => setDetail(topExpense)}
+              className="w-full rounded-2xl border-2 border-[var(--accent)] bg-[var(--surface)] px-4 py-4 text-left transition active:bg-[var(--paper)]"
+            >
               <p className="text-xs font-medium tracking-wide text-[var(--accent)]">
-                {topExpenseTitle}
+                {topExpenseTitle} · 點開看明細
               </p>
               <div className="mt-2 flex items-end justify-between gap-3">
                 <div className="min-w-0">
@@ -360,7 +286,7 @@ export function ReportsPage() {
                   {formatMoney(topExpense.amount, currency)}
                 </p>
               </div>
-            </section>
+            </button>
           ) : null}
 
           <section className="space-y-2">
@@ -416,6 +342,7 @@ export function ReportsPage() {
             <CategoryPieChart
               items={breakdown}
               currency={currency}
+              onSelect={setDetail}
               emptyLabel={
                 pieKind === "expense"
                   ? "此期間尚無支出分類資料"
@@ -425,9 +352,12 @@ export function ReportsPage() {
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-sm font-medium text-[var(--ink)]">
-              {rankingTitle}
-            </h2>
+            <div className="flex items-baseline justify-between gap-2">
+              <h2 className="text-sm font-medium text-[var(--ink)]">
+                {rankingTitle}
+              </h2>
+              <p className="text-[11px] text-[var(--muted)]">點一下看明細</p>
+            </div>
             {ranking.length === 0 ? (
               <p className="rounded-2xl border border-dashed border-[var(--line)] px-4 py-8 text-center text-sm text-[var(--muted)]">
                 此期間尚無資料

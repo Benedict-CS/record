@@ -37,7 +37,7 @@ export function YearSpendCard({ year }: { year: number }) {
         <p className="min-w-0 text-[var(--muted)]">
           實際花掉{" "}
           <span className="font-medium tabular-nums text-rose-700">
-            {formatMoney(summary.expense, currency)}
+            {formatMoney(summary.selfPay, currency)}
           </span>
         </p>
         <p className="min-w-0 text-[var(--muted)]">

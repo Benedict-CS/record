@@ -6,12 +6,15 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import { useToast } from "@/components/ToastProvider";
 import {
   duplicateTransaction,
+  markReimbursementReceived,
   releaseHold,
   restoreTransaction,
   softDeleteTransaction,
+  undoReimbursementReceived,
 } from "@/lib/db/crud";
 import { compareSameDayTransactions } from "@/lib/day-order";
 import { formatMoney, todayLocal } from "@/lib/format";
+import { expenseDisplayAmount } from "@/lib/reimbursement";
 import { runSync } from "@/lib/sync/engine";
 import type { Account, Category, Transaction } from "@/lib/types";
 
@@ -145,6 +148,31 @@ export function TransactionList({
     show("已退回", { variant: "success" });
   }
 
+  async function onMarkReimbursed(tx: Transaction) {
+    const ok = await confirm({
+      title: "銷帳待報銷？",
+      message:
+        "確認補助或退稅已入帳（薪水裡／銀行入帳另記過）。只標記狀態，不另記收入。帳戶仍保留實付全額；列表主數字是自付。",
+      confirmLabel: "銷帳",
+    });
+    if (!ok) return;
+    await markReimbursementReceived(tx.id);
+    void runSync();
+    show("已銷帳", { variant: "success" });
+  }
+
+  async function onUndoReimbursed(tx: Transaction) {
+    const ok = await confirm({
+      title: "取消銷帳？",
+      message: "會回到「待報銷」，帳戶金額不變。",
+      confirmLabel: "取消銷帳",
+    });
+    if (!ok) return;
+    await undoReimbursementReceived(tx.id);
+    void runSync();
+    show("已改回待報銷", { variant: "info" });
+  }
+
   async function onDelete(tx: Transaction) {
     const ok = await confirm({
       title: "刪除這筆紀錄？",
@@ -201,7 +229,7 @@ export function TransactionList({
       {groups.map((group) => {
         const dayExpense = group.items
           .filter((tx) => tx.type === "expense")
-          .reduce((sum, tx) => sum + tx.amount, 0);
+          .reduce((sum, tx) => sum + expenseDisplayAmount(tx), 0);
         const dayHeld = group.items
           .filter((tx) => tx.type === "hold")
           .reduce((sum, tx) => sum + tx.amount, 0);
@@ -250,6 +278,24 @@ export function TransactionList({
                 const isHold = tx.type === "hold";
                 const holdReleased =
                   isHold && tx.hold_status === "released";
+                const reimbAmount =
+                  tx.type === "expense" &&
+                  tx.reimbursable_amount != null &&
+                  tx.reimbursable_amount > 0
+                    ? tx.reimbursable_amount
+                    : null;
+                const reimbPending =
+                  reimbAmount != null &&
+                  tx.reimbursement_status === "pending";
+                const reimbReceived =
+                  reimbAmount != null &&
+                  tx.reimbursement_status === "received";
+                const selfPay =
+                  reimbAmount != null
+                    ? Math.max(0, tx.amount - reimbAmount)
+                    : null;
+                // Pending: full cash. After 銷帳: self-pay.
+                const displayAmount = expenseDisplayAmount(tx);
                 const sign =
                   tx.type === "income"
                     ? "+"
@@ -283,6 +329,12 @@ export function TransactionList({
                   !groupByDay && !framed ? tx.date : null,
                   accountName,
                   holdReleased ? "已退回" : isHold ? "暫時扣住" : null,
+                  reimbPending && reimbAmount != null
+                    ? `待報銷 ${formatMoney(reimbAmount, currency)}`
+                    : null,
+                  reimbReceived && reimbAmount != null
+                    ? `已報銷 ${formatMoney(reimbAmount, currency)}`
+                    : null,
                   note || null,
                 ].filter(Boolean);
 
@@ -320,10 +372,17 @@ export function TransactionList({
                         {title}
                       </span>
                       <span
-                        className={`w-full text-right text-sm font-semibold tabular-nums ${color}`}
+                        className={`flex w-full flex-col items-end text-right ${color}`}
                       >
-                        {sign}
-                        {formatMoney(tx.amount, currency)}
+                        <span className="text-sm font-semibold tabular-nums">
+                          {sign}
+                          {formatMoney(displayAmount, currency)}
+                        </span>
+                        {reimbReceived && selfPay != null ? (
+                          <span className="text-[10px] font-normal tabular-nums text-[var(--muted)] no-underline">
+                            實付 {formatMoney(tx.amount, currency)}
+                          </span>
+                        ) : null}
                       </span>
                       {subtitleParts.length > 0 ? (
                         <span className="col-span-2 min-w-0 truncate text-[11px] text-[var(--muted)]">
@@ -341,6 +400,28 @@ export function TransactionList({
                           onClick={() => void onRelease(tx)}
                         >
                           退回
+                        </button>
+                      ) : null}
+                      {reimbPending ? (
+                        <button
+                          type="button"
+                          className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-sky-900 active:bg-sky-50"
+                          aria-label="銷帳"
+                          title="銷帳"
+                          onClick={() => void onMarkReimbursed(tx)}
+                        >
+                          銷帳
+                        </button>
+                      ) : null}
+                      {reimbReceived ? (
+                        <button
+                          type="button"
+                          className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-[var(--muted)] active:bg-[var(--paper)]"
+                          aria-label="取消銷帳"
+                          title="取消銷帳"
+                          onClick={() => void onUndoReimbursed(tx)}
+                        >
+                          撤銷
                         </button>
                       ) : null}
                       {onEdit ? (

@@ -7,6 +7,7 @@ import { useBook } from "@/components/BookProvider";
 import { TransactionEditor } from "@/components/TransactionEditor";
 import { TransactionList } from "@/components/TransactionList";
 import { formatMoney } from "@/lib/format";
+import { expenseDisplayAmount } from "@/lib/reimbursement";
 import {
   useAccountBalances,
   useAccountTransactions,
@@ -32,13 +33,15 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
   const summary = useMemo(() => {
     let income = 0;
     let expense = 0;
+    let expenseCash = 0;
     let held = 0;
     for (const tx of transactions) {
       if (tx.type === "income" && tx.account_id === accountId) {
         income += tx.amount;
       }
       if (tx.type === "expense" && tx.account_id === accountId) {
-        expense += tx.amount;
+        expense += expenseDisplayAmount(tx);
+        expenseCash += tx.amount;
       }
       if (
         tx.type === "hold" &&
@@ -47,11 +50,14 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
         held += tx.amount;
       }
       if (tx.type === "transfer") {
-        if (tx.account_id === accountId) expense += tx.amount;
+        if (tx.account_id === accountId) {
+          expense += tx.amount;
+          expenseCash += tx.amount;
+        }
         if (tx.transfer_account_id === accountId) income += tx.amount;
       }
     }
-    return { income, expense, held };
+    return { income, expense, expenseCash, held };
   }, [transactions, accountId]);
 
   return (
@@ -88,6 +94,11 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
               <p className="mt-0.5 text-sm font-semibold tabular-nums text-rose-700">
                 {formatMoney(summary.expense, currency)}
               </p>
+              {summary.expense < summary.expenseCash ? (
+                <p className="mt-0.5 text-[10px] text-[var(--muted)]">
+                  實付 {formatMoney(summary.expenseCash, currency)}
+                </p>
+              ) : null}
             </div>
             <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5">
               <p className="text-[11px] text-[var(--muted)]">被扣住</p>

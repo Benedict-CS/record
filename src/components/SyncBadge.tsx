@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/components/ToastProvider";
 import {
@@ -15,8 +15,8 @@ const LABELS: Record<SyncUiStatus, string> = {
   offline: "離線",
   syncing: "同步中",
   synced: "已同步",
-  error: "有衝突",
-  local: "僅本機",
+  error: "同步失敗",
+  local: "未登入",
 };
 
 const DOTS: Record<SyncUiStatus, string> = {
@@ -28,11 +28,14 @@ const DOTS: Record<SyncUiStatus, string> = {
 };
 
 const FIRST_SYNC_KEY = "ledger_cloud_boot_done";
+const LONG_PRESS_MS = 650;
 
 export function SyncBadge() {
   const [{ status, message }, setState] = useState(getSyncStatus());
   const [busy, setBusy] = useState(false);
   const { show } = useToast();
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressed = useRef(false);
 
   useEffect(() => {
     const stop = startSyncListeners();
@@ -45,27 +48,59 @@ export function SyncBadge() {
     return () => {
       stop();
       unsubscribe();
+      if (pressTimer.current) clearTimeout(pressTimer.current);
     };
   }, []);
 
-  async function onSync() {
+  async function onSync(forceFull = false) {
     if (busy) return;
     setBusy(true);
     try {
-      await runSync();
+      await runSync({ forceFull });
       const result = getSyncStatus();
       if (result.status === "synced") {
-        show("已同步到雲端", { variant: "success" });
+        show(forceFull ? "已完整同步到雲端" : "已同步到雲端", {
+          variant: "success",
+        });
       } else if (result.status === "error") {
-        show(result.message ?? "同步有衝突，請再試一次", { variant: "error" });
+        show(result.message ?? "同步失敗，請再試一次", { variant: "error" });
       } else if (result.status === "offline") {
         show("目前離線，連線後會自動同步", { variant: "info" });
       } else {
-        show(result.message ?? "僅本機模式，尚未登入同步", { variant: "info" });
+        show(result.message ?? "尚未登入，僅本機記帳", { variant: "info" });
       }
     } finally {
       setBusy(false);
     }
+  }
+
+  function clearPress() {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  }
+
+  function onPointerDown() {
+    longPressed.current = false;
+    clearPress();
+    pressTimer.current = setTimeout(() => {
+      longPressed.current = true;
+      void onSync(true);
+    }, LONG_PRESS_MS);
+  }
+
+  function onPointerUp() {
+    const wasLong = longPressed.current;
+    clearPress();
+    if (!wasLong) void onSync(false);
+  }
+
+  function onPointerCancel() {
+    // OS cancel only — do not treat finger slide (pointerleave) as cancel,
+    // or short taps never fire sync.
+    clearPress();
+    longPressed.current = false;
   }
 
   const label = busy || status === "syncing" ? "同步中" : LABELS[status];
@@ -80,8 +115,10 @@ export function SyncBadge() {
   return (
     <button
       type="button"
-      onClick={() => void onSync()}
-      aria-label={`同步狀態：${label}${detail}。點擊立即同步`}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      aria-label={`同步狀態：${label}${detail}。點擊立即同步，長按完整同步`}
       aria-busy={status === "syncing" || busy}
       className={[
         "inline-flex min-h-11 max-w-[13rem] flex-col items-end justify-center rounded-xl border px-3 py-1.5 text-left active:bg-[var(--paper)]",
@@ -93,7 +130,11 @@ export function SyncBadge() {
               ? "border-amber-200 bg-amber-50 text-amber-900"
               : "border-[var(--line)] bg-[var(--surface)] text-[var(--muted)]",
       ].join(" ")}
-      title={message ?? LABELS[status]}
+      title={
+        message
+          ? `${message}（點擊同步／長按完整同步）`
+          : "點擊同步／長按完整同步"
+      }
     >
       <span className="inline-flex items-center gap-2 text-xs font-medium">
         <span
@@ -137,7 +178,7 @@ export function SyncBootBanner() {
     if (retrying) return;
     setRetrying(true);
     try {
-      await runSync();
+      await runSync({ forceFull: true });
     } finally {
       setRetrying(false);
     }

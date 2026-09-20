@@ -6,12 +6,18 @@ import { useBook } from "@/components/BookProvider";
 import { CategoryPickerGrid } from "@/components/CategoryPickerGrid";
 import { useToast } from "@/components/ToastProvider";
 import { formatCalcNumber } from "@/lib/calculator";
-import { releaseHold, updateTransaction } from "@/lib/db/crud";
+import {
+  markReimbursementReceived,
+  releaseHold,
+  undoReimbursementReceived,
+  updateTransaction,
+} from "@/lib/db/crud";
 import { formatMoney, todayLocal } from "@/lib/format";
 import { runSync } from "@/lib/sync/engine";
 import type { Account, Category, Transaction, TransactionType } from "@/lib/types";
 
 type FormType = "income" | "expense" | "hold";
+type KeypadTarget = "amount" | "reimbursable";
 
 function toFormType(type: TransactionType): FormType {
   if (type === "income") return "income";
@@ -36,13 +42,21 @@ export function TransactionEditor({
   const [amount, setAmount] = useState<number | null>(
     Number.isFinite(transaction.amount) ? transaction.amount : null,
   );
+  const [reimbursable, setReimbursable] = useState<number | null>(
+    transaction.reimbursable_amount != null &&
+      Number.isFinite(transaction.reimbursable_amount) &&
+      transaction.reimbursable_amount > 0
+      ? transaction.reimbursable_amount
+      : null,
+  );
   const [date, setDate] = useState(transaction.date);
   const [note, setNote] = useState(transaction.note);
   const [accountId, setAccountId] = useState(transaction.account_id);
   const [categoryId, setCategoryId] = useState(transaction.category_id ?? "");
-  const [keypadOpen, setKeypadOpen] = useState(false);
+  const [keypadTarget, setKeypadTarget] = useState<KeypadTarget | null>(null);
   const [saving, setSaving] = useState(false);
   const [releasing, setReleasing] = useState(false);
+  const [marking, setMarking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [seededFrom, setSeededFrom] = useState(transaction);
@@ -52,11 +66,26 @@ export function TransactionEditor({
   const isReleasedHold =
     transaction.type === "hold" &&
     transaction.hold_status === "released";
+  const canMarkReimbursed =
+    transaction.type === "expense" &&
+    transaction.reimbursable_amount != null &&
+    transaction.reimbursable_amount > 0 &&
+    transaction.reimbursement_status === "pending";
+  const isReimbursed =
+    transaction.type === "expense" &&
+    transaction.reimbursement_status === "received";
 
   if (seededFrom !== transaction) {
     setSeededFrom(transaction);
     setType(toFormType(transaction.type));
     setAmount(Number.isFinite(transaction.amount) ? transaction.amount : null);
+    setReimbursable(
+      transaction.reimbursable_amount != null &&
+        Number.isFinite(transaction.reimbursable_amount) &&
+        transaction.reimbursable_amount > 0
+        ? transaction.reimbursable_amount
+        : null,
+    );
     setDate(transaction.date);
     setNote(transaction.note);
     setAccountId(transaction.account_id);
@@ -83,6 +112,14 @@ export function TransactionEditor({
       ? categoryId || null
       : categoryId || filteredCategories[0]?.id || "";
 
+  const estimatedSelfPay =
+    type === "expense" &&
+    amount != null &&
+    reimbursable != null &&
+    reimbursable > 0
+      ? Math.max(0, amount - reimbursable)
+      : null;
+
   async function onRelease() {
     setError(null);
     setReleasing(true);
@@ -99,6 +136,36 @@ export function TransactionEditor({
       setError(err instanceof Error ? err.message : "退回失敗");
     } finally {
       setReleasing(false);
+    }
+  }
+
+  async function onMarkReimbursed() {
+    setError(null);
+    setMarking(true);
+    try {
+      await markReimbursementReceived(transaction.id);
+      void runSync();
+      show("已銷帳（不另記收入）", { variant: "success" });
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "銷帳失敗");
+    } finally {
+      setMarking(false);
+    }
+  }
+
+  async function onUndoReimbursed() {
+    setError(null);
+    setMarking(true);
+    try {
+      await undoReimbursementReceived(transaction.id);
+      void runSync();
+      show("已改回待報銷", { variant: "info" });
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "取消失敗");
+    } finally {
+      setMarking(false);
     }
   }
 
@@ -131,6 +198,15 @@ export function TransactionEditor({
       setError("請選擇分類");
       return;
     }
+    if (
+      type === "expense" &&
+      reimbursable != null &&
+      reimbursable > 0 &&
+      reimbursable > amount
+    ) {
+      setError("待報銷金額不可大於實付");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -143,6 +219,16 @@ export function TransactionEditor({
         category_id: effectiveCategoryId ? String(effectiveCategoryId) : null,
         transfer_account_id: null,
         hold_status: type === "hold" ? (transaction.hold_status ?? "held") : null,
+        reimbursable_amount:
+          type === "expense" && reimbursable != null && reimbursable > 0
+            ? reimbursable
+            : null,
+        reimbursement_status:
+          type === "expense" && reimbursable != null && reimbursable > 0
+            ? (transaction.reimbursement_status === "received"
+                ? "received"
+                : "pending")
+            : null,
       });
       void runSync();
       onClose();
@@ -157,6 +243,10 @@ export function TransactionEditor({
     amount === null
       ? "點擊輸入金額"
       : formatMoney(amount, book?.currency);
+  const reimbursableLabel =
+    reimbursable === null
+      ? "選填"
+      : formatMoney(reimbursable, book?.currency);
 
   return (
     <>
@@ -204,6 +294,7 @@ export function TransactionEditor({
                   onClick={() => {
                     setType(value);
                     setCategoryId("");
+                    if (value !== "expense") setReimbursable(null);
                   }}
                   className={[
                     "min-h-11 rounded-xl px-2 py-2 text-sm font-medium disabled:opacity-50",
@@ -228,11 +319,13 @@ export function TransactionEditor({
             ) : null}
 
             <div className="block">
-              <span className="mb-1 block text-xs text-[var(--muted)]">金額</span>
+              <span className="mb-1 block text-xs text-[var(--muted)]">
+                {type === "expense" ? "實付金額" : "金額"}
+              </span>
               <button
                 type="button"
                 disabled={isReleasedHold}
-                onClick={() => setKeypadOpen(true)}
+                onClick={() => setKeypadTarget("amount")}
                 className={[
                   "flex min-h-14 w-full items-center justify-between rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-left outline-none focus:border-[var(--accent)] disabled:opacity-60",
                   amount === null ? "text-[var(--muted)]" : "text-[var(--ink)]",
@@ -244,6 +337,37 @@ export function TransactionEditor({
                 <span className="text-xs text-[var(--muted)]">計算機</span>
               </button>
             </div>
+
+            {type === "expense" ? (
+              <div className="block">
+                <span className="mb-1 block text-xs text-[var(--muted)]">
+                  待報銷（公司補助／退稅，選填）
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setKeypadTarget("reimbursable")}
+                  className={[
+                    "flex min-h-12 w-full items-center justify-between rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-left outline-none focus:border-[var(--accent)]",
+                    reimbursable === null
+                      ? "text-[var(--muted)]"
+                      : "text-[var(--ink)]",
+                  ].join(" ")}
+                >
+                  <span className="text-lg font-semibold tabular-nums">
+                    {reimbursableLabel}
+                  </span>
+                  <span className="text-xs text-[var(--muted)]">計算機</span>
+                </button>
+                {estimatedSelfPay != null ? (
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--muted)]">
+                    實付 {formatMoney(amount!, book?.currency)}｜待報銷{" "}
+                    {formatMoney(reimbursable!, book?.currency)}｜預估自付{" "}
+                    {formatMoney(estimatedSelfPay, book?.currency)}
+                    {isReimbursed ? " · 已銷帳" : ""}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
 
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
@@ -315,8 +439,36 @@ export function TransactionEditor({
               </button>
             ) : null}
 
+            {canMarkReimbursed ? (
+              <button
+                type="button"
+                disabled={marking}
+                onClick={() => void onMarkReimbursed()}
+                className="min-h-12 w-full rounded-xl border border-sky-700/30 bg-sky-50 px-4 py-2.5 text-sm font-medium text-sky-950 disabled:opacity-60"
+              >
+                {marking ? "處理中…" : "銷帳（補助／退稅已收到）"}
+              </button>
+            ) : null}
+
+            {isReimbursed ? (
+              <button
+                type="button"
+                disabled={marking}
+                onClick={() => void onUndoReimbursed()}
+                className="min-h-12 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-4 py-2.5 text-sm font-medium text-[var(--ink)] disabled:opacity-60"
+              >
+                {marking ? "處理中…" : "取消銷帳（改回待報銷）"}
+              </button>
+            ) : null}
+
             {isReleasedHold ? (
               <p className="text-center text-xs text-[var(--muted)]">這筆已退回</p>
+            ) : null}
+
+            {isReimbursed ? (
+              <p className="text-center text-xs text-[var(--muted)]">
+                帳戶仍記實付全額；列表主數字是自付。可按上方取消銷帳。
+              </p>
             ) : null}
 
             <button
@@ -331,12 +483,24 @@ export function TransactionEditor({
       </div>
 
       <AmountKeypad
-        open={keypadOpen}
-        initialExpression={amount !== null ? formatCalcNumber(amount) : ""}
-        onClose={() => setKeypadOpen(false)}
+        open={keypadTarget !== null}
+        initialExpression={
+          keypadTarget === "reimbursable"
+            ? reimbursable !== null
+              ? formatCalcNumber(reimbursable)
+              : ""
+            : amount !== null
+              ? formatCalcNumber(amount)
+              : ""
+        }
+        onClose={() => setKeypadTarget(null)}
         onConfirm={(value) => {
-          setAmount(value);
-          setKeypadOpen(false);
+          if (keypadTarget === "reimbursable") {
+            setReimbursable(value > 0 ? value : null);
+          } else {
+            setAmount(value);
+          }
+          setKeypadTarget(null);
         }}
       />
     </>

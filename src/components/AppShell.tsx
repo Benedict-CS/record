@@ -69,17 +69,17 @@ export function AppShell({
           <div className="flex shrink-0 flex-col items-end gap-1">
             <SyncBadge />
             <Link
-              href="/login"
+              href={user ? "/settings" : "/login"}
               aria-label={
                 user
-                  ? `帳號 ${user.email}，開啟登入與同步設定`
+                  ? `帳號 ${user.email}，開啟帳號設定`
                   : configured
                     ? "開啟登入同步"
                     : "開啟設定說明"
               }
               className="inline-flex min-h-11 max-w-[10rem] items-center truncate px-1 text-xs text-[var(--accent)] underline-offset-2 hover:underline"
             >
-              {user ? user.email : configured ? "登入同步" : "設定說明"}
+              {user ? "帳號" : configured ? "登入同步" : "設定說明"}
             </Link>
           </div>
         </div>

@@ -1,18 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { BottomSheet } from "@/components/BottomSheet";
 import { useBook } from "@/components/BookProvider";
 import { MonthSummary } from "@/components/MonthSummary";
-import { NetWorthCard } from "@/components/NetWorthCard";
 import { QuickTemplateBar } from "@/components/QuickTemplateBar";
 import { TransactionEditor } from "@/components/TransactionEditor";
 import { TransactionForm } from "@/components/TransactionForm";
 import { TransactionList } from "@/components/TransactionList";
 import { YearSpendCard } from "@/components/YearSpendCard";
 import { useToast } from "@/components/ToastProvider";
-import { listTransactionsForMonth } from "@/lib/db/crud";
+import {
+  findLatestTransactionMonth,
+  listTransactionsForMonth,
+} from "@/lib/db/crud";
 import {
   useAccounts,
   useCategories,
@@ -51,6 +54,8 @@ export function HomePage() {
     return () => window.removeEventListener("hashchange", openFromHash);
   }, []);
 
+  // If this month is empty, open the latest month that still has data
+  // (once per book). Stay on the real current month when the book is empty.
   useEffect(() => {
     if (!ready || !bookId) return;
     if (transactions.length > 0) {
@@ -70,18 +75,16 @@ export function HomePage() {
         openedForBook.current = bookId;
         return;
       }
-      for (const [y, m] of [
-        [2026, 9],
-        [2026, 8],
-      ] as const) {
-        const rows = await listTransactionsForMonth(bookId, y, m);
-        if (cancelled) return;
-        if (rows.length > 0) {
-          openedForBook.current = bookId;
-          setYear(y);
-          setMonth(m);
-          return;
-        }
+      const latest = await findLatestTransactionMonth(bookId);
+      if (cancelled) return;
+      openedForBook.current = bookId;
+      if (
+        latest &&
+        (latest.year !== now.getFullYear() ||
+          latest.month !== now.getMonth() + 1)
+      ) {
+        setYear(latest.year);
+        setMonth(latest.month);
       }
     })();
     return () => {
@@ -97,10 +100,18 @@ export function HomePage() {
     [transactions, typeFilter],
   );
 
+  const isCurrentMonth =
+    year === now.getFullYear() && month === now.getMonth() + 1;
+
   function shiftMonth(delta: number) {
     const date = new Date(year, month - 1 + delta, 1);
     setYear(date.getFullYear());
     setMonth(date.getMonth() + 1);
+  }
+
+  function goToCurrentMonth() {
+    setYear(now.getFullYear());
+    setMonth(now.getMonth() + 1);
   }
 
   function closeAddSheet() {
@@ -110,13 +121,14 @@ export function HomePage() {
     }
   }
 
+  const shellTitle = isCurrentMonth ? "本月記帳" : `${year} 年 ${month} 月`;
+
   return (
-    <AppShell title="本月記帳">
+    <AppShell title={shellTitle}>
       {!ready ? (
         <p className="text-sm text-[var(--muted)]">載入本機資料…</p>
       ) : (
         <div className="space-y-3 pb-16">
-          <NetWorthCard />
           <YearSpendCard year={year} />
           <MonthSummary
             year={year}
@@ -124,14 +136,25 @@ export function HomePage() {
             transactions={transactions}
             onPrev={() => shiftMonth(-1)}
             onNext={() => shiftMonth(1)}
+            onGoCurrent={!isCurrentMonth ? goToCurrentMonth : undefined}
           />
           <QuickTemplateBar />
           <section className="space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-medium text-[var(--ink)]">本月明細</h2>
-              <span className="text-xs tabular-nums text-[var(--muted)]">
-                {visibleTransactions.length} 筆
-              </span>
+              <h2 className="text-sm font-medium text-[var(--ink)]">
+                {isCurrentMonth ? "本月明細" : `${month} 月明細`}
+              </h2>
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/search"
+                  className="text-xs text-[var(--accent)] underline-offset-2 hover:underline"
+                >
+                  搜尋
+                </Link>
+                <span className="text-xs tabular-nums text-[var(--muted)]">
+                  {visibleTransactions.length} 筆
+                </span>
+              </div>
             </div>
             <div className="grid grid-cols-4 gap-1.5">
               {(
@@ -160,18 +183,29 @@ export function HomePage() {
                 </button>
               ))}
             </div>
-            <TransactionList
-              transactions={visibleTransactions}
-              accounts={accounts}
-              categories={categories}
-              onEdit={setEditing}
-              groupByDay
-              emptyMessage={
-                typeFilter === "all"
-                  ? "這個月還沒有紀錄，點右下角 + 開始。"
-                  : "這個篩選目前沒有紀錄"
-              }
-            />
+            {typeFilter !== "all" && visibleTransactions.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-[var(--line)] px-4 py-6 text-center">
+                <p className="text-sm text-[var(--muted)]">
+                  這個篩選目前沒有紀錄
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setTypeFilter("all")}
+                  className="mt-3 min-h-10 rounded-xl bg-[var(--ink)] px-4 text-xs font-medium text-[var(--paper)]"
+                >
+                  看全部
+                </button>
+              </div>
+            ) : (
+              <TransactionList
+                transactions={visibleTransactions}
+                accounts={accounts}
+                categories={categories}
+                onEdit={setEditing}
+                groupByDay
+                emptyMessage="這個月還沒有紀錄，點右下角 + 開始。"
+              />
+            )}
           </section>
         </div>
       )}
@@ -206,8 +240,8 @@ export function HomePage() {
       <button
         type="button"
         onClick={() => setAddOpen(true)}
-        aria-label="新增記帳"
-        title="新增記帳"
+        aria-label="記一筆"
+        title="記一筆"
         className="quick-add-fab fixed z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent)] text-2xl font-light leading-none text-[var(--paper)] shadow-lg shadow-[rgba(15,122,95,0.35)] transition"
       >
         +

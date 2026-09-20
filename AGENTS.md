@@ -9,7 +9,7 @@ Useful paths:
 - App UI: `src/components/`
 - Local DB + CRUD: `src/lib/db/`
 - Sync: `src/lib/sync/engine.ts`
-- Migrations: `supabase/migrations/` (`001` … `006`)
+- Migrations: `supabase/migrations/` (`001` … `007`)
 
 Deploy with `npm run deploy`. Prefer reading Next.js docs under `node_modules/next/dist/docs/` when APIs differ from older Next.js.
 

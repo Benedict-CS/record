@@ -6,6 +6,7 @@ import { useBook } from "@/components/BookProvider";
 import { TransactionEditor } from "@/components/TransactionEditor";
 import { TransactionList } from "@/components/TransactionList";
 import { formatMoney } from "@/lib/format";
+import { expenseDisplayAmount } from "@/lib/reimbursement";
 import {
   compareMonthTransactions,
   compareSameDayTransactions,
@@ -187,7 +188,7 @@ export function SearchPage() {
     let held = 0;
     for (const tx of results) {
       if (tx.type === "income") income += tx.amount;
-      if (tx.type === "expense") expense += tx.amount;
+      if (tx.type === "expense") expense += expenseDisplayAmount(tx);
       if (tx.type === "hold") held += tx.amount;
     }
     return { income, expense, held };
@@ -483,7 +484,7 @@ export function SearchPage() {
 
             {!searching ? (
               <p className="rounded-2xl border border-dashed border-[var(--line)] px-4 py-8 text-center text-sm text-[var(--muted)]">
-                輸入關鍵字，或展開篩選條件開始搜尋
+                輸入關鍵字，或只開篩選也可以搜（關鍵字可留空）
               </p>
             ) : results.length === 0 ? (
               <p className="rounded-2xl border border-dashed border-[var(--line)] px-4 py-8 text-center text-sm text-[var(--muted)]">

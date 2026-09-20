@@ -1,10 +1,10 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/components/AuthProvider";
-import { useConfirm } from "@/components/ConfirmProvider";
 import { useToast } from "@/components/ToastProvider";
 
 type Mode = "signin" | "signup";
@@ -16,22 +16,24 @@ export function LoginPage() {
     configured,
     signInWithPassword,
     signUpWithPassword,
-    setPassword,
-    signOut,
   } = useAuth();
-  const confirm = useConfirm();
+  const router = useRouter();
   const { show } = useToast();
   const emailId = useId();
   const passwordId = useId();
-  const newPasswordId = useId();
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPasswordField] = useState("");
-  const [newPassword, setNewPassword] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [settingPassword, setSettingPassword] = useState(false);
+
+  // Already signed in → go straight to this month's ledger.
+  useEffect(() => {
+    if (!loading && user) {
+      router.replace("/");
+    }
+  }, [loading, user, router]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -49,54 +51,23 @@ export function LoginPage() {
 
     if (result.error) {
       setError(result.error);
-      show(result.error, { variant: "error" });
       return;
     }
 
-    if (mode === "signup" && "needsEmailConfirm" in result && result.needsEmailConfirm) {
+    if (
+      mode === "signup" &&
+      "needsEmailConfirm" in result &&
+      result.needsEmailConfirm
+    ) {
       setMessage("註冊成功。若有開信箱驗證，請到信箱點連結後再登入。");
-      show("請確認信箱後再登入", { variant: "success" });
+      show("請確認信箱後再登入", { variant: "info" });
       return;
     }
 
     show(mode === "signin" ? "登入成功" : "註冊並登入成功", {
       variant: "success",
     });
-  }
-
-  async function onSetPassword(event: FormEvent) {
-    event.preventDefault();
-    setError(null);
-    setMessage(null);
-    setSettingPassword(true);
-    const result = await setPassword(newPassword);
-    setSettingPassword(false);
-    if (result.error) {
-      setError(result.error);
-      show(result.error, { variant: "error" });
-      return;
-    }
-    setNewPassword("");
-    setMessage("密碼已設定，之後可用 Email + 密碼登入。");
-    show("密碼已設定", { variant: "success" });
-  }
-
-  async function onSignOut() {
-    const ok = await confirm({
-      title: "登出這個帳號？",
-      message: "登出後仍可離線記帳，但變更不會再同步到雲端。",
-      confirmLabel: "登出",
-    });
-    if (!ok) return;
-    try {
-      await signOut();
-      show("已登出", { variant: "success" });
-    } catch (caught) {
-      show(
-        caught instanceof Error && caught.message ? caught.message : "登出失敗",
-        { variant: "error" },
-      );
-    }
+    router.replace("/");
   }
 
   return (
@@ -116,72 +87,10 @@ export function LoginPage() {
               返回記帳
             </Link>
           </div>
-        ) : loading ? (
+        ) : loading || user ? (
           <p className="text-sm text-[var(--muted)]" role="status">
-            檢查登入狀態…
+            {user ? "登入成功，正在進入本月帳本…" : "檢查登入狀態…"}
           </p>
-        ) : user ? (
-          <div className="space-y-4">
-            <div className="space-y-3">
-              <p className="text-sm break-all text-[var(--ink)]">
-                已登入：<span className="font-medium">{user.email}</span>
-              </p>
-              <p className="text-sm text-[var(--muted)]">
-                連線時會自動把本機變更同步到雲端，方便跨裝置使用。
-              </p>
-              <button
-                type="button"
-                onClick={() => void onSignOut()}
-                className="touch-target inline-flex items-center justify-center rounded-md border border-[var(--line)] px-4 text-sm text-[var(--ink)]"
-              >
-                登出
-              </button>
-            </div>
-
-            <form
-              onSubmit={onSetPassword}
-              className="space-y-3 border-t border-[var(--line)] pt-4"
-            >
-              <p className="text-sm text-[var(--muted)]">
-                若你是先前用寄信連結登入的，在這裡設一組密碼後，之後就不用再寄信。
-              </p>
-              <div>
-                <label
-                  htmlFor={newPasswordId}
-                  className="mb-1 block text-xs text-[var(--muted)]"
-                >
-                  新密碼（至少 6 碼）
-                </label>
-                <input
-                  id={newPasswordId}
-                  type="password"
-                  required
-                  minLength={6}
-                  autoComplete="new-password"
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  className="min-h-11 w-full rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 outline-none focus:border-[var(--accent)]"
-                />
-              </div>
-              {error ? (
-                <p className="text-sm text-rose-600" role="alert">
-                  {error}
-                </p>
-              ) : null}
-              {message ? (
-                <p className="text-sm text-emerald-700" role="status">
-                  {message}
-                </p>
-              ) : null}
-              <button
-                type="submit"
-                disabled={settingPassword}
-                className="min-h-12 w-full rounded-md border border-[var(--line)] px-4 text-sm font-medium text-[var(--ink)] disabled:opacity-60"
-              >
-                {settingPassword ? "設定中…" : "設定／更新密碼"}
-              </button>
-            </form>
-          </div>
         ) : (
           <form onSubmit={onSubmit} className="space-y-3">
             <div className="flex gap-2">

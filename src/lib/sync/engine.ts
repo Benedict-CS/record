@@ -194,7 +194,43 @@ async function collapseDuplicateBooks() {
   }
 }
 
+/** Keep one holding per book+name+kind+institution; prefer higher principal. */
+async function collapseDuplicateHoldings() {
+  const live = (await db.holdings.toArray()).filter((row) => !row.deleted_at);
+  const groups = new Map<string, typeof live>();
+  for (const row of live) {
+    const key = `${row.book_id}\0${row.kind}\0${row.name.trim()}\0${(row.institution ?? "").trim()}`;
+    const list = groups.get(key) ?? [];
+    list.push(row);
+    groups.set(key, list);
+  }
+
+  const stamp = new Date().toISOString();
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    group.sort((a, b) => {
+      if (b.amount !== a.amount) return b.amount - a.amount;
+      return b.updated_at.localeCompare(a.updated_at);
+    });
+    for (const extra of group.slice(1)) {
+      await db.holdings.update(extra.id, {
+        deleted_at: stamp,
+        updated_at: stamp,
+        sync_status: "pending",
+      });
+    }
+  }
+}
+
 async function retireTransfersLocally() {
+  // One-shot: after transfers are gone, skip the full-table scan every sync.
+  if (
+    typeof localStorage !== "undefined" &&
+    localStorage.getItem("ledger_retired_transfers_v1") === "1"
+  ) {
+    return;
+  }
+
   const stamp = new Date().toISOString();
   const transfers = await db.transactions
     .filter((row) => !row.deleted_at && row.type === "transfer")
@@ -215,6 +251,10 @@ async function retireTransfersLocally() {
       updated_at: stamp,
       sync_status: "pending",
     });
+  }
+
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem("ledger_retired_transfers_v1", "1");
   }
 }
 
@@ -254,6 +294,32 @@ async function repairDeadAccountRefs() {
   }
 }
 
+/** Soft-delete empty placeholder holdings left by old seed defaults. */
+async function purgeEmptyHoldings() {
+  if (
+    typeof localStorage !== "undefined" &&
+    localStorage.getItem("ledger_purged_empty_holdings_v1") === "1"
+  ) {
+    return;
+  }
+
+  const stamp = new Date().toISOString();
+  const empties = await db.holdings
+    .filter((row) => !row.deleted_at && Number(row.amount) === 0)
+    .toArray();
+  for (const row of empties) {
+    await db.holdings.update(row.id, {
+      deleted_at: stamp,
+      updated_at: stamp,
+      sync_status: "pending",
+    });
+  }
+
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem("ledger_purged_empty_holdings_v1", "1");
+  }
+}
+
 /** Remove invented/demo local rows that cloud cleanup cannot match by id. */
 async function purgeInventedLocalData() {
   // One-shot migration — do not re-wipe on every sync (zeros TWD counts).
@@ -284,243 +350,249 @@ async function purgeInventedLocalData() {
 }
 
 async function mergeRemoteBooks(remoteRows: CloudBook[]) {
-  for (const remote of remoteRows) {
-    const local = await db.books.get(remote.id);
-    if (!local) {
-      await db.books.put({ ...remote, sync_status: "synced" });
-      continue;
+  if (!remoteRows.length) return;
+  const locals = await db.books.bulkGet(remoteRows.map((row) => row.id));
+  const toPut: CloudBook[] = [];
+  for (let i = 0; i < remoteRows.length; i += 1) {
+    const remote = remoteRows[i];
+    const local = locals[i];
+    if (!local || remote.updated_at >= local.updated_at) {
+      toPut.push(remote);
     }
-    // Cloud wins when newer (incl. resurrect). Pending local must not block
-    // adopting the KEEP book after a collapse tombstone race.
-    if (remote.updated_at >= local.updated_at) {
-      await db.books.put({ ...remote, sync_status: "synced" });
-    }
+  }
+  if (toPut.length) {
+    await db.books.bulkPut(
+      toPut.map((row) => ({ ...row, sync_status: "synced" as const })),
+    );
   }
 }
 
 async function mergeRemoteAccounts(remoteRows: CloudAccount[]) {
-  for (const remote of remoteRows) {
-    // Rows created before migration 004 come back without opening_balance.
+  if (!remoteRows.length) return;
+  const locals = await db.accounts.bulkGet(remoteRows.map((row) => row.id));
+  const toPut: Array<CloudAccount & { opening_balance: number }> = [];
+  for (let i = 0; i < remoteRows.length; i += 1) {
+    const remote = remoteRows[i];
     const normalised = {
       ...remote,
       opening_balance: Number(remote.opening_balance ?? 0),
     };
-    const local = await db.accounts.get(remote.id);
-    if (!local) {
-      await db.accounts.put({ ...normalised, sync_status: "synced" });
-      continue;
-    }
+    const local = locals[i];
     if (
-      local.sync_status === "pending" &&
+      local?.sync_status === "pending" &&
       local.deleted_at &&
       !remote.deleted_at &&
       local.updated_at >= remote.updated_at
     ) {
       continue;
     }
-    if (remote.updated_at >= local.updated_at) {
-      await db.accounts.put({ ...normalised, sync_status: "synced" });
+    if (!local || remote.updated_at >= local.updated_at) {
+      toPut.push(normalised);
     }
+  }
+  if (toPut.length) {
+    await db.accounts.bulkPut(
+      toPut.map((row) => ({ ...row, sync_status: "synced" as const })),
+    );
   }
 }
 
 async function mergeRemoteCategories(remoteRows: CloudCategory[]) {
-  for (const remote of remoteRows) {
+  if (!remoteRows.length) return;
+  const locals = await db.categories.bulkGet(remoteRows.map((row) => row.id));
+  const toPut: Array<CloudCategory & { color: string }> = [];
+  for (let i = 0; i < remoteRows.length; i += 1) {
+    const remote = remoteRows[i];
     const withColor = {
       ...remote,
       color: remote.color || "#0f7a5f",
     };
-    const local = await db.categories.get(remote.id);
-    if (!local) {
-      await db.categories.put({ ...withColor, sync_status: "synced" });
-      continue;
-    }
-    // Pending local soft-delete must not be undone by an older live remote row.
+    const local = locals[i];
     if (
-      local.sync_status === "pending" &&
+      local?.sync_status === "pending" &&
       local.deleted_at &&
       !remote.deleted_at &&
       local.updated_at >= remote.updated_at
     ) {
       continue;
     }
-    if (remote.updated_at >= local.updated_at) {
-      await db.categories.put({ ...withColor, sync_status: "synced" });
+    if (!local || remote.updated_at >= local.updated_at) {
+      toPut.push(withColor);
     }
+  }
+  if (toPut.length) {
+    await db.categories.bulkPut(
+      toPut.map((row) => ({ ...row, sync_status: "synced" as const })),
+    );
   }
 }
 
 async function mergeRemoteTransactions(remoteRows: CloudTransaction[]) {
-  for (const remote of remoteRows) {
+  if (!remoteRows.length) return;
+  const locals = await db.transactions.bulkGet(
+    remoteRows.map((row) => row.id),
+  );
+  const toPut: CloudTransaction[] = [];
+  for (let i = 0; i < remoteRows.length; i += 1) {
+    const remote = remoteRows[i];
     const normalised: CloudTransaction = {
       ...remote,
       amount: Number(remote.amount),
-      hold_status: (remote.hold_status ?? null) as CloudTransaction["hold_status"],
+      hold_status: (remote.hold_status ??
+        null) as CloudTransaction["hold_status"],
       release_transaction_id: remote.release_transaction_id ?? null,
+      reimbursable_amount:
+        remote.reimbursable_amount == null
+          ? null
+          : Number(remote.reimbursable_amount),
+      reimbursement_status: (remote.reimbursement_status ??
+        null) as CloudTransaction["reimbursement_status"],
     };
-    const local = await db.transactions.get(remote.id);
-    if (!local) {
-      await db.transactions.put({
-        ...normalised,
-        sync_status: "synced",
-      });
-      continue;
+    const local = locals[i];
+    if (!local || remote.updated_at >= local.updated_at) {
+      toPut.push(normalised);
     }
-    // Cloud wins when newer (including soft-deletes). Pending local must not
-    // block cleanup of invented/demo rows already removed remotely.
-    if (remote.updated_at >= local.updated_at) {
-      await db.transactions.put({
-        ...normalised,
-        sync_status: "synced",
-      });
-    }
+  }
+  if (toPut.length) {
+    await db.transactions.bulkPut(
+      toPut.map((row) => ({ ...row, sync_status: "synced" as const })),
+    );
   }
 }
 
 async function mergeRemoteBudgets(remoteRows: CloudBudget[]) {
-  for (const remote of remoteRows) {
-    const local = await db.budgets.get(remote.id);
-    if (!local) {
-      await db.budgets.put({
-        ...remote,
-        amount: Number(remote.amount),
-        sync_status: "synced",
-      });
-      continue;
+  if (!remoteRows.length) return;
+  const locals = await db.budgets.bulkGet(remoteRows.map((row) => row.id));
+  const toPut: CloudBudget[] = [];
+  for (let i = 0; i < remoteRows.length; i += 1) {
+    const remote = remoteRows[i];
+    const local = locals[i];
+    if (local?.sync_status === "pending") continue;
+    if (!local || remote.updated_at >= local.updated_at) {
+      toPut.push({ ...remote, amount: Number(remote.amount) });
     }
-    if (local.sync_status === "pending") continue;
-    if (remote.updated_at >= local.updated_at) {
-      await db.budgets.put({
-        ...remote,
-        amount: Number(remote.amount),
-        sync_status: "synced",
-      });
-    }
+  }
+  if (toPut.length) {
+    await db.budgets.bulkPut(
+      toPut.map((row) => ({ ...row, sync_status: "synced" as const })),
+    );
   }
 }
 
 async function mergeRemoteTemplates(remoteRows: CloudTemplate[]) {
-  for (const remote of remoteRows) {
-    const normalised = {
-      ...remote,
-      amount: Number(remote.amount),
-    };
-    const local = await db.templates.get(remote.id);
-    if (!local) {
-      await db.templates.put({ ...normalised, sync_status: "synced" });
-      continue;
+  if (!remoteRows.length) return;
+  const locals = await db.templates.bulkGet(remoteRows.map((row) => row.id));
+  const toPut: CloudTemplate[] = [];
+  for (let i = 0; i < remoteRows.length; i += 1) {
+    const remote = remoteRows[i];
+    const normalised = { ...remote, amount: Number(remote.amount) };
+    const local = locals[i];
+    if (local?.sync_status === "pending") continue;
+    if (!local || remote.updated_at >= local.updated_at) {
+      toPut.push(normalised);
     }
-    if (local.sync_status === "pending") continue;
-    if (remote.updated_at >= local.updated_at) {
-      await db.templates.put({ ...normalised, sync_status: "synced" });
-    }
+  }
+  if (toPut.length) {
+    await db.templates.bulkPut(
+      toPut.map((row) => ({ ...row, sync_status: "synced" as const })),
+    );
   }
 }
 
 async function mergeRemoteHoldings(remoteRows: CloudHolding[]) {
-  for (const remote of remoteRows) {
+  if (!remoteRows.length) return;
+  const locals = await db.holdings.bulkGet(remoteRows.map((row) => row.id));
+  const toPut: Array<
+    CloudHolding & { amount: number; annual_rate: number }
+  > = [];
+  for (let i = 0; i < remoteRows.length; i += 1) {
+    const remote = remoteRows[i];
     const normalised = {
       ...remote,
       amount: Number(remote.amount),
       annual_rate: Number(remote.annual_rate),
     };
-    const local = await db.holdings.get(remote.id);
-    if (!local) {
-      await db.holdings.put({ ...normalised, sync_status: "synced" });
-      continue;
+    const local = locals[i];
+    if (local?.sync_status === "pending") continue;
+    if (!local || remote.updated_at >= local.updated_at) {
+      toPut.push(normalised);
     }
-    if (local.sync_status === "pending") continue;
-    if (remote.updated_at >= local.updated_at) {
-      await db.holdings.put({ ...normalised, sync_status: "synced" });
-    }
+  }
+  if (toPut.length) {
+    await db.holdings.bulkPut(
+      toPut.map((row) => ({ ...row, sync_status: "synced" as const })),
+    );
   }
 }
 
-async function pullAll(userId: string) {
+type PullOptions = { forceFull?: boolean };
+
+async function pullAll(userId: string, options: PullOptions = {}) {
   const supabase = createClient();
   const state = await db.sync_state.get("default");
   const since = state?.last_pulled_at;
+  const localTxCount = await db.transactions.count();
+  // First sync / empty DB / explicit full: download everything.
+  // Later syncs only fetch rows newer than last_pulled_at (much faster).
+  const full =
+    options.forceFull ||
+    !since ||
+    localTxCount === 0 ||
+    (typeof localStorage !== "undefined" &&
+      localStorage.getItem("ledger_force_full_pull") === "1");
 
-  {
-    // Full-pull books so KEEP resurrects even if last_pulled_at skipped it.
-    const { data, error } = await supabase
-      .from("books")
-      .select("*")
-      .eq("user_id", userId)
-      .order("updated_at", { ascending: true });
-    if (error) throw error;
-    await mergeRemoteBooks((data ?? []) as CloudBook[]);
+  if (
+    full &&
+    typeof localStorage !== "undefined" &&
+    localStorage.getItem("ledger_force_full_pull") === "1"
+  ) {
+    localStorage.removeItem("ledger_force_full_pull");
   }
 
-  {
-    // Full-pull accounts so TWD account lists cannot vanish after twin collapse.
-    const { data, error } = await supabase
-      .from("accounts")
-      .select("*")
-      .eq("user_id", userId)
-      .order("updated_at", { ascending: true });
-    if (error) throw error;
-    await mergeRemoteAccounts((data ?? []) as CloudAccount[]);
-  }
+  // 2s overlap so rows stamped exactly at last_pulled_at are not skipped.
+  const sinceWithOverlap =
+    !full && since
+      ? new Date(new Date(since).getTime() - 2000).toISOString()
+      : null;
 
-  {
-    // Full-pull categories with books/accounts so new tags (運動/機車) land.
-    const { data, error } = await supabase
-      .from("categories")
-      .select("*")
-      .eq("user_id", userId)
-      .order("updated_at", { ascending: true });
-    if (error) throw error;
-    await mergeRemoteCategories((data ?? []) as CloudCategory[]);
-  }
-
-  {
-    // Always full-pull transactions so tombstones and Sep imports are not missed
-    // when last_pulled_at advanced past a failed/partial sync.
-    const { data, error } = await supabase
-      .from("transactions")
-      .select("*")
-      .eq("user_id", userId)
-      .order("updated_at", { ascending: true });
-    if (error) throw error;
-    await mergeRemoteTransactions((data ?? []) as CloudTransaction[]);
-  }
-
-  {
+  async function fetchTable(table: string) {
     let query = supabase
-      .from("budgets")
+      .from(table)
       .select("*")
       .eq("user_id", userId)
       .order("updated_at", { ascending: true });
-    if (since) query = query.gt("updated_at", since);
+    if (sinceWithOverlap) query = query.gt("updated_at", sinceWithOverlap);
     const { data, error } = await query;
     if (error) throw error;
-    await mergeRemoteBudgets((data ?? []) as CloudBudget[]);
+    return data ?? [];
   }
 
-  {
-    let query = supabase
-      .from("templates")
-      .select("*")
-      .eq("user_id", userId)
-      .order("updated_at", { ascending: true });
-    if (since) query = query.gt("updated_at", since);
-    const { data, error } = await query;
-    if (error) throw error;
-    await mergeRemoteTemplates((data ?? []) as CloudTemplate[]);
-  }
+  // Parallel network pulls; merge stays sequential by table dependency order.
+  const [
+    books,
+    accounts,
+    categories,
+    transactions,
+    budgets,
+    templates,
+    holdings,
+  ] = await Promise.all([
+    fetchTable("books"),
+    fetchTable("accounts"),
+    fetchTable("categories"),
+    fetchTable("transactions"),
+    fetchTable("budgets"),
+    fetchTable("templates"),
+    fetchTable("holdings"),
+  ]);
 
-  {
-    let query = supabase
-      .from("holdings")
-      .select("*")
-      .eq("user_id", userId)
-      .order("updated_at", { ascending: true });
-    if (since) query = query.gt("updated_at", since);
-    const { data, error } = await query;
-    if (error) throw error;
-    await mergeRemoteHoldings((data ?? []) as CloudHolding[]);
-  }
+  await mergeRemoteBooks(books as CloudBook[]);
+  await mergeRemoteAccounts(accounts as CloudAccount[]);
+  await mergeRemoteCategories(categories as CloudCategory[]);
+  await mergeRemoteTransactions(transactions as CloudTransaction[]);
+  await mergeRemoteBudgets(budgets as CloudBudget[]);
+  await mergeRemoteTemplates(templates as CloudTemplate[]);
+  await mergeRemoteHoldings(holdings as CloudHolding[]);
 
   // Defer last_pulled_at until push succeeds so a failed push can re-pull.
   return new Date().toISOString();
@@ -604,6 +676,8 @@ async function pushPending(userId: string) {
       amount: row.amount,
       hold_status: row.hold_status ?? null,
       release_transaction_id: row.release_transaction_id ?? null,
+      reimbursable_amount: row.reimbursable_amount ?? null,
+      reimbursement_status: row.reimbursement_status ?? null,
     }));
   const ownedBudgets = budgets
     .filter((row) => row.user_id === userId)
@@ -625,44 +699,65 @@ async function pushPending(userId: string) {
       annual_rate: row.annual_rate,
     }));
 
+  const UPSERT_CHUNK = 150;
+
   async function upsertTable(
     table: string,
     rows: Record<string, unknown>[],
-    markSynced: (id: string) => Promise<unknown>,
+    markSynced: (ids: string[]) => Promise<void>,
   ) {
     if (!rows.length) return;
-    const { error } = await supabase.from(table).upsert(rows);
-    if (error) throw Object.assign(error, { __table: table });
-    await Promise.all(rows.map((row) => markSynced(String(row.id))));
+    for (let i = 0; i < rows.length; i += UPSERT_CHUNK) {
+      const chunk = rows.slice(i, i + UPSERT_CHUNK);
+      const { error } = await supabase.from(table).upsert(chunk);
+      if (error) throw Object.assign(error, { __table: table });
+      await markSynced(chunk.map((row) => String(row.id)));
+    }
   }
 
-  await upsertTable("books", ownedBooks as Record<string, unknown>[], (id) =>
-    db.books.update(id, { sync_status: "synced" }),
+  async function markLocalSynced<T extends { id: string; sync_status: SyncStatus }>(
+    table: {
+      bulkGet: (keys: string[]) => Promise<Array<T | undefined>>;
+      bulkPut: (items: T[]) => Promise<unknown>;
+    },
+    ids: string[],
+  ) {
+    const locals = await table.bulkGet(ids);
+    const stamped = locals
+      .filter((row): row is T => Boolean(row))
+      .map((row) => ({ ...row, sync_status: "synced" as const }));
+    if (stamped.length) await table.bulkPut(stamped);
+  }
+
+  await upsertTable(
+    "books",
+    ownedBooks as Record<string, unknown>[],
+    (ids) => markLocalSynced(db.books, ids),
   );
   await upsertTable(
     "accounts",
     ownedAccounts as Record<string, unknown>[],
-    (id) => db.accounts.update(id, { sync_status: "synced" }),
+    (ids) => markLocalSynced(db.accounts, ids),
   );
   await upsertTable(
     "categories",
     ownedCategories as Record<string, unknown>[],
-    (id) => db.categories.update(id, { sync_status: "synced" }),
+    (ids) => markLocalSynced(db.categories, ids),
   );
   await upsertTable(
     "transactions",
     ownedTransactions as Record<string, unknown>[],
-    (id) => db.transactions.update(id, { sync_status: "synced" }),
+    (ids) => markLocalSynced(db.transactions, ids),
   );
   await upsertTable(
     "budgets",
     ownedBudgets as Record<string, unknown>[],
-    (id) => db.budgets.update(id, { sync_status: "synced" }),
+    (ids) => markLocalSynced(db.budgets, ids),
   );
   await upsertTable(
     "templates",
     ownedTemplates as Record<string, unknown>[],
-    (id) => db.templates.update(id, { sync_status: "synced" }),
+    (ids) => markLocalSynced(db.templates, ids),
   );
 
   const holdingsPayload = ownedHoldings.map((row) => ({
@@ -679,7 +774,7 @@ async function pushPending(userId: string) {
   await upsertTable(
     "holdings",
     holdingsPayload as Record<string, unknown>[],
-    (id) => db.holdings.update(id, { sync_status: "synced" }),
+    (ids) => markLocalSynced(db.holdings, ids),
   );
 
   const state = await db.sync_state.get("default");
@@ -690,7 +785,25 @@ async function pushPending(userId: string) {
   });
 }
 
-export async function runSync(): Promise<void> {
+export type RunSyncOptions = {
+  /** Download every row (ignore last_pulled_at). Use after bulk cloud edits. */
+  forceFull?: boolean;
+};
+
+const MAINTENANCE_KEY = "ledger_last_sync_maintenance_at";
+const MAINTENANCE_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6h
+const AUTO_SYNC_MIN_MS = 45_000;
+let lastAutoSyncAt = 0;
+
+function needsMaintenance(forceFull: boolean): boolean {
+  if (forceFull) return true;
+  if (typeof localStorage === "undefined") return true;
+  const last = localStorage.getItem(MAINTENANCE_KEY);
+  if (!last) return true;
+  return Date.now() - Date.parse(last) > MAINTENANCE_INTERVAL_MS;
+}
+
+export async function runSync(options: RunSyncOptions = {}): Promise<void> {
   if (typeof window === "undefined") return;
   if (!navigator.onLine) {
     setStatus("offline");
@@ -702,33 +815,63 @@ export async function runSync(): Promise<void> {
   }
   if (syncing) return;
 
+  const forceFull = Boolean(options.forceFull);
   syncing = true;
-  setStatus("syncing", "正在載入雲端資料…");
+  setStatus(
+    "syncing",
+    forceFull ? "正在完整同步…" : "正在同步…",
+  );
 
   try {
-    // Seed first so sync never races an empty twin create mid-pull.
-    const { ensureSeedData } = await import("@/lib/db/seed");
-    await ensureSeedData();
+    const state = await db.sync_state.get("default");
+    const isFirstPull = !state?.last_pulled_at || forceFull;
+    // Seed only when local is empty / first cloud pull — BookProvider already
+    // seeds on boot; re-running pin/dedupe on every sync was a major cost.
+    if (isFirstPull) {
+      const { ensureSeedData } = await import("@/lib/db/seed");
+      await ensureSeedData();
+    }
 
     const supabase = createClient();
     const {
       data: { user },
       error: userError,
     } = await supabase.auth.getUser();
-    if (userError) throw userError;
+    if (userError) {
+      const msg = (userError.message ?? "").toLowerCase();
+      if (
+        msg.includes("auth session missing") ||
+        msg.includes("session missing")
+      ) {
+        setStatus("local", "未登入");
+        return;
+      }
+      throw userError;
+    }
 
     if (!user) {
-      setStatus("local", "未登入，僅本機");
+      setStatus("local", "未登入");
       return;
     }
 
     await claimLocalRowsForUser(user.id);
-    const pulledAt = await pullAll(user.id);
-    await collapseDuplicateBooks();
-    await repairDeadAccountRefs();
-    await preferCanonicalActiveBook();
-    await retireTransfersLocally();
-    await purgeInventedLocalData();
+    const pulledAt = await pullAll(user.id, { forceFull });
+    // Cheap when clean; clears empty seed twins that landed next to real holdings.
+    await collapseDuplicateHoldings();
+    await purgeEmptyHoldings();
+
+    if (needsMaintenance(forceFull)) {
+      await collapseDuplicateBooks();
+      await repairDeadAccountRefs();
+      await preferCanonicalActiveBook();
+      await retireTransfersLocally();
+      await purgeInventedLocalData();
+      await purgeEmptyHoldings();
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem(MAINTENANCE_KEY, new Date().toISOString());
+      }
+    }
+
     await pushPending(user.id);
     const syncState = await db.sync_state.get("default");
     await db.sync_state.put({
@@ -748,16 +891,24 @@ export async function runSync(): Promise<void> {
   }
 }
 
+/** Queue a background sync, throttled for visibility/online auto triggers. */
+function scheduleAutoSync() {
+  const now = Date.now();
+  if (now - lastAutoSyncAt < AUTO_SYNC_MIN_MS) return;
+  lastAutoSyncAt = now;
+  void runSync();
+}
+
 export function startSyncListeners() {
   if (typeof window === "undefined") return () => undefined;
 
   const onOnline = () => {
-    void runSync();
+    scheduleAutoSync();
   };
   const onOffline = () => setStatus("offline");
   const onVisible = () => {
     if (document.visibilityState === "visible") {
-      void runSync();
+      scheduleAutoSync();
     }
   };
 
@@ -768,6 +919,7 @@ export function startSyncListeners() {
   if (!navigator.onLine) {
     setStatus("offline");
   } else {
+    lastAutoSyncAt = Date.now();
     void runSync();
   }
 

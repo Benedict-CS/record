@@ -4,11 +4,15 @@ import Link from "next/link";
 import {
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
   useSyncExternalStore,
+  type FormEvent,
 } from "react";
 import { AppShell } from "@/components/AppShell";
+import { useAuth } from "@/components/AuthProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
 import { ReminderNudge } from "@/components/ReminderNudge";
 import { useToast } from "@/components/ToastProvider";
 import {
@@ -49,6 +53,18 @@ const PERMISSION_LABEL: Record<NotificationOutcome, string> = {
 
 export function SettingsPage() {
   const { show } = useToast();
+  const confirm = useConfirm();
+  const {
+    user,
+    configured,
+    setPassword,
+    signOut,
+  } = useAuth();
+  const newPasswordId = useId();
+  const [newPassword, setNewPassword] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [settingPassword, setSettingPassword] = useState(false);
   // Both values live outside React (localStorage / the Notification API), so
   // they hydrate from the server snapshot and then swap to the real value.
   const settings = useSyncExternalStore(
@@ -110,10 +126,121 @@ export function SettingsPage() {
     }
   }
 
+  async function onSetPassword(event: FormEvent) {
+    event.preventDefault();
+    setPasswordError(null);
+    setPasswordMessage(null);
+    setSettingPassword(true);
+    const result = await setPassword(newPassword);
+    setSettingPassword(false);
+    if (result.error) {
+      setPasswordError(result.error);
+      show(result.error, { variant: "error" });
+      return;
+    }
+    setNewPassword("");
+    setPasswordMessage("密碼已更新。");
+    show("密碼已更新", { variant: "success" });
+  }
+
+  async function onSignOut() {
+    const ok = await confirm({
+      title: "登出這個帳號？",
+      message: "登出後仍可離線記帳，但變更不會再同步到雲端。",
+      confirmLabel: "登出",
+    });
+    if (!ok) return;
+    try {
+      await signOut();
+      show("已登出", { variant: "success" });
+    } catch (caught) {
+      show(
+        caught instanceof Error && caught.message ? caught.message : "登出失敗",
+        { variant: "error" },
+      );
+    }
+  }
+
   return (
     <AppShell title="設定">
       <div className="space-y-4">
         <ReminderNudge />
+
+        {configured ? (
+          <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">
+            <div className="border-b border-[var(--line)] px-4 py-3">
+              <h2 className="text-sm font-medium text-[var(--ink)]">帳號與同步</h2>
+              <p className="mt-0.5 text-xs leading-relaxed text-[var(--muted)]">
+                登入後本機變更會同步到雲端；改密碼與登出在這裡。
+              </p>
+            </div>
+            {user ? (
+              <div className="space-y-3 px-4 py-3">
+                <p className="break-all text-sm text-[var(--ink)]">
+                  已登入：<span className="font-medium">{user.email}</span>
+                </p>
+                <form onSubmit={onSetPassword} className="space-y-3">
+                  <div>
+                    <label
+                      htmlFor={newPasswordId}
+                      className="mb-1 block text-xs text-[var(--muted)]"
+                    >
+                      新密碼（至少 6 碼）
+                    </label>
+                    <input
+                      id={newPasswordId}
+                      type="password"
+                      required
+                      minLength={6}
+                      autoComplete="new-password"
+                      value={newPassword}
+                      onChange={(event) => setNewPassword(event.target.value)}
+                      className="min-h-11 w-full rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 outline-none focus:border-[var(--accent)]"
+                    />
+                  </div>
+                  {passwordError ? (
+                    <p className="text-sm text-rose-600" role="alert">
+                      {passwordError}
+                    </p>
+                  ) : null}
+                  {passwordMessage ? (
+                    <p className="text-sm text-emerald-700" role="status">
+                      {passwordMessage}
+                    </p>
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="submit"
+                      disabled={settingPassword}
+                      className="min-h-11 rounded-md border border-[var(--line)] px-4 text-sm font-medium text-[var(--ink)] disabled:opacity-60"
+                    >
+                      {settingPassword ? "設定中…" : "更新密碼"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void onSignOut()}
+                      className="min-h-11 rounded-md border border-[var(--line)] px-4 text-sm text-[var(--ink)]"
+                    >
+                      登出
+                    </button>
+                  </div>
+                </form>
+              </div>
+            ) : (
+              <div className="px-4 py-3">
+                <p className="text-sm text-[var(--muted)]">
+                  尚未登入，無法同步到雲端。
+                </p>
+                <Link
+                  href="/login"
+                  className="mt-3 inline-flex min-h-11 items-center justify-center rounded-md bg-[var(--ink)] px-4 text-sm font-medium text-[var(--paper)]"
+                >
+                  去登入
+                </Link>
+              </div>
+            )}
+          </section>
+        ) : null}
 
         <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">
           <div className="border-b border-[var(--line)] px-4 py-3">

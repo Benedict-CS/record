@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { AmountKeypad } from "@/components/AmountKeypad";
 import { useBook } from "@/components/BookProvider";
 import { CategoryPickerGrid } from "@/components/CategoryPickerGrid";
@@ -11,6 +12,7 @@ import { runSync } from "@/lib/sync/engine";
 import type { Account, Category, Transaction, TransactionType } from "@/lib/types";
 
 type FormType = "income" | "expense" | "hold";
+type KeypadTarget = "amount" | "reimbursable";
 
 function toFormType(type: TransactionType | undefined): FormType {
   if (type === "income") return "income";
@@ -42,6 +44,13 @@ export function TransactionForm({
   const [amount, setAmount] = useState<number | null>(
     initial && Number.isFinite(initial.amount) ? initial.amount : null,
   );
+  const [reimbursable, setReimbursable] = useState<number | null>(
+    initial?.reimbursable_amount != null &&
+      Number.isFinite(initial.reimbursable_amount) &&
+      initial.reimbursable_amount > 0
+      ? initial.reimbursable_amount
+      : null,
+  );
   const [date, setDate] = useState(
     initial?.date ?? defaultDate ?? todayLocal(),
   );
@@ -50,7 +59,7 @@ export function TransactionForm({
     initial?.account_id ?? accounts[0]?.id ?? "",
   );
   const [categoryId, setCategoryId] = useState(initial?.category_id ?? "");
-  const [keypadOpen, setKeypadOpen] = useState(false);
+  const [keypadTarget, setKeypadTarget] = useState<KeypadTarget | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,6 +70,13 @@ export function TransactionForm({
     if (initial) {
       setType(toFormType(initial.type));
       setAmount(Number.isFinite(initial.amount) ? initial.amount : null);
+      setReimbursable(
+        initial.reimbursable_amount != null &&
+          Number.isFinite(initial.reimbursable_amount) &&
+          initial.reimbursable_amount > 0
+          ? initial.reimbursable_amount
+          : null,
+      );
       setDate(initial.date);
       setNote(initial.note);
       setAccountId(initial.account_id);
@@ -80,6 +96,14 @@ export function TransactionForm({
     type === "hold"
       ? categoryId || null
       : categoryId || filteredCategories[0]?.id || "";
+
+  const estimatedSelfPay =
+    type === "expense" &&
+    amount != null &&
+    reimbursable != null &&
+    reimbursable > 0
+      ? Math.max(0, amount - reimbursable)
+      : null;
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -105,6 +129,15 @@ export function TransactionForm({
       setError("請選擇分類");
       return;
     }
+    if (
+      type === "expense" &&
+      reimbursable != null &&
+      reimbursable > 0 &&
+      reimbursable > amount
+    ) {
+      setError("待報銷金額不可大於實付");
+      return;
+    }
     if (isEdit && initial) {
       // ok
     } else if (!bookId) {
@@ -123,6 +156,16 @@ export function TransactionForm({
         category_id: effectiveCategoryId ? String(effectiveCategoryId) : null,
         transfer_account_id: null,
         hold_status: type === "hold" ? ("held" as const) : null,
+        reimbursable_amount:
+          type === "expense" && reimbursable != null && reimbursable > 0
+            ? reimbursable
+            : null,
+        reimbursement_status:
+          type === "expense" && reimbursable != null && reimbursable > 0
+            ? (initial?.reimbursement_status === "received"
+                ? ("received" as const)
+                : ("pending" as const))
+            : null,
       };
 
       if (isEdit && initial) {
@@ -130,6 +173,7 @@ export function TransactionForm({
       } else {
         await createTransaction(bookId!, payload);
         setAmount(null);
+        setReimbursable(null);
         setNote("");
       }
       void runSync();
@@ -145,6 +189,10 @@ export function TransactionForm({
     amount === null
       ? "點擊輸入金額"
       : formatMoney(amount, book?.currency);
+  const reimbursableLabel =
+    reimbursable === null
+      ? "選填"
+      : formatMoney(reimbursable, book?.currency);
 
   return (
     <>
@@ -170,6 +218,7 @@ export function TransactionForm({
               onClick={() => {
                 setType(value);
                 setCategoryId("");
+                if (value !== "expense") setReimbursable(null);
               }}
               className={[
                 "min-h-11 rounded-xl px-2 py-2 text-sm font-medium",
@@ -195,11 +244,12 @@ export function TransactionForm({
 
         <div className="block">
           <span className="mb-1 block text-xs text-[var(--muted)]">
-            金額{type === "hold" ? "" : "（請客可填 0）"}
+            {type === "expense" ? "實付金額" : "金額"}
+            {type === "hold" ? "" : "（請客可填 0）"}
           </span>
           <button
             type="button"
-            onClick={() => setKeypadOpen(true)}
+            onClick={() => setKeypadTarget("amount")}
             className={[
               "flex min-h-14 w-full items-center justify-between rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-left outline-none focus:border-[var(--accent)]",
               amount === null ? "text-[var(--muted)]" : "text-[var(--ink)]",
@@ -211,6 +261,40 @@ export function TransactionForm({
             <span className="text-xs text-[var(--muted)]">計算機</span>
           </button>
         </div>
+
+        {type === "expense" ? (
+          <div className="block">
+            <span className="mb-1 block text-xs text-[var(--muted)]">
+              待報銷（公司補助／退稅，選填）
+            </span>
+            <button
+              type="button"
+              onClick={() => setKeypadTarget("reimbursable")}
+              className={[
+                "flex min-h-12 w-full items-center justify-between rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-left outline-none focus:border-[var(--accent)]",
+                reimbursable === null
+                  ? "text-[var(--muted)]"
+                  : "text-[var(--ink)]",
+              ].join(" ")}
+            >
+              <span className="text-lg font-semibold tabular-nums">
+                {reimbursableLabel}
+              </span>
+              <span className="text-xs text-[var(--muted)]">計算機</span>
+            </button>
+            {estimatedSelfPay != null ? (
+              <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--muted)]">
+                實付 {formatMoney(amount!, book?.currency)}｜待報銷{" "}
+                {formatMoney(reimbursable!, book?.currency)}｜預估自付{" "}
+                {formatMoney(estimatedSelfPay, book?.currency)}
+              </p>
+            ) : (
+              <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--muted)]">
+                和「扣住」不同：帳戶已全額扣款；補助或退稅入帳後按「銷帳」（不另記收入，避免和薪水／退稅收入重複）。
+              </p>
+            )}
+          </div>
+        ) : null}
 
         <label className="block">
           <span className="mb-1 block text-xs text-[var(--muted)]">
@@ -231,7 +315,13 @@ export function TransactionForm({
             <span className="mb-1.5 block text-xs text-[var(--muted)]">分類</span>
             {filteredCategories.length === 0 ? (
               <p className="rounded-xl border border-dashed border-[var(--line)] px-3 py-4 text-center text-xs text-[var(--muted)]">
-                還沒有分類，請先到「分類」頁新增。
+                還沒有分類。
+                <Link
+                  href="/categories"
+                  className="ml-1 text-[var(--accent)] underline-offset-2 hover:underline"
+                >
+                  去新增分類
+                </Link>
               </p>
             ) : (
               <CategoryPickerGrid
@@ -255,17 +345,29 @@ export function TransactionForm({
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-[var(--muted)]">帳戶</span>
-            <select
-              value={effectiveAccountId}
-              onChange={(event) => setAccountId(event.target.value)}
-              className="min-h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-            >
-              {accounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.name}
-                </option>
-              ))}
-            </select>
+            {accounts.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-[var(--line)] px-3 py-3 text-center text-xs text-[var(--muted)]">
+                還沒有帳戶。
+                <Link
+                  href="/accounts"
+                  className="ml-1 text-[var(--accent)] underline-offset-2 hover:underline"
+                >
+                  去新增帳戶
+                </Link>
+              </p>
+            ) : (
+              <select
+                value={effectiveAccountId}
+                onChange={(event) => setAccountId(event.target.value)}
+                className="min-h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+              >
+                {accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </label>
         </div>
 
@@ -273,7 +375,11 @@ export function TransactionForm({
 
         <button
           type="submit"
-          disabled={saving}
+          disabled={
+            saving ||
+            accounts.length === 0 ||
+            (type !== "hold" && filteredCategories.length === 0)
+          }
           className="min-h-12 w-full rounded-xl bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-[var(--paper)] disabled:opacity-60"
         >
           {saving
@@ -287,12 +393,24 @@ export function TransactionForm({
       </form>
 
       <AmountKeypad
-        open={keypadOpen}
-        initialExpression={amount !== null ? formatCalcNumber(amount) : ""}
-        onClose={() => setKeypadOpen(false)}
+        open={keypadTarget !== null}
+        initialExpression={
+          keypadTarget === "reimbursable"
+            ? reimbursable !== null
+              ? formatCalcNumber(reimbursable)
+              : ""
+            : amount !== null
+              ? formatCalcNumber(amount)
+              : ""
+        }
+        onClose={() => setKeypadTarget(null)}
         onConfirm={(value) => {
-          setAmount(value);
-          setKeypadOpen(false);
+          if (keypadTarget === "reimbursable") {
+            setReimbursable(value > 0 ? value : null);
+          } else {
+            setAmount(value);
+          }
+          setKeypadTarget(null);
         }}
       />
     </>

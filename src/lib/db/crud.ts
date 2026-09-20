@@ -10,6 +10,7 @@ import {
 } from "@/lib/day-order";
 import { db } from "@/lib/db/schema";
 import { monthlyInterest, yearlyInterest } from "@/lib/interest";
+import { expenseDisplayAmount } from "@/lib/reimbursement";
 import type {
   Account,
   AccountBalance,
@@ -26,6 +27,7 @@ import type {
   HoldStatus,
   InterestCompounding,
   PeriodSummary,
+  ReimbursementStatus,
   SummaryComparison,
   Template,
   Transaction,
@@ -186,6 +188,27 @@ export async function listTransactionsForMonth(
     categoryId ? names.get(categoryId) : null;
 
   return rows.sort((a, b) => compareMonthTransactions(a, b, nameOf));
+}
+
+/** Latest calendar month that still has live transactions (for empty-home jump). */
+export async function findLatestTransactionMonth(
+  bookId: string,
+): Promise<{ year: number; month: number } | null> {
+  const rows = await db.transactions
+    .where("book_id")
+    .equals(bookId)
+    .filter((row) => !row.deleted_at && row.type !== "transfer" && Boolean(row.date))
+    .toArray();
+  if (!rows.length) return null;
+  let maxDate = rows[0].date;
+  for (const row of rows) {
+    if (row.date > maxDate) maxDate = row.date;
+  }
+  const [yearText, monthText] = maxDate.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  if (!year || !month) return null;
+  return { year, month };
 }
 
 export async function listTransactionsForYear(
@@ -387,9 +410,18 @@ export async function createTransaction(
     transfer_account_id?: string | null;
     hold_status?: HoldStatus | null;
     release_transaction_id?: string | null;
+    reimbursable_amount?: number | null;
+    reimbursement_status?: ReimbursementStatus | null;
   },
 ): Promise<Transaction> {
   const isHold = input.type === "hold";
+  const isExpense = input.type === "expense";
+  const reimbursable =
+    isExpense &&
+    input.reimbursable_amount != null &&
+    input.reimbursable_amount > 0
+      ? input.reimbursable_amount
+      : null;
   const tx: Transaction = {
     ...baseMeta(),
     book_id: bookId,
@@ -403,6 +435,10 @@ export async function createTransaction(
     hold_status: isHold ? (input.hold_status ?? "held") : null,
     release_transaction_id: isHold
       ? (input.release_transaction_id ?? null)
+      : null,
+    reimbursable_amount: reimbursable,
+    reimbursement_status: reimbursable
+      ? (input.reimbursement_status ?? "pending")
       : null,
   };
   await db.transactions.add(tx);
@@ -423,6 +459,8 @@ export async function updateTransaction(
       | "transfer_account_id"
       | "hold_status"
       | "release_transaction_id"
+      | "reimbursable_amount"
+      | "reimbursement_status"
     >
   >,
 ): Promise<void> {
@@ -430,6 +468,24 @@ export async function updateTransaction(
   if (!existing || existing.deleted_at) return;
   const nextType = patch.type ?? existing.type;
   const isHold = nextType === "hold";
+  const isExpense = nextType === "expense";
+
+  let reimbursable_amount: number | null = null;
+  let reimbursement_status: Transaction["reimbursement_status"] = null;
+  if (isExpense) {
+    const raw =
+      patch.reimbursable_amount !== undefined
+        ? patch.reimbursable_amount
+        : existing.reimbursable_amount;
+    if (raw != null && raw > 0) {
+      reimbursable_amount = raw;
+      reimbursement_status =
+        patch.reimbursement_status !== undefined
+          ? patch.reimbursement_status
+          : (existing.reimbursement_status ?? "pending");
+    }
+  }
+
   await db.transactions.update(id, {
     ...patch,
     amount:
@@ -442,6 +498,8 @@ export async function updateTransaction(
           ? patch.release_transaction_id
           : existing.release_transaction_id)
       : null,
+    reimbursable_amount,
+    reimbursement_status,
     updated_at: nowIso(),
     client_id: getClientId(),
     sync_status: "pending",
@@ -522,6 +580,49 @@ export async function duplicateTransaction(
     category_id: existing.category_id,
     transfer_account_id: existing.transfer_account_id,
     hold_status: existing.type === "hold" ? "held" : null,
+    reimbursable_amount:
+      existing.type === "expense" ? existing.reimbursable_amount : null,
+    reimbursement_status:
+      existing.type === "expense" && existing.reimbursable_amount
+        ? "pending"
+        : null,
+  });
+}
+
+/**
+ * Mark company reimbursement as received (e.g. with salary).
+ * Does not create income — cash already left on the expense; salary covers it.
+ */
+export async function markReimbursementReceived(id: string): Promise<void> {
+  const existing = await getTransaction(id);
+  if (
+    !existing ||
+    existing.type !== "expense" ||
+    !existing.reimbursable_amount ||
+    existing.reimbursement_status !== "pending"
+  ) {
+    return;
+  }
+  await db.transactions.update(id, {
+    reimbursement_status: "received",
+    ...touchMeta(),
+  });
+}
+
+/** Undo 銷帳: back to pending (still no cash change). */
+export async function undoReimbursementReceived(id: string): Promise<void> {
+  const existing = await getTransaction(id);
+  if (
+    !existing ||
+    existing.type !== "expense" ||
+    !existing.reimbursable_amount ||
+    existing.reimbursement_status !== "received"
+  ) {
+    return;
+  }
+  await db.transactions.update(id, {
+    reimbursement_status: "pending",
+    ...touchMeta(),
   });
 }
 
@@ -559,6 +660,8 @@ export async function releaseHold(
       transfer_account_id: null,
       hold_status: null,
       release_transaction_id: null,
+      reimbursable_amount: null,
+      reimbursement_status: null,
     };
     await db.transactions.add(income);
     await db.transactions.update(existing.id, {
@@ -1021,6 +1124,8 @@ export function monthSummary(transactions: Transaction[]): PeriodSummary {
   let income = 0;
   let expense = 0;
   let held = 0;
+  let reimbursablePending = 0;
+  let reimbursableReceived = 0;
   for (const tx of transactions) {
     if (tx.type === "income") {
       if (
@@ -1031,16 +1136,29 @@ export function monthSummary(transactions: Transaction[]): PeriodSummary {
       }
       income += tx.amount;
     }
-    if (tx.type === "expense") expense += tx.amount;
+    if (tx.type === "expense") {
+      expense += tx.amount;
+      if (tx.reimbursable_amount != null && tx.reimbursable_amount > 0) {
+        if (tx.reimbursement_status === "pending") {
+          reimbursablePending += tx.reimbursable_amount;
+        } else if (tx.reimbursement_status === "received") {
+          reimbursableReceived += tx.reimbursable_amount;
+        }
+      }
+    }
     // Count every hold in-period so later「已退回」does not erase that month's 花費.
     if (tx.type === "hold") held += tx.amount;
   }
+  const selfPay = Math.max(0, expense - reimbursableReceived);
   return {
     income,
     expense,
     held,
-    outflow: expense + held,
+    outflow: selfPay + held,
+    // Net uses full cash expense so salary/補助 income is not double-counted.
     net: income - expense,
+    reimbursablePending,
+    selfPay,
   };
 }
 
@@ -1053,7 +1171,9 @@ export function categoryBreakdown(
   for (const tx of transactions) {
     if (tx.type !== type) continue;
     const key = tx.category_id;
-    map.set(key, (map.get(key) ?? 0) + tx.amount);
+    const amount =
+      type === "expense" ? expenseDisplayAmount(tx) : tx.amount;
+    map.set(key, (map.get(key) ?? 0) + amount);
   }
 
   const total = [...map.values()].reduce((sum, value) => sum + value, 0);
@@ -1089,7 +1209,7 @@ export function groupTransactionsByDay(
       transactions: [],
     };
     if (tx.type === "income") bucket.income += tx.amount;
-    if (tx.type === "expense") bucket.expense += tx.amount;
+    if (tx.type === "expense") bucket.expense += expenseDisplayAmount(tx);
     if (tx.type === "hold") bucket.held += tx.amount;
     bucket.transactions.push(tx);
     map.set(tx.date, bucket);
@@ -1107,7 +1227,9 @@ export function monthlyTotalsForYear(transactions: Transaction[]) {
     const month = Number(tx.date.slice(5, 7));
     if (!month || month < 1 || month > 12) continue;
     if (tx.type === "income") months[month - 1].income += tx.amount;
-    if (tx.type === "expense") months[month - 1].expense += tx.amount;
+    if (tx.type === "expense") {
+      months[month - 1].expense += expenseDisplayAmount(tx);
+    }
   }
   return months;
 }
@@ -1119,7 +1241,7 @@ export function dailyAverageExpense(
   if (daysInPeriod <= 0) return 0;
   let expense = 0;
   for (const tx of transactions) {
-    if (tx.type === "expense") expense += tx.amount;
+    if (tx.type === "expense") expense += expenseDisplayAmount(tx);
   }
   return expense / daysInPeriod;
 }
@@ -1129,14 +1251,14 @@ export function compareSummaries(
   previous: PeriodSummary,
 ): SummaryComparison {
   const incomeDelta = current.income - previous.income;
-  const expenseDelta = current.expense - previous.expense;
+  const expenseDelta = current.selfPay - previous.selfPay;
   return {
     incomeDelta,
     expenseDelta,
     incomePercent:
       previous.income === 0 ? 0 : (incomeDelta / previous.income) * 100,
     expensePercent:
-      previous.expense === 0 ? 0 : (expenseDelta / previous.expense) * 100,
+      previous.selfPay === 0 ? 0 : (expenseDelta / previous.selfPay) * 100,
   };
 }
 
@@ -1149,7 +1271,7 @@ export function dailyTrend(transactions: Transaction[]): DailyTrendPoint[] {
       expense: 0,
     };
     if (tx.type === "income") point.income += tx.amount;
-    if (tx.type === "expense") point.expense += tx.amount;
+    if (tx.type === "expense") point.expense += expenseDisplayAmount(tx);
     map.set(tx.date, point);
   }
   return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));

@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import type { User } from "@supabase/supabase-js";
+import { formatAuthError } from "@/lib/auth-errors";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { runSync } from "@/lib/sync/engine";
 
@@ -78,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email,
         password,
       });
-      if (error) return { error: error.message };
+      if (error) return { error: formatAuthError(error.message) };
       return {};
     },
     [],
@@ -96,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password,
         options: { emailRedirectTo: redirectTo },
       });
-      if (error) return { error: error.message };
+      if (error) return { error: formatAuthError(error.message) };
       // When "Confirm email" is on, session may be null until the user clicks
       // the confirmation link. When it is off, session is present immediately.
       return { needsEmailConfirm: !data.session };
@@ -110,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const supabase = createClient();
     const { error } = await supabase.auth.updateUser({ password });
-    if (error) return { error: error.message };
+    if (error) return { error: formatAuthError(error.message) };
     return {};
   }, []);
 

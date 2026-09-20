@@ -202,7 +202,7 @@ export function BudgetsPage() {
             </div>
             <p className="text-[11px] opacity-70">本月實際花掉（不含扣住）</p>
             <p className="mt-1 text-xl font-semibold tabular-nums">
-              {formatMoney(summary.expense, currency)}
+              {formatMoney(summary.selfPay, currency)}
               {overallBudget ? (
                 <span className="ml-2 text-sm font-normal opacity-70">
                   / {formatMoney(overallBudget.amount, currency)}
@@ -220,7 +220,7 @@ export function BudgetsPage() {
             ) : null}
             {overallBudget ? (
               <ProgressBar
-                spent={summary.expense}
+                spent={summary.selfPay}
                 budget={overallBudget.amount}
               />
             ) : null}

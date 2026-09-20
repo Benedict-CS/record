@@ -30,6 +30,8 @@ function tx(
     transfer_account_id: null,
     hold_status: null,
     release_transaction_id: null,
+    reimbursable_amount: null,
+    reimbursement_status: null,
   };
 }
 

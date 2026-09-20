@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useMemo } from "react";
 import { formatMoney, type MoneyCurrency } from "@/lib/format";
+import { expenseDisplayAmount } from "@/lib/reimbursement";
 import type { Transaction } from "@/lib/types";
 
 type Props = {
@@ -56,7 +57,10 @@ export function CategoryDetailSheet({
       });
   }, [transactions, categoryId]);
 
-  const total = rows.reduce((sum, tx) => sum + tx.amount, 0);
+  const total = rows.reduce((sum, tx) => {
+    if (tx.type === "expense") return sum + expenseDisplayAmount(tx);
+    return sum + tx.amount;
+  }, 0);
   const average = rows.length > 0 ? total / rows.length : 0;
   const isIncome = rows[0]?.type === "income";
   const amountColor = isIncome ? "text-emerald-700" : "text-rose-700";
@@ -158,7 +162,12 @@ export function CategoryDetailSheet({
                     }`}
                   >
                     {tx.type === "income" ? "+" : "-"}
-                    {formatMoney(tx.amount, currency)}
+                    {formatMoney(
+                      tx.type === "expense"
+                        ? expenseDisplayAmount(tx)
+                        : tx.amount,
+                      currency,
+                    )}
                   </p>
                 </li>
               ))}
