@@ -7,7 +7,8 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test": "npx --yes tsx src/lib/money.test.ts && npx --yes tsx src/lib/day-order.test.ts && npx --yes tsx src/lib/category-order.test.ts && npx --yes tsx src/lib/month-summary.test.ts",
+    "test": "npx --yes tsx src/lib/money.test.ts && npx --yes tsx src/lib/day-order.test.ts && npx --yes tsx src/lib/category-order.test.ts && npx --yes tsx src/lib/month-summary.test.ts && npx --yes tsx src/lib/reimbursement.test.ts",
+    "health": "node scripts/health-check.js",
     "deploy": "vercel deploy --yes --prod --scope team_sGRRuKcFWr48UE0zblZkTCCe"
   },
   "dependencies": {
