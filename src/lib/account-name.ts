@@ -1,5 +1,5 @@
 /**
- * Record accounts are names such as "benedict", plus a password.
+ * Record accounts are names such as "account", plus a password.
  * Supabase Auth still stores an email, so a name is saved as
  * `name@users.record`. People never type that address.
  */
@@ -16,7 +16,7 @@ export function normalizeAccountName(input: string) {
 export function accountNameError(input: string): string | null {
   const name = normalizeAccountName(input);
   if (!name) return "請輸入帳號";
-  if (name.includes("@")) return "帳號不用 Email，例如 benedict";
+  if (name.includes("@")) return "帳號不用 Email，例如 account";
   if (!ACCOUNT_NAME.test(name) || /[._-]$/.test(name)) {
     return "帳號用 2 到 32 個英數，可含 . _ -";
   }

@@ -5,3 +5,5 @@ alter table public.transactions
 
 create index if not exists transactions_holding_id_idx
   on public.transactions (holding_id);
+
+notify pgrst, 'reload schema';

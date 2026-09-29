@@ -6,6 +6,7 @@ import {
   writeActiveBookId,
 } from "@/lib/db/owner";
 import { db } from "@/lib/db/schema";
+import { missingColumnName, withoutColumn } from "@/lib/sync/schema-compat";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import type {
   CloudAccount,
@@ -444,6 +445,13 @@ async function mergeRemoteTransactions(remoteRows: CloudTransaction[]) {
   const toPut: CloudTransaction[] = [];
   for (let i = 0; i < remoteRows.length; i += 1) {
     const remote = remoteRows[i];
+    const local = locals[i];
+    // A database that has not added holding_id omits the key. Keep the local
+    // link so a later pull does not wipe which bank card this expense drew from.
+    const remoteHasHolding = Object.prototype.hasOwnProperty.call(
+      remote,
+      "holding_id",
+    );
     const normalised: CloudTransaction = {
       ...remote,
       amount: Number(remote.amount),
@@ -456,9 +464,10 @@ async function mergeRemoteTransactions(remoteRows: CloudTransaction[]) {
           : Number(remote.reimbursable_amount),
       reimbursement_status: (remote.reimbursement_status ??
         null) as CloudTransaction["reimbursement_status"],
-      holding_id: remote.holding_id ?? null,
+      holding_id: remoteHasHolding
+        ? (remote.holding_id ?? null)
+        : (local?.holding_id ?? null),
     };
-    const local = locals[i];
     if (!local || remote.updated_at >= local.updated_at) {
       toPut.push(normalised);
     }
@@ -723,10 +732,25 @@ async function pushPending(userId: string) {
   ) {
     if (!rows.length) return;
     for (let i = 0; i < rows.length; i += UPSERT_CHUNK) {
-      const chunk = rows.slice(i, i + UPSERT_CHUNK);
-      const { error } = await supabase.from(table).upsert(chunk);
-      if (error) throw Object.assign(error, { __table: table });
-      await markSynced(chunk.map((row) => String(row.id)));
+      let payload = rows.slice(i, i + UPSERT_CHUNK);
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        const { error } = await supabase.from(table).upsert(payload);
+        if (!error) {
+          payload = [];
+          break;
+        }
+        const column = missingColumnName(error);
+        if (!column || !payload.some((row) => column in row)) {
+          throw Object.assign(error, { __table: table });
+        }
+        payload = withoutColumn(payload, column);
+      }
+      if (payload.length) {
+        throw Object.assign(new Error("同步時略過的欄位仍無法上傳"), {
+          __table: table,
+        });
+      }
+      await markSynced(rows.slice(i, i + UPSERT_CHUNK).map((row) => String(row.id)));
     }
   }
 

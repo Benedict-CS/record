@@ -131,7 +131,7 @@ export function LoginPage() {
             </div>
 
             <p className="text-sm text-[var(--muted)]">
-              用帳號和密碼登入，例如 benedict。不用 Email。登入後，離線記下的資料會在上線時同步。
+              用帳號和密碼登入，不用 Email。登入後，離線記下的資料會在上線時同步。
             </p>
 
             <div>
@@ -153,7 +153,7 @@ export function LoginPage() {
                 value={account}
                 onChange={(event) => setAccount(event.target.value)}
                 className="min-h-11 w-full rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 outline-none focus:border-[var(--accent)]"
-                placeholder="benedict"
+                placeholder="account"
               />
             </div>
 
