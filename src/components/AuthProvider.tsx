@@ -10,6 +10,12 @@ import {
   type ReactNode,
 } from "react";
 import type { User } from "@supabase/supabase-js";
+import {
+  accountNameError,
+  normalizeAccountName,
+  signInAccountError,
+  toAuthEmail,
+} from "@/lib/account-name";
 import { formatAuthError } from "@/lib/auth-errors";
 import { setOwnerId } from "@/lib/db/owner";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
@@ -20,11 +26,11 @@ type AuthContextValue = {
   loading: boolean;
   configured: boolean;
   signInWithPassword: (
-    email: string,
+    account: string,
     password: string,
   ) => Promise<{ error?: string }>;
   signUpWithPassword: (
-    email: string,
+    account: string,
     password: string,
   ) => Promise<{ error?: string; needsEmailConfirm?: boolean }>;
   setPassword: (password: string) => Promise<{ error?: string }>;
@@ -75,13 +81,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [configured]);
 
   const signInWithPassword = useCallback(
-    async (email: string, password: string) => {
+    async (account: string, password: string) => {
       if (!isSupabaseConfigured()) {
         return { error: "尚未設定 Supabase 環境變數" };
       }
+      const problem = signInAccountError(account);
+      if (problem) return { error: problem };
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithPassword({
-        email,
+        email: toAuthEmail(account),
         password,
       });
       if (error) return { error: formatAuthError(error.message) };
@@ -91,16 +99,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signUpWithPassword = useCallback(
-    async (email: string, password: string) => {
+    async (account: string, password: string) => {
       if (!isSupabaseConfigured()) {
         return { error: "尚未設定 Supabase 環境變數" };
       }
+      const problem = accountNameError(account);
+      if (problem) return { error: problem };
+      const username = normalizeAccountName(account);
       const supabase = createClient();
       const redirectTo = `${window.location.origin}/auth/callback`;
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: toAuthEmail(username),
         password,
-        options: { emailRedirectTo: redirectTo },
+        options: {
+          emailRedirectTo: redirectTo,
+          data: { username },
+        },
       });
       if (error) return { error: formatAuthError(error.message) };
       // When "Confirm email" is on, session may be null until the user clicks

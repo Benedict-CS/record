@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { BookSwitcher } from "@/components/BookSwitcher";
 import { QuickAddFab } from "@/components/QuickAddFab";
 import { SyncBadge, SyncBootBanner } from "@/components/SyncBadge";
+import { accountLabel } from "@/lib/account-name";
 import { useAuth } from "@/components/AuthProvider";
 
 const NAV = [
@@ -47,6 +48,7 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const { user, configured } = useAuth();
+  const name = accountLabel(user);
 
   return (
     <div className="app-shell mx-auto flex min-h-full w-full max-w-lg flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
@@ -72,15 +74,15 @@ export function AppShell({
               href={user ? "/settings" : "/login"}
               aria-label={
                 user
-                  ? `帳號 ${user.email}，開啟帳號設定`
+                  ? `帳號 ${name}，開啟帳號設定`
                   : configured
                     ? "開啟登入同步"
                     : "開啟設定說明"
               }
               className="inline-flex min-h-11 max-w-[10rem] items-center truncate px-1 text-xs text-[var(--accent)] underline-offset-2 hover:underline"
             >
-              {user?.email
-                ? user.email
+              {name
+                ? name
                 : configured
                   ? "登入同步"
                   : "設定說明"}

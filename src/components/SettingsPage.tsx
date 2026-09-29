@@ -10,6 +10,7 @@ import {
   useSyncExternalStore,
   type FormEvent,
 } from "react";
+import { accountLabel } from "@/lib/account-name";
 import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/components/AuthProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
@@ -178,7 +179,7 @@ export function SettingsPage() {
             {user ? (
               <div className="space-y-3 px-4 py-3">
                 <p className="break-all text-sm text-[var(--ink)]">
-                  已登入：<span className="font-medium">{user.email}</span>
+                  已登入：<span className="font-medium">{accountLabel(user)}</span>
                 </p>
                 <form onSubmit={onSetPassword} className="space-y-3">
                   <div>
@@ -226,7 +227,7 @@ export function SettingsPage() {
                     onClick={() => void onSignOut()}
                     className="mt-3 min-h-11 w-full rounded-md border border-rose-200 bg-rose-50 px-4 text-sm font-medium text-rose-800"
                   >
-                    登出 {user.email}
+                    登出 {accountLabel(user)}
                   </button>
                 </div>
               </div>

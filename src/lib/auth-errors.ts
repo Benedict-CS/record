@@ -8,13 +8,13 @@ export function formatAuthError(message: string | undefined | null): string {
     lower.includes("invalid login credentials") ||
     lower.includes("invalid_credentials")
   ) {
-    return "Email 或密碼不對";
+    return "帳號或密碼不對";
   }
   if (lower.includes("email not confirmed")) {
     return "請先到信箱點驗證連結";
   }
   if (lower.includes("user already registered")) {
-    return "這個 Email 已經註冊過，請改用登入";
+    return "這個帳號已經有人用了，請改用登入";
   }
   if (
     lower.includes("auth session missing") ||

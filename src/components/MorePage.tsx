@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
+import { accountLabel } from "@/lib/account-name";
 import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/components/AuthProvider";
 import { BackupPanel } from "@/components/BackupPanel";
@@ -77,7 +78,7 @@ export function MorePage() {
           <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3">
             <p className="text-xs text-[var(--muted)]">目前登入</p>
             <p className="mt-1 break-all text-sm font-medium text-[var(--ink)]">
-              {user.email}
+              {accountLabel(user)}
             </p>
             <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">
               只同步這個帳號。登出後是這台自己的帳，不會把這台的紀錄上傳到下一個帳號。
