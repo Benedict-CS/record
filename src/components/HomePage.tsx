@@ -16,6 +16,7 @@ import {
   findLatestTransactionMonth,
   listTransactionsForMonth,
 } from "@/lib/db/crud";
+import { formatDayHeading } from "@/lib/format";
 import {
   useAccounts,
   useCategories,
@@ -32,6 +33,8 @@ export function HomePage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  /** When set, the add sheet is for this day. Null means today (the FAB). */
+  const [addDate, setAddDate] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<
     "all" | "expense" | "income" | "hold"
   >("all");
@@ -46,6 +49,7 @@ export function HomePage() {
   useEffect(() => {
     function openFromHash() {
       if (window.location.hash === "#quick-add") {
+        setAddDate(null);
         setAddOpen(true);
       }
     }
@@ -114,8 +118,14 @@ export function HomePage() {
     setMonth(now.getMonth() + 1);
   }
 
+  function openAdd(date?: string) {
+    setAddDate(date ?? null);
+    setAddOpen(true);
+  }
+
   function closeAddSheet() {
     setAddOpen(false);
+    setAddDate(null);
     if (window.location.hash === "#quick-add") {
       history.replaceState(null, "", window.location.pathname);
     }
@@ -202,6 +212,7 @@ export function HomePage() {
                 accounts={accounts}
                 categories={categories}
                 onEdit={setEditing}
+                onAddForDate={openAdd}
                 groupByDay
                 emptyMessage="這個月還沒有紀錄，點右下角 + 開始。"
               />
@@ -213,12 +224,13 @@ export function HomePage() {
       <BottomSheet
         open={addOpen}
         onClose={closeAddSheet}
-        title="記一筆"
+        title={addDate ? `記一筆 · ${formatDayHeading(addDate)}` : "記一筆"}
         description="支出／收入／扣住（押金）。請客金額可填 0"
       >
         <TransactionForm
-          key={addOpen ? "open" : "closed"}
+          key={`${addOpen ? "open" : "closed"}-${addDate ?? "today"}`}
           bare
+          defaultDate={addDate ?? undefined}
           accounts={accounts}
           categories={categories}
           onSaved={() => {
@@ -239,7 +251,7 @@ export function HomePage() {
 
       <button
         type="button"
-        onClick={() => setAddOpen(true)}
+        onClick={() => openAdd()}
         aria-label="記一筆"
         title="記一筆"
         className="quick-add-fab fixed z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent)] text-2xl font-light leading-none text-[var(--paper)] shadow-lg shadow-[rgba(15,122,95,0.35)] transition"

@@ -27,6 +27,7 @@ export function TransactionForm({
   onSaved,
   bare = false,
   defaultDate,
+  defaultAccountId,
 }: {
   accounts: Account[];
   categories: Category[];
@@ -36,6 +37,8 @@ export function TransactionForm({
   bare?: boolean;
   /** Prefill date when creating (e.g. calendar day). */
   defaultDate?: string;
+  /** Prefill account when creating (e.g. from an account's day card). */
+  defaultAccountId?: string;
 }) {
   const { book, bookId } = useBook();
   const isEdit = Boolean(initial?.id);
@@ -56,7 +59,7 @@ export function TransactionForm({
   );
   const [note, setNote] = useState(initial?.note ?? "");
   const [accountId, setAccountId] = useState(
-    initial?.account_id ?? accounts[0]?.id ?? "",
+    initial?.account_id ?? defaultAccountId ?? accounts[0]?.id ?? "",
   );
   const [categoryId, setCategoryId] = useState(initial?.category_id ?? "");
   const [keypadTarget, setKeypadTarget] = useState<KeypadTarget | null>(null);
