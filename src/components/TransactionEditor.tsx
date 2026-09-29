@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { AmountKeypad } from "@/components/AmountKeypad";
+import { BankHoldingField } from "@/components/BankHoldingField";
 import { useBook } from "@/components/BookProvider";
 import { CategoryPickerGrid } from "@/components/CategoryPickerGrid";
 import { useToast } from "@/components/ToastProvider";
@@ -13,6 +14,7 @@ import {
   updateTransaction,
 } from "@/lib/db/crud";
 import { formatMoney, todayLocal } from "@/lib/format";
+import { useHoldings } from "@/lib/hooks/useLedgerData";
 import { runSync } from "@/lib/sync/engine";
 import type { Account, Category, Transaction, TransactionType } from "@/lib/types";
 
@@ -37,6 +39,7 @@ export function TransactionEditor({
   onClose: () => void;
 }) {
   const { book } = useBook();
+  const holdings = useHoldings();
   const { show } = useToast();
   const [type, setType] = useState<FormType>(toFormType(transaction.type));
   const [amount, setAmount] = useState<number | null>(
@@ -52,6 +55,7 @@ export function TransactionEditor({
   const [date, setDate] = useState(transaction.date);
   const [note, setNote] = useState(transaction.note);
   const [accountId, setAccountId] = useState(transaction.account_id);
+  const [holdingId, setHoldingId] = useState(transaction.holding_id ?? "");
   const [categoryId, setCategoryId] = useState(transaction.category_id ?? "");
   const [keypadTarget, setKeypadTarget] = useState<KeypadTarget | null>(null);
   const [saving, setSaving] = useState(false);
@@ -90,6 +94,7 @@ export function TransactionEditor({
     setNote(transaction.note);
     setAccountId(transaction.account_id);
     setCategoryId(transaction.category_id ?? "");
+    setHoldingId(transaction.holding_id ?? "");
     setError(null);
   }
 
@@ -107,6 +112,10 @@ export function TransactionEditor({
   );
 
   const effectiveAccountId = accountId || accounts[0]?.id || "";
+  const selectedAccount =
+    accounts.find((account) => account.id === effectiveAccountId) ?? null;
+  const bankExpense = type === "expense" && selectedAccount?.type === "bank";
+  const cashExpense = type === "expense" && selectedAccount?.type === "cash";
   const effectiveCategoryId =
     type === "hold"
       ? categoryId || null
@@ -229,6 +238,7 @@ export function TransactionEditor({
                 ? "received"
                 : "pending")
             : null,
+        holding_id: bankExpense && holdingId ? holdingId : null,
       });
       void runSync();
       onClose();
@@ -394,6 +404,21 @@ export function TransactionEditor({
                 </select>
               </label>
             </div>
+
+            {bankExpense ? (
+              <BankHoldingField
+                holdings={holdings}
+                value={holdingId}
+                onChange={setHoldingId}
+                currency={book?.currency}
+              />
+            ) : null}
+
+            {cashExpense ? (
+              <p className="text-[11px] leading-relaxed text-[var(--muted)]">
+                現金不會自動改動存款，請自己到存款頁調整現金。
+              </p>
+            ) : null}
 
             <label className="block">
               <span className="mb-1 block text-xs text-[var(--muted)]">

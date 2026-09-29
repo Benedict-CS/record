@@ -62,6 +62,11 @@ export interface Transaction extends SyncMeta {
   reimbursable_amount: number | null;
   /** Expense only: pending until marked received with salary. */
   reimbursement_status: ReimbursementStatus | null;
+  /**
+   * Bank expense only: 存款 holding this spend draws from.
+   * Cash expenses stay null so holdings are not changed.
+   */
+  holding_id: string | null;
 }
 
 export interface Budget extends SyncMeta {

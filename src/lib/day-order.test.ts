@@ -32,6 +32,7 @@ function tx(
     release_transaction_id: null,
     reimbursable_amount: null,
     reimbursement_status: null,
+    holding_id: null,
   };
 }
 

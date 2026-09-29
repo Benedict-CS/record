@@ -79,6 +79,7 @@
 | 5 | `supabase/migrations/005_holdings.sql` |
 | 6 | `supabase/migrations/006_hold_transactions.sql` |
 | 7 | `supabase/migrations/007_reimbursable_expense.sql` |
+| 8 | `supabase/migrations/008_transaction_holding.sql` |
 
 **每個檔案的操作步驟：**
 
@@ -89,7 +90,7 @@
 5. 確認右下角顯示成功（Success / 無錯誤）。
 6. 再開一個 **New query**，對下一份檔案重複同樣步驟。
 
-執行完成後應有：`accounts`、`categories`、`transactions`、`budgets`、`books`、`templates`、`holdings`，以及各表的 RLS 政策；`003` 會替子表加上 `book_id`；`005` 是存款／資產（定存、基金、電子錢包）；`006` 為交易「扣住（hold）」欄位（`hold_status`、`release_transaction_id`）。如果專案早已跑過前面幾份，只要補跑尚未執行的遷移即可。
+執行完成後應有：`accounts`、`categories`、`transactions`、`budgets`、`books`、`templates`、`holdings`，以及各表的 RLS 政策；`003` 會替子表加上 `book_id`；`005` 是存款／資產（定存、基金、電子錢包）；`006` 為交易「扣住（hold）」欄位（`hold_status`、`release_transaction_id`）；`008` 為銀行支出連動存款的 `transactions.holding_id`。如果專案早已跑過前面幾份，只要補跑尚未執行的遷移即可。銀行支出選活存／定存扣款之前，必須先跑 `008`，否則這類交易上傳會失敗。
 
 ---
 

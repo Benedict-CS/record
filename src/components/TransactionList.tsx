@@ -138,10 +138,14 @@ export function TransactionList({
     categoryId ? categoryMap[categoryId]?.name : null;
 
   async function onDuplicate(tx: Transaction) {
-    const copy = await duplicateTransaction(tx.id, todayLocal());
-    if (!copy) return;
-    void runSync();
-    show("已複製到今天", { variant: "success" });
+    try {
+      const copy = await duplicateTransaction(tx.id, todayLocal());
+      if (!copy) return;
+      void runSync();
+      show("已複製到今天", { variant: "success" });
+    } catch (err) {
+      show(err instanceof Error ? err.message : "複製失敗", { variant: "error" });
+    }
   }
 
   async function onRelease(tx: Transaction) {
@@ -201,7 +205,13 @@ export function TransactionList({
       action: {
         label: "復原",
         onClick: () => {
-          void restoreTransaction(tx.id).then(() => runSync());
+          void restoreTransaction(tx.id)
+            .then(() => runSync())
+            .catch((err: unknown) => {
+              show(err instanceof Error ? err.message : "復原失敗", {
+                variant: "error",
+              });
+            });
         },
       },
     });

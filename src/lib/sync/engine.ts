@@ -456,6 +456,7 @@ async function mergeRemoteTransactions(remoteRows: CloudTransaction[]) {
           : Number(remote.reimbursable_amount),
       reimbursement_status: (remote.reimbursement_status ??
         null) as CloudTransaction["reimbursement_status"],
+      holding_id: remote.holding_id ?? null,
     };
     const local = locals[i];
     if (!local || remote.updated_at >= local.updated_at) {
@@ -691,6 +692,7 @@ async function pushPending(userId: string) {
       release_transaction_id: row.release_transaction_id ?? null,
       reimbursable_amount: row.reimbursable_amount ?? null,
       reimbursement_status: row.reimbursement_status ?? null,
+      holding_id: row.holding_id ?? null,
     }));
   const ownedBudgets = budgets
     .filter((row) => row.user_id === userId)

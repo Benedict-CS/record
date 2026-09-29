@@ -10,6 +10,14 @@ import {
   compareSameDayTransactions,
 } from "@/lib/day-order";
 import { db } from "@/lib/db/schema";
+import { formatMoney } from "@/lib/format";
+import {
+  holdingBalanceDeltas,
+  isSpendableBankHolding,
+  nextHoldingBalances,
+  nextHoldingSpend,
+  storedHoldingSpend,
+} from "@/lib/holding-spend";
 import { monthlyInterest, yearlyInterest } from "@/lib/interest";
 import { expenseDisplayAmount } from "@/lib/reimbursement";
 import type {
@@ -65,6 +73,98 @@ function touchMeta() {
     client_id: getClientId(),
     sync_status: "pending" as const,
   };
+}
+
+function centsOf(amount: number) {
+  return Math.round(amount * 100);
+}
+
+/**
+ * Move 存款 balances to match a bank expense link.
+ * Must run inside a read-write transaction that includes holdings and accounts.
+ * Returns the holding id to store (null when this row should not draw a holding).
+ */
+async function commitHoldingSpend(input: {
+  bookId: string;
+  previous: Transaction | null;
+  next: {
+    type: string;
+    amount: number;
+    account_id: string;
+    holding_id: string | null | undefined;
+    deleted: boolean;
+  };
+}): Promise<string | null> {
+  const account = input.next.deleted
+    ? undefined
+    : await db.accounts.get(input.next.account_id);
+  const nextLink = nextHoldingSpend({
+    type: input.next.type,
+    amount: input.next.amount,
+    holdingId: input.next.holding_id,
+    accountType: account?.type ?? null,
+    deleted: input.next.deleted,
+  });
+  const previousLink = input.previous
+    ? storedHoldingSpend({
+        type: input.previous.type,
+        amount: input.previous.amount,
+        holdingId: input.previous.holding_id,
+        deleted: Boolean(input.previous.deleted_at),
+      })
+    : { holdingId: null, amount: 0 };
+
+  if (nextLink.holdingId) {
+    const holding = await db.holdings.get(nextLink.holdingId);
+    const missing =
+      !holding || holding.deleted_at || holding.book_id !== input.bookId;
+    const drawingMore =
+      previousLink.holdingId !== nextLink.holdingId ||
+      nextLink.amount > previousLink.amount;
+    if (drawingMore && missing) {
+      throw new Error("找不到要扣款的銀行存款");
+    }
+    if (drawingMore && holding && !isSpendableBankHolding(holding.kind)) {
+      throw new Error("只能從活存或定存扣款");
+    }
+  }
+
+  const deltas = holdingBalanceDeltas(previousLink, nextLink);
+  if (!deltas.length) return nextLink.holdingId;
+
+  const ids = [...new Set(deltas.map((row) => row.holdingId))];
+  const rows = await db.holdings.bulkGet(ids);
+  const currentCents: Record<string, number> = {};
+  rows.forEach((row, index) => {
+    if (!row || row.deleted_at || row.book_id !== input.bookId) return;
+    currentCents[ids[index]] = centsOf(row.amount);
+  });
+
+  // A deleted holding cannot take money back; dropping that refund lets the ledger row still change.
+  const applicable = deltas.filter(
+    (delta) => delta.deltaCents < 0 || delta.holdingId in currentCents,
+  );
+  const result = nextHoldingBalances(currentCents, applicable);
+  if (result.missingId) {
+    throw new Error("找不到要扣款的銀行存款");
+  }
+  if (result.shortfallId) {
+    const holding = rows.find((row) => row?.id === result.shortfallId);
+    const name = holding?.name ?? "存款";
+    throw new Error(
+      `「${name}」餘額不足，目前 ${formatMoney(holding?.amount ?? 0)}`,
+    );
+  }
+
+  const stamp = touchMeta();
+  for (const [id, cents] of Object.entries(result.balances)) {
+    if (currentCents[id] === cents) continue;
+    await db.holdings.update(id, {
+      amount: cents / 100,
+      ...stamp,
+    });
+  }
+  return nextLink.holdingId;
 }
 
 /** Whole-book slice of the [book_id+date] index, ordered by date ascending. */
@@ -418,6 +518,7 @@ export async function createTransaction(
     release_transaction_id?: string | null;
     reimbursable_amount?: number | null;
     reimbursement_status?: ReimbursementStatus | null;
+    holding_id?: string | null;
   },
 ): Promise<Transaction> {
   const isHold = input.type === "hold";
@@ -446,8 +547,28 @@ export async function createTransaction(
     reimbursement_status: reimbursable
       ? (input.reimbursement_status ?? "pending")
       : null,
+    holding_id: null,
   };
-  await db.transactions.add(tx);
+  await db.transaction(
+    "rw",
+    db.transactions,
+    db.holdings,
+    db.accounts,
+    async () => {
+      tx.holding_id = await commitHoldingSpend({
+        bookId,
+        previous: null,
+        next: {
+          type: tx.type,
+          amount: tx.amount,
+          account_id: tx.account_id,
+          holding_id: input.holding_id,
+          deleted: false,
+        },
+      });
+      await db.transactions.add(tx);
+    },
+  );
   return tx;
 }
 
@@ -467,49 +588,75 @@ export async function updateTransaction(
       | "release_transaction_id"
       | "reimbursable_amount"
       | "reimbursement_status"
+      | "holding_id"
     >
   >,
 ): Promise<void> {
-  const existing = await db.transactions.get(id);
-  if (!existing || existing.deleted_at) return;
-  const nextType = patch.type ?? existing.type;
-  const isHold = nextType === "hold";
-  const isExpense = nextType === "expense";
+  await db.transaction(
+    "rw",
+    db.transactions,
+    db.holdings,
+    db.accounts,
+    async () => {
+      const existing = await db.transactions.get(id);
+      if (!existing || existing.deleted_at) return;
+      const nextType = patch.type ?? existing.type;
+      const isHold = nextType === "hold";
+      const isExpense = nextType === "expense";
+      const nextAmount =
+        patch.amount !== undefined ? Math.abs(patch.amount) : existing.amount;
 
-  let reimbursable_amount: number | null = null;
-  let reimbursement_status: Transaction["reimbursement_status"] = null;
-  if (isExpense) {
-    const raw =
-      patch.reimbursable_amount !== undefined
-        ? patch.reimbursable_amount
-        : existing.reimbursable_amount;
-    if (raw != null && raw > 0) {
-      reimbursable_amount = raw;
-      reimbursement_status =
-        patch.reimbursement_status !== undefined
-          ? patch.reimbursement_status
-          : (existing.reimbursement_status ?? "pending");
-    }
-  }
+      let reimbursable_amount: number | null = null;
+      let reimbursement_status: Transaction["reimbursement_status"] = null;
+      if (isExpense) {
+        const raw =
+          patch.reimbursable_amount !== undefined
+            ? patch.reimbursable_amount
+            : existing.reimbursable_amount;
+        if (raw != null && raw > 0) {
+          reimbursable_amount = raw;
+          reimbursement_status =
+            patch.reimbursement_status !== undefined
+              ? patch.reimbursement_status
+              : (existing.reimbursement_status ?? "pending");
+        }
+      }
 
-  await db.transactions.update(id, {
-    ...patch,
-    amount:
-      patch.amount !== undefined ? Math.abs(patch.amount) : existing.amount,
-    hold_status: isHold
-      ? (patch.hold_status ?? existing.hold_status ?? "held")
-      : null,
-    release_transaction_id: isHold
-      ? (patch.release_transaction_id !== undefined
-          ? patch.release_transaction_id
-          : existing.release_transaction_id)
-      : null,
-    reimbursable_amount,
-    reimbursement_status,
-    updated_at: nowIso(),
-    client_id: getClientId(),
-    sync_status: "pending",
-  });
+      const holding_id = await commitHoldingSpend({
+        bookId: existing.book_id,
+        previous: existing,
+        next: {
+          type: nextType,
+          amount: nextAmount,
+          account_id: patch.account_id ?? existing.account_id,
+          holding_id:
+            patch.holding_id !== undefined
+              ? patch.holding_id
+              : existing.holding_id,
+          deleted: false,
+        },
+      });
+
+      await db.transactions.update(id, {
+        ...patch,
+        amount: nextAmount,
+        hold_status: isHold
+          ? (patch.hold_status ?? existing.hold_status ?? "held")
+          : null,
+        release_transaction_id: isHold
+          ? (patch.release_transaction_id !== undefined
+              ? patch.release_transaction_id
+              : existing.release_transaction_id)
+          : null,
+        reimbursable_amount,
+        reimbursement_status,
+        holding_id,
+        updated_at: nowIso(),
+        client_id: getClientId(),
+        sync_status: "pending",
+      });
+    },
+  );
 }
 
 export async function softDeleteTransaction(id: string): Promise<void> {
@@ -524,9 +671,26 @@ export async function softDeleteTransaction(id: string): Promise<void> {
     sync_status: "pending" as const,
   };
 
-  await db.transaction("rw", db.transactions, async () => {
+  await db.transaction(
+    "rw",
+    db.transactions,
+    db.holdings,
+    db.accounts,
+    async () => {
     const row = await db.transactions.get(id);
     if (!row || row.deleted_at) return;
+
+    await commitHoldingSpend({
+      bookId: row.book_id,
+      previous: row,
+      next: {
+        type: row.type,
+        amount: row.amount,
+        account_id: row.account_id,
+        holding_id: row.holding_id,
+        deleted: true,
+      },
+    });
 
     // Keep hold ↔ release income paired so account balances stay consistent.
     if (row.type === "hold" && row.release_transaction_id) {
@@ -551,7 +715,8 @@ export async function softDeleteTransaction(id: string): Promise<void> {
     }
 
     await db.transactions.update(row.id, tombstone);
-  });
+  },
+  );
 }
 
 export async function getTransaction(
@@ -563,12 +728,35 @@ export async function getTransaction(
 }
 
 export async function restoreTransaction(id: string): Promise<void> {
-  const existing = await db.transactions.get(id);
-  if (!existing) return;
-  await db.transactions.update(id, {
-    deleted_at: null,
-    ...touchMeta(),
-  });
+  await db.transaction(
+    "rw",
+    db.transactions,
+    db.holdings,
+    db.accounts,
+    async () => {
+      const existing = await db.transactions.get(id);
+      if (!existing) return;
+      if (existing.deleted_at) {
+        const account = await db.accounts.get(existing.account_id);
+        await commitHoldingSpend({
+          bookId: existing.book_id,
+          previous: existing,
+          next: {
+            type: existing.type,
+            amount: existing.amount,
+            account_id: existing.account_id,
+            holding_id:
+              account?.type === "bank" ? existing.holding_id : null,
+            deleted: false,
+          },
+        });
+      }
+      await db.transactions.update(id, {
+        deleted_at: null,
+        ...touchMeta(),
+      });
+    },
+  );
 }
 
 export async function duplicateTransaction(
@@ -592,6 +780,7 @@ export async function duplicateTransaction(
       existing.type === "expense" && existing.reimbursable_amount
         ? "pending"
         : null,
+    holding_id: existing.holding_id,
   });
 }
 
@@ -668,6 +857,7 @@ export async function releaseHold(
       release_transaction_id: null,
       reimbursable_amount: null,
       reimbursement_status: null,
+      holding_id: null,
     };
     await db.transactions.add(income);
     await db.transactions.update(existing.id, {
