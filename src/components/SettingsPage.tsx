@@ -146,7 +146,8 @@ export function SettingsPage() {
   async function onSignOut() {
     const ok = await confirm({
       title: "登出這個帳號？",
-      message: "登出後仍可離線記帳，但變更不會再同步到雲端。",
+      message:
+        "登出後看到的是這台裝置自己的帳，可以繼續離線記。那些紀錄不會同步到雲端，也不會在下次登入別的帳號時被上傳。",
       confirmLabel: "登出",
     });
     if (!ok) return;
@@ -171,7 +172,7 @@ export function SettingsPage() {
             <div className="border-b border-[var(--line)] px-4 py-3">
               <h2 className="text-sm font-medium text-[var(--ink)]">帳號與同步</h2>
               <p className="mt-0.5 text-xs leading-relaxed text-[var(--muted)]">
-                登入後本機變更會同步到雲端；改密碼與登出在這裡。
+                登入後，只有這個帳號的紀錄會和雲端同步。未登入時記的帳留在這台裝置，不會被下一個登入的帳號帶走。
               </p>
             </div>
             {user ? (
@@ -208,23 +209,26 @@ export function SettingsPage() {
                       {passwordMessage}
                     </p>
                   ) : null}
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="submit"
-                      disabled={settingPassword}
-                      className="min-h-11 rounded-md border border-[var(--line)] px-4 text-sm font-medium text-[var(--ink)] disabled:opacity-60"
-                    >
-                      {settingPassword ? "設定中…" : "更新密碼"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void onSignOut()}
-                      className="min-h-11 rounded-md border border-[var(--line)] px-4 text-sm text-[var(--ink)]"
-                    >
-                      登出
-                    </button>
-                  </div>
+                  <button
+                    type="submit"
+                    disabled={settingPassword}
+                    className="min-h-11 rounded-md border border-[var(--line)] px-4 text-sm font-medium text-[var(--ink)] disabled:opacity-60"
+                  >
+                    {settingPassword ? "設定中…" : "更新密碼"}
+                  </button>
                 </form>
+                <div className="border-t border-[var(--line)] pt-3">
+                  <p className="text-xs leading-relaxed text-[var(--muted)]">
+                    登出後回到這台自己的帳。上一個帳號的紀錄留在那個帳號，不會在你改登別的帳號時被上傳。
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void onSignOut()}
+                    className="mt-3 min-h-11 w-full rounded-md border border-rose-200 bg-rose-50 px-4 text-sm font-medium text-rose-800"
+                  >
+                    登出 {user.email}
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="px-4 py-3">

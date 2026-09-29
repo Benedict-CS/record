@@ -79,7 +79,11 @@ export function AppShell({
               }
               className="inline-flex min-h-11 max-w-[10rem] items-center truncate px-1 text-xs text-[var(--accent)] underline-offset-2 hover:underline"
             >
-              {user ? "帳號" : configured ? "登入同步" : "設定說明"}
+              {user?.email
+                ? user.email
+                : configured
+                  ? "登入同步"
+                  : "設定說明"}
             </Link>
           </div>
         </div>

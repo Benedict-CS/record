@@ -1,4 +1,10 @@
-import { claimLocalRowsForUser } from "@/lib/db/crud";
+import { ensureOwnerLedger } from "@/lib/db/seed";
+import {
+  getOwnerId,
+  readActiveBookId,
+  sameOwner,
+  writeActiveBookId,
+} from "@/lib/db/owner";
 import { db } from "@/lib/db/schema";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import type {
@@ -73,8 +79,11 @@ function stripSyncStatus<T extends { sync_status: SyncStatus }>(
  */
 async function preferCanonicalActiveBook() {
   if (typeof localStorage === "undefined") return;
-  const activeId = localStorage.getItem("ledger_active_book_id");
-  const live = (await db.books.toArray()).filter((row) => !row.deleted_at);
+  const ownerId = getOwnerId();
+  const activeId = readActiveBookId(ownerId);
+  const live = (await db.books.toArray()).filter(
+    (row) => !row.deleted_at && sameOwner(row.user_id, ownerId),
+  );
   if (live.length === 0) return;
 
   const active = activeId ? live.find((row) => row.id === activeId) : null;
@@ -100,7 +109,7 @@ async function preferCanonicalActiveBook() {
     if (!best || count > best.count) best = { id: book.id, count };
   }
   if (best && best.count > 0 && best.id !== activeId) {
-    localStorage.setItem("ledger_active_book_id", best.id);
+    writeActiveBookId(best.id, ownerId);
     window.dispatchEvent(
       new CustomEvent("ledger-active-book", { detail: best.id }),
     );
@@ -108,7 +117,7 @@ async function preferCanonicalActiveBook() {
     const twd = live.find((row) => row.currency === "TWD");
     const fallback = twd?.id ?? live[0]?.id;
     if (fallback) {
-      localStorage.setItem("ledger_active_book_id", fallback);
+      writeActiveBookId(fallback, ownerId);
       window.dispatchEvent(
         new CustomEvent("ledger-active-book", { detail: fallback }),
       );
@@ -121,7 +130,7 @@ async function collapseDuplicateBooks() {
   const books = (await db.books.toArray()).filter((row) => !row.deleted_at);
   const groups = new Map<string, typeof books>();
   for (const book of books) {
-    const key = `${book.currency}\0${book.name.trim()}`;
+    const key = `${book.user_id ?? ""}\0${book.currency}\0${book.name.trim()}`;
     const list = groups.get(key) ?? [];
     list.push(book);
     groups.set(key, list);
@@ -186,9 +195,9 @@ async function collapseDuplicateBooks() {
       });
       if (
         typeof localStorage !== "undefined" &&
-        localStorage.getItem("ledger_active_book_id") === extra.id
+        readActiveBookId(extra.user_id) === extra.id
       ) {
-        localStorage.setItem("ledger_active_book_id", keep.id);
+        writeActiveBookId(keep.id, extra.user_id);
       }
     }
   }
@@ -527,9 +536,13 @@ async function mergeRemoteHoldings(remoteRows: CloudHolding[]) {
 
 type PullOptions = { forceFull?: boolean };
 
+function syncStateKey(userId: string) {
+  return `user:${userId}`;
+}
+
 async function pullAll(userId: string, options: PullOptions = {}) {
   const supabase = createClient();
-  const state = await db.sync_state.get("default");
+  const state = await db.sync_state.get(syncStateKey(userId));
   const since = state?.last_pulled_at;
   const localTxCount = await db.transactions.count();
   // First sync / empty DB / explicit full: download everything.
@@ -777,9 +790,9 @@ async function pushPending(userId: string) {
     (ids) => markLocalSynced(db.holdings, ids),
   );
 
-  const state = await db.sync_state.get("default");
+  const state = await db.sync_state.get(syncStateKey(userId));
   await db.sync_state.put({
-    id: "default",
+    id: syncStateKey(userId),
     last_pulled_at: state?.last_pulled_at ?? null,
     last_pushed_at: new Date().toISOString(),
   });
@@ -854,8 +867,10 @@ export async function runSync(options: RunSyncOptions = {}): Promise<void> {
       return;
     }
 
-    await claimLocalRowsForUser(user.id);
+    // Do not adopt this device's logged-out ledger, or another account's rows.
+    // Each account only pulls and pushes rows stamped with its own user id.
     const pulledAt = await pullAll(user.id, { forceFull });
+    await ensureOwnerLedger(user.id);
     // Cheap when clean; clears empty seed twins that landed next to real holdings.
     await collapseDuplicateHoldings();
     await purgeEmptyHoldings();
@@ -873,9 +888,9 @@ export async function runSync(options: RunSyncOptions = {}): Promise<void> {
     }
 
     await pushPending(user.id);
-    const syncState = await db.sync_state.get("default");
+    const syncState = await db.sync_state.get(syncStateKey(user.id));
     await db.sync_state.put({
-      id: "default",
+      id: syncStateKey(user.id),
       last_pulled_at: pulledAt,
       last_pushed_at: syncState?.last_pushed_at ?? new Date().toISOString(),
     });

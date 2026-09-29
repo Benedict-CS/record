@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { User } from "@supabase/supabase-js";
 import { formatAuthError } from "@/lib/auth-errors";
+import { setOwnerId } from "@/lib/db/owner";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { runSync } from "@/lib/sync/engine";
 
@@ -49,16 +50,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     void supabase.auth.getUser().then(({ data }) => {
       if (!mounted) return;
-      setUser(data.user ?? null);
+      const next = data.user ?? null;
+      setOwnerId(next?.id ?? null);
+      setUser(next);
       setAuthResolved(true);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+      const next = session?.user ?? null;
+      setOwnerId(next?.id ?? null);
+      setUser(next);
       setAuthResolved(true);
-      if (session?.user) {
+      if (next) {
         void runSync();
       }
     });
@@ -119,6 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!isSupabaseConfigured()) return;
     const supabase = createClient();
     await supabase.auth.signOut();
+    setOwnerId(null);
     setUser(null);
   }, []);
 

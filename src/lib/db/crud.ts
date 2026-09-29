@@ -4,6 +4,7 @@ import {
   sortCategories,
 } from "@/lib/category-order";
 import { getClientId } from "@/lib/client-id";
+import { getOwnerId, sameOwner } from "@/lib/db/owner";
 import {
   compareMonthTransactions,
   compareSameDayTransactions,
@@ -47,10 +48,10 @@ function todayIso() {
   return `${year}-${month}-${day}`;
 }
 
-function baseMeta(userId: string | null = null) {
+function baseMeta() {
   return {
     id: crypto.randomUUID(),
-    user_id: userId,
+    user_id: getOwnerId(),
     updated_at: nowIso(),
     deleted_at: null as string | null,
     client_id: getClientId(),
@@ -101,8 +102,13 @@ function uniqueByKey<T>(rows: T[], keyOf: (row: T) => string): T[] {
 }
 
 export async function listBooks(): Promise<Book[]> {
+  const ownerId = getOwnerId();
   const rows = await db.books.orderBy("sort_order").toArray();
-  const live = uniqueById(rows.filter((row) => !row.deleted_at));
+  const live = uniqueById(
+    rows.filter(
+      (row) => !row.deleted_at && sameOwner(row.user_id, ownerId),
+    ),
+  );
 
   // When duplicate currency+name books exist, keep the one with the most txs.
   const best = new Map<string, Book>();
@@ -1078,39 +1084,6 @@ export async function recordHoldingInterest(
     account_id: account.id,
     category_id: category?.id ?? null,
   });
-}
-
-export async function claimLocalRowsForUser(userId: string): Promise<void> {
-  const stamp = nowIso();
-  await db.transaction(
-    "rw",
-    [db.books, db.accounts, db.categories, db.transactions, db.budgets, db.templates, db.holdings],
-    async () => {
-      const tables = [
-        db.books,
-        db.accounts,
-        db.categories,
-        db.transactions,
-        db.budgets,
-        db.templates,
-        db.holdings,
-      ] as const;
-      for (const table of tables) {
-        // Only adopt unowned local rows — never reassign another user's data.
-        const orphans = await table
-          .filter((row) => !row.user_id)
-          .toArray();
-        for (const row of orphans) {
-          await table.update(row.id, {
-            user_id: userId,
-            updated_at: stamp,
-            client_id: getClientId(),
-            sync_status: "pending",
-          });
-        }
-      }
-    },
-  );
 }
 
 export function monthSummary(transactions: Transaction[]): PeriodSummary {
