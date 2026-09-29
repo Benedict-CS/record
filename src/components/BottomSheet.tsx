@@ -134,7 +134,8 @@ export function BottomSheet({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
+    {/* Above the floating add button (z-50) so the date row stays visible. */}
+    <div className="fixed inset-0 z-[60] flex items-end justify-center">
       <button
         type="button"
         aria-label={closeLabel}
