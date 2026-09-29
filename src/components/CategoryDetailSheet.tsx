@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { formatMoney, type MoneyCurrency } from "@/lib/format";
 import { expenseDisplayAmount } from "@/lib/reimbursement";
 import type { Transaction } from "@/lib/types";
@@ -27,6 +28,7 @@ export function CategoryDetailSheet({
   onClose,
 }: Props) {
   const titleId = useId();
+  const router = useRouter();
 
   useEffect(() => {
     const previous = document.body.style.overflow;
@@ -140,35 +142,43 @@ export function CategoryDetailSheet({
           ) : (
             <ul className="space-y-2">
               {rows.map((tx) => (
-                <li
-                  key={tx.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2.5"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium tabular-nums text-[var(--ink)]">
-                      {tx.date}
-                    </p>
-                    {tx.note ? (
-                      <p className="mt-0.5 truncate text-xs text-[var(--muted)]">
-                        {tx.note}
-                      </p>
-                    ) : null}
-                  </div>
-                  <p
-                    className={`shrink-0 text-sm font-semibold tabular-nums ${
-                      tx.type === "income"
-                        ? "text-emerald-700"
-                        : "text-rose-700"
-                    }`}
+                <li key={tx.id}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(
+                        `/calendar?date=${encodeURIComponent(tx.date)}&tx=${encodeURIComponent(tx.id)}`,
+                      )
+                    }
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2.5 text-left active:bg-[var(--surface)]"
+                    aria-label={`到 ${tx.date} 修改${tx.note ? `：${tx.note}` : ""}`}
                   >
-                    {tx.type === "income" ? "+" : "-"}
-                    {formatMoney(
-                      tx.type === "expense"
-                        ? expenseDisplayAmount(tx)
-                        : tx.amount,
-                      currency,
-                    )}
-                  </p>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium tabular-nums text-[var(--ink)]">
+                        {tx.date}
+                      </p>
+                      {tx.note ? (
+                        <p className="mt-0.5 truncate text-xs text-[var(--muted)]">
+                          {tx.note}
+                        </p>
+                      ) : null}
+                    </div>
+                    <p
+                      className={`shrink-0 text-sm font-semibold tabular-nums ${
+                        tx.type === "income"
+                          ? "text-emerald-700"
+                          : "text-rose-700"
+                      }`}
+                    >
+                      {tx.type === "income" ? "+" : "-"}
+                      {formatMoney(
+                        tx.type === "expense"
+                          ? expenseDisplayAmount(tx)
+                          : tx.amount,
+                        currency,
+                      )}
+                    </p>
+                  </button>
                 </li>
               ))}
             </ul>
