@@ -114,8 +114,10 @@ export function TransactionEditor({
   const effectiveAccountId = accountId || accounts[0]?.id || "";
   const selectedAccount =
     accounts.find((account) => account.id === effectiveAccountId) ?? null;
-  const bankExpense = type === "expense" && selectedAccount?.type === "bank";
-  const cashExpense = type === "expense" && selectedAccount?.type === "cash";
+  const bankMove =
+    (type === "expense" || type === "income") && selectedAccount?.type === "bank";
+  const cashMove =
+    (type === "expense" || type === "income") && selectedAccount?.type === "cash";
   const effectiveCategoryId =
     type === "hold"
       ? categoryId || null
@@ -238,7 +240,7 @@ export function TransactionEditor({
                 ? "received"
                 : "pending")
             : null,
-        holding_id: bankExpense && holdingId ? holdingId : null,
+        holding_id: bankMove && holdingId ? holdingId : null,
       });
       void runSync();
       onClose();
@@ -405,16 +407,17 @@ export function TransactionEditor({
               </label>
             </div>
 
-            {bankExpense ? (
+            {bankMove ? (
               <BankHoldingField
                 holdings={holdings}
                 value={holdingId}
                 onChange={setHoldingId}
                 currency={book?.currency}
+                purpose={type === "income" ? "income" : "expense"}
               />
             ) : null}
 
-            {cashExpense ? (
+            {cashMove ? (
               <p className="text-[11px] leading-relaxed text-[var(--muted)]">
                 現金不會自動改動存款，請自己到存款頁調整現金。
               </p>

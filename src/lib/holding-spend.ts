@@ -1,12 +1,21 @@
 /**
- * Bank-card expenses move money out of a 存款 holding.
+ * Bank-account rows move a 存款 holding.
+ * An expense deducts the full amount. Income adds the full amount.
  * Cash (and every non-bank account) never changes holdings.
  */
 
 export type HoldingSpendLink = {
   holdingId: string | null;
-  /** Positive cash that left the holding. */
+  /** Positive cash moved. Zero stays linked without a balance change. */
   amount: number;
+  /** -1 deducts the holding (expense). +1 credits it (income). */
+  sign: -1 | 1;
+};
+
+export const NO_HOLDING_LINK: HoldingSpendLink = {
+  holdingId: null,
+  amount: 0,
+  sign: -1,
 };
 
 export type HoldingBalanceDelta = {
@@ -15,7 +24,7 @@ export type HoldingBalanceDelta = {
   deltaCents: number;
 };
 
-/** Kinds a bank expense can draw from. Cash holdings stay manual. */
+/** Kinds a bank expense or income can move. Cash holdings stay manual. */
 export const SPENDABLE_HOLDING_KINDS = ["savings", "deposit"] as const;
 
 export function isSpendableBankHolding(kind: string) {
@@ -28,7 +37,7 @@ function deductionAmount(amount: number) {
   return Math.round(value * 100) / 100;
 }
 
-/** Deduction already stored on a transaction, including rows whose account later changed. */
+/** Movement already stored on a transaction, including rows whose account later changed. */
 export function storedHoldingSpend(input: {
   type: string;
   amount: number;
@@ -36,13 +45,19 @@ export function storedHoldingSpend(input: {
   deleted: boolean;
 }): HoldingSpendLink {
   const holdingId = input.holdingId ?? null;
-  if (input.deleted || input.type !== "expense" || !holdingId) {
-    return { holdingId: null, amount: 0 };
-  }
-  return { holdingId, amount: deductionAmount(input.amount) };
+  const linked =
+    !input.deleted &&
+    Boolean(holdingId) &&
+    (input.type === "expense" || input.type === "income");
+  if (!linked || !holdingId) return NO_HOLDING_LINK;
+  return {
+    holdingId,
+    amount: deductionAmount(input.amount),
+    sign: input.type === "income" ? 1 : -1,
+  };
 }
 
-/** Deduction a save should apply. Only live bank expenses keep the link. */
+/** Movement a save should apply. Only live bank expenses and income keep the link. */
 export function nextHoldingSpend(input: {
   type: string;
   amount: number;
@@ -50,13 +65,27 @@ export function nextHoldingSpend(input: {
   accountType: string | null | undefined;
   deleted: boolean;
 }): HoldingSpendLink {
-  if (input.accountType !== "bank") {
-    return { holdingId: null, amount: 0 };
-  }
+  if (input.accountType !== "bank") return NO_HOLDING_LINK;
+  if (input.type !== "expense" && input.type !== "income") return NO_HOLDING_LINK;
   return storedHoldingSpend(input);
 }
 
-/** Net cents to add back (positive) or take (negative) when a link changes. */
+/**
+ * The save needs the target holding to still exist.
+ * A smaller movement on the same card can be saved after that card is gone.
+ * A new card, or a larger movement, has to land on a live 活存 or 定存.
+ */
+export function holdingLinkNeedsLiveTarget(
+  previous: HoldingSpendLink,
+  next: HoldingSpendLink,
+): boolean {
+  if (!next.holdingId || next.amount <= 0) return false;
+  const sameCard =
+    previous.holdingId === next.holdingId && previous.sign === next.sign;
+  return !sameCard || next.amount > previous.amount;
+}
+
+/** Net cents to apply when a link changes. Positive credits the holding. */
 export function holdingBalanceDeltas(
   previous: HoldingSpendLink,
   next: HoldingSpendLink,
@@ -66,8 +95,8 @@ export function holdingBalanceDeltas(
     if (!holdingId || deltaCents === 0) return;
     cents.set(holdingId, (cents.get(holdingId) ?? 0) + deltaCents);
   };
-  add(previous.holdingId, Math.round(previous.amount * 100));
-  add(next.holdingId, -Math.round(next.amount * 100));
+  add(previous.holdingId, -previous.sign * Math.round(previous.amount * 100));
+  add(next.holdingId, next.sign * Math.round(next.amount * 100));
   return [...cents.entries()]
     .filter(([, deltaCents]) => deltaCents !== 0)
     .map(([holdingId, deltaCents]) => ({ holdingId, deltaCents }));

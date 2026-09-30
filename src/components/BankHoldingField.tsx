@@ -10,11 +10,13 @@ export function BankHoldingField({
   value,
   onChange,
   currency,
+  purpose,
 }: {
   holdings: Holding[];
   value: string;
   onChange: (id: string) => void;
   currency?: string;
+  purpose: "expense" | "income";
 }) {
   const options = holdings.filter(
     (holding) => isSpendableBankHolding(holding.kind) || holding.id === value,
@@ -22,7 +24,9 @@ export function BankHoldingField({
 
   return (
     <label className="block">
-      <span className="mb-1 block text-xs text-[var(--muted)]">從哪張銀行扣</span>
+      <span className="mb-1 block text-xs text-[var(--muted)]">
+        {purpose === "income" ? "入到哪張銀行" : "從哪張銀行扣"}
+      </span>
       {options.length === 0 ? (
         <p className="rounded-xl border border-dashed border-[var(--line)] px-3 py-3 text-xs leading-relaxed text-[var(--muted)]">
           還沒有活存或定存。
@@ -53,7 +57,9 @@ export function BankHoldingField({
         </select>
       )}
       <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--muted)]">
-        選了之後，儲存會從這筆存款扣掉實付金額。沒選、或帳戶是現金，都不會改動存款。
+        {purpose === "income"
+          ? "選了之後，儲存會把這筆收入加進這張存款。沒選、或帳戶是現金，都不會改動存款。"
+          : "選了之後，儲存會從這筆存款扣掉實付金額。沒選、或帳戶是現金，都不會改動存款。"}
       </p>
     </label>
   );

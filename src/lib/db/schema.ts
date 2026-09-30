@@ -252,7 +252,7 @@ export class RecordDB extends Dexie {
           }
         }
       });
-    // v8: holding_id on bank expenses (which 存款 card the spend draws from).
+    // v8: holding_id on bank expenses and income (which 存款 card moved).
     this.version(8)
       .stores({
         books:

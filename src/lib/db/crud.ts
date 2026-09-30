@@ -12,7 +12,9 @@ import {
 import { db } from "@/lib/db/schema";
 import { formatMoney } from "@/lib/format";
 import {
+  NO_HOLDING_LINK,
   holdingBalanceDeltas,
+  holdingLinkNeedsLiveTarget,
   isSpendableBankHolding,
   nextHoldingBalances,
   nextHoldingSpend,
@@ -80,9 +82,9 @@ function centsOf(amount: number) {
 }
 
 /**
- * Move 存款 balances to match a bank expense link.
+ * Move 存款 balances to match a bank expense or income link.
  * Must run inside a read-write transaction that includes holdings and accounts.
- * Returns the holding id to store (null when this row should not draw a holding).
+ * Returns the holding id to store (null when this row should not touch a holding).
  */
 async function commitHoldingSpend(input: {
   bookId: string;
@@ -112,20 +114,22 @@ async function commitHoldingSpend(input: {
         holdingId: input.previous.holding_id,
         deleted: Boolean(input.previous.deleted_at),
       })
-    : { holdingId: null, amount: 0 };
+    : NO_HOLDING_LINK;
 
-  if (nextLink.holdingId) {
+  if (holdingLinkNeedsLiveTarget(previousLink, nextLink) && nextLink.holdingId) {
     const holding = await db.holdings.get(nextLink.holdingId);
     const missing =
       !holding || holding.deleted_at || holding.book_id !== input.bookId;
-    const drawingMore =
-      previousLink.holdingId !== nextLink.holdingId ||
-      nextLink.amount > previousLink.amount;
-    if (drawingMore && missing) {
-      throw new Error("找不到要扣款的銀行存款");
+    const crediting = nextLink.sign > 0;
+    if (missing) {
+      throw new Error(
+        crediting ? "找不到要入帳的銀行存款" : "找不到要扣款的銀行存款",
+      );
     }
-    if (drawingMore && holding && !isSpendableBankHolding(holding.kind)) {
-      throw new Error("只能從活存或定存扣款");
+    if (holding && !isSpendableBankHolding(holding.kind)) {
+      throw new Error(
+        crediting ? "只能入到活存或定存" : "只能從活存或定存扣款",
+      );
     }
   }
 
@@ -140,13 +144,14 @@ async function commitHoldingSpend(input: {
     currentCents[ids[index]] = centsOf(row.amount);
   });
 
-  // A deleted holding cannot take money back; dropping that refund lets the ledger row still change.
-  const applicable = deltas.filter(
-    (delta) => delta.deltaCents < 0 || delta.holdingId in currentCents,
-  );
+  // A deleted holding cannot give money back or take a credit back.
+  // Dropping that delta lets the ledger row still change.
+  const applicable = deltas.filter((delta) => delta.holdingId in currentCents);
   const result = nextHoldingBalances(currentCents, applicable);
   if (result.missingId) {
-    throw new Error("找不到要扣款的銀行存款");
+    throw new Error(
+      nextLink.sign > 0 ? "找不到要入帳的銀行存款" : "找不到要扣款的銀行存款",
+    );
   }
   if (result.shortfallId) {
     const holding = rows.find((row) => row?.id === result.shortfallId);

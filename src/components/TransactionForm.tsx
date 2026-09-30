@@ -103,14 +103,16 @@ export function TransactionForm({
   const effectiveAccountId = accountId || accounts[0]?.id || "";
   const selectedAccount =
     accounts.find((account) => account.id === effectiveAccountId) ?? null;
-  const bankExpense = type === "expense" && selectedAccount?.type === "bank";
-  const cashExpense = type === "expense" && selectedAccount?.type === "cash";
+  const bankMove =
+    (type === "expense" || type === "income") && selectedAccount?.type === "bank";
+  const cashMove =
+    (type === "expense" || type === "income") && selectedAccount?.type === "cash";
   const spendableHoldings = holdings.filter((holding) =>
     isSpendableBankHolding(holding.kind),
   );
   const effectiveHoldingId =
     holdingId ||
-    (!isEdit && bankExpense && spendableHoldings.length === 1
+    (!isEdit && bankMove && spendableHoldings.length === 1
       ? spendableHoldings[0].id
       : "");
   const effectiveCategoryId =
@@ -159,11 +161,13 @@ export function TransactionForm({
       setError("待報銷金額不可大於實付");
       return;
     }
-    if (bankExpense && !isEdit && !effectiveHoldingId) {
+    if (bankMove && !isEdit && !effectiveHoldingId) {
       setError(
         spendableHoldings.length === 0
           ? "請先到存款新增活存或定存（例如台新、郵局）"
-          : "請選擇要扣款的銀行",
+          : type === "income"
+            ? "請選擇要入帳的銀行"
+            : "請選擇要扣款的銀行",
       );
       return;
     }
@@ -195,7 +199,7 @@ export function TransactionForm({
                 ? ("received" as const)
                 : ("pending" as const))
             : null,
-        holding_id: bankExpense && effectiveHoldingId ? effectiveHoldingId : null,
+        holding_id: bankMove && effectiveHoldingId ? effectiveHoldingId : null,
       };
 
       if (isEdit && initial) {
@@ -402,16 +406,17 @@ export function TransactionForm({
           </label>
         </div>
 
-        {bankExpense ? (
+        {bankMove ? (
           <BankHoldingField
             holdings={holdings}
             value={effectiveHoldingId}
             onChange={setHoldingId}
             currency={book?.currency}
+            purpose={type === "income" ? "income" : "expense"}
           />
         ) : null}
 
-        {cashExpense ? (
+        {cashMove ? (
           <p className="text-[11px] leading-relaxed text-[var(--muted)]">
             現金不會自動改動存款，請自己到存款頁調整現金。
           </p>
