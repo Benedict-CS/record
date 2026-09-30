@@ -6,7 +6,28 @@ import {
 } from "@/lib/summary-display";
 import type { PeriodSummary } from "@/lib/types";
 
-/** One equation: 結餘 = 收入 − 支出. Extra lines appear only when they change the meaning. */
+function AmountBlock({
+  label,
+  amount,
+  currency,
+  tone,
+}: {
+  label: string;
+  amount: number;
+  currency?: MoneyCurrency;
+  tone: string;
+}) {
+  return (
+    <div className="min-w-0 rounded-xl bg-[var(--paper)] px-2 py-2.5 sm:px-2.5">
+      <p className="text-[11px] text-[var(--muted)]">{label}</p>
+      <p className={`mt-1 truncate text-sm font-semibold tabular-nums sm:text-base ${tone}`}>
+        {formatMoney(amount, currency)}
+      </p>
+    </div>
+  );
+}
+
+/** Three equal totals. Holds and reimbursements sit under them, only when non-zero. */
 export function SimpleSummary({
   summary,
   currency,
@@ -17,41 +38,56 @@ export function SimpleSummary({
   const spend = periodSpend(summary);
   const balance = periodBalance(summary);
   const reimbursed = reimbursedAmount(summary);
-  const notes: string[] = [];
+  const notes: Array<{ key: string; text: string; tone: string }> = [];
   if (summary.held > 0) {
-    notes.push(`押金 ${formatMoney(summary.held, currency)} 不算支出`);
+    notes.push({
+      key: "held",
+      text: `押金 ${formatMoney(summary.held, currency)} 不算支出`,
+      tone: "text-amber-900/80",
+    });
   }
   if (reimbursed > 0) {
-    notes.push(`已銷帳 ${formatMoney(reimbursed, currency)} 已從支出扣掉`);
+    notes.push({
+      key: "reimbursed",
+      text: `已銷帳 ${formatMoney(reimbursed, currency)} 已從支出扣掉`,
+      tone: "text-[var(--muted)]",
+    });
   }
   if (summary.reimbursablePending > 0) {
-    notes.push(
-      `待報銷 ${formatMoney(summary.reimbursablePending, currency)} 還算在支出裡`,
-    );
+    notes.push({
+      key: "pending",
+      text: `待報銷 ${formatMoney(summary.reimbursablePending, currency)} 還算在支出裡`,
+      tone: "text-sky-900/80",
+    });
   }
 
   return (
     <div>
-      <p className="text-[11px] text-[var(--muted)]">結餘</p>
-      <p className="mt-0.5 truncate text-2xl font-semibold tabular-nums text-[var(--ink)]">
-        {formatMoney(balance, currency)}
-      </p>
-      <p className="mt-1 text-xs text-[var(--muted)]">
-        收入{" "}
-        <span className="font-medium tabular-nums text-[var(--ink)]">
-          {formatMoney(summary.income, currency)}
-        </span>
-        {" − "}
-        支出{" "}
-        <span className="font-medium tabular-nums text-rose-700">
-          {formatMoney(spend, currency)}
-        </span>
-      </p>
+      <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+        <AmountBlock
+          label="支出"
+          amount={spend}
+          currency={currency}
+          tone="text-rose-700"
+        />
+        <AmountBlock
+          label="收入"
+          amount={summary.income}
+          currency={currency}
+          tone="text-emerald-800"
+        />
+        <AmountBlock
+          label="結餘"
+          amount={balance}
+          currency={currency}
+          tone="text-[var(--ink)]"
+        />
+      </div>
       {notes.length > 0 ? (
-        <ul className="mt-2 space-y-0.5 text-[11px] text-[var(--muted)]">
+        <ul className="mt-2 space-y-0.5 border-t border-[var(--line)] pt-2">
           {notes.map((note) => (
-            <li key={note} className="tabular-nums">
-              {note}
+            <li key={note.key} className={`text-[11px] tabular-nums ${note.tone}`}>
+              {note.text}
             </li>
           ))}
         </ul>
