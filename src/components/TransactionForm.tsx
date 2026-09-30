@@ -269,7 +269,7 @@ export function TransactionForm({
 
         {type === "hold" ? (
           <p className="text-[11px] leading-relaxed text-[var(--muted)]">
-            錢被扣住、之後會退或結算（押金、電費預繳）。不計入「實際花掉」。
+            錢被扣住、之後會退或結算（押金、電費預繳）。不計入支出。
           </p>
         ) : null}
 

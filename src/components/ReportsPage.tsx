@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useBook } from "@/components/BookProvider";
 import { CategoryDetailSheet } from "@/components/CategoryDetailSheet";
+import { SimpleSummary } from "@/components/SimpleSummary";
 import { CategoryPieChart } from "@/components/CategoryPieChart";
 import { TrendLineChart, type TrendPoint } from "@/components/TrendLineChart";
 import { YearBarChart } from "@/components/YearBarChart";
@@ -193,46 +194,7 @@ export function ReportsPage() {
                 ›
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-xl bg-[var(--paper)] px-2.5 py-2.5 text-left">
-                <p className="text-[11px] text-[var(--muted)]">花費</p>
-                <p className="mt-1 truncate text-base font-semibold tabular-nums text-[var(--ink)]">
-                  {formatMoney(summary.outflow, currency)}
-                </p>
-                <p className="mt-0.5 text-[10px] text-[var(--muted)]">
-                  {summary.selfPay < summary.expense
-                    ? `已核銷後 · 帳戶實付 ${formatMoney(summary.expense + summary.held, currency)}`
-                    : "花掉＋扣住"}
-                </p>
-              </div>
-              <div className="rounded-xl bg-amber-50 px-2.5 py-2.5 text-left">
-                <p className="text-[11px] text-amber-900/70">被扣住</p>
-                <p className="mt-1 truncate text-base font-semibold tabular-nums text-amber-900">
-                  {formatMoney(summary.held, currency)}
-                </p>
-                <p className="mt-0.5 text-[10px] text-amber-900/60">押金／預繳</p>
-              </div>
-              <div className="rounded-xl bg-[var(--paper)] px-2.5 py-2.5 text-left">
-                <p className="text-[11px] text-[var(--muted)]">實際花掉</p>
-                <p className="mt-1 truncate text-base font-semibold tabular-nums text-rose-700">
-                  {formatMoney(summary.selfPay, currency)}
-                </p>
-                <p className="mt-0.5 text-[10px] text-[var(--muted)]">
-                  {summary.selfPay < summary.expense
-                    ? `帳戶實付 ${formatMoney(summary.expense, currency)}`
-                    : "花費 − 被扣住"}
-                </p>
-              </div>
-              <div className="rounded-xl bg-[var(--paper)] px-2.5 py-2.5 text-left">
-                <p className="text-[11px] text-[var(--muted)]">結餘</p>
-                <p className="mt-1 truncate text-base font-semibold tabular-nums text-[var(--ink)]">
-                  {formatMoney(summary.net, currency)}
-                </p>
-                <p className="mt-0.5 text-[10px] text-[var(--muted)]">
-                  收入 {formatMoney(summary.income, currency)}
-                </p>
-              </div>
-            </div>
+            <SimpleSummary summary={summary} currency={currency} />
           </section>
 
           <section className="space-y-2">
@@ -246,10 +208,10 @@ export function ReportsPage() {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <DeltaCard
-                label="實際花掉"
+                label="支出"
                 delta={comparison.expenseDelta}
                 percent={comparison.expensePercent}
-                previous={previousSummary.expense}
+                previous={previousSummary.selfPay}
                 positiveIsGood={false}
                 currency={currency}
               />

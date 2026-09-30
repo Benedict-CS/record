@@ -324,7 +324,7 @@ export function TransactionEditor({
 
             {type === "hold" && !isReleasedHold ? (
               <p className="text-xs leading-relaxed text-[var(--muted)]">
-                錢被扣住、之後會退或結算（押金、電費預繳）。不計入「實際花掉」。
+                錢被扣住、之後會退或結算（押金、電費預繳）。不計入支出。
               </p>
             ) : null}
 

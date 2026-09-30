@@ -6,6 +6,7 @@ import { useBook } from "@/components/BookProvider";
 import { monthSummary } from "@/lib/db/crud";
 import { formatMoney } from "@/lib/format";
 import { useYearTransactions } from "@/lib/hooks/useLedgerData";
+import { periodBalance, periodSpend } from "@/lib/summary-display";
 
 /** Compact year spending snapshot above the month block. */
 export function YearSpendCard({ year }: { year: number }) {
@@ -24,29 +25,26 @@ export function YearSpendCard({ year }: { year: number }) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] text-[var(--muted)]">{year} 年花費</p>
+          <p className="text-[11px] text-[var(--muted)]">{year} 年結餘</p>
           <p className="mt-0.5 truncate text-lg font-semibold tabular-nums text-[var(--ink)]">
-            {formatMoney(summary.outflow, currency)}
+            {formatMoney(periodBalance(summary), currency)}
           </p>
         </div>
         <span className="shrink-0 pt-0.5 text-xs text-[var(--accent)]">
           報表 ›
         </span>
       </div>
-      <div className="mt-1.5 grid grid-cols-2 gap-2 text-xs">
-        <p className="min-w-0 text-[var(--muted)]">
-          實際花掉{" "}
-          <span className="font-medium tabular-nums text-rose-700">
-            {formatMoney(summary.selfPay, currency)}
-          </span>
-        </p>
-        <p className="min-w-0 text-[var(--muted)]">
-          被扣住{" "}
-          <span className="font-medium tabular-nums text-amber-800">
-            {formatMoney(summary.held, currency)}
-          </span>
-        </p>
-      </div>
+      <p className="mt-1 text-xs text-[var(--muted)]">
+        支出{" "}
+        <span className="font-medium tabular-nums text-rose-700">
+          {formatMoney(periodSpend(summary), currency)}
+        </span>
+        {" · "}
+        收入{" "}
+        <span className="font-medium tabular-nums text-[var(--ink)]">
+          {formatMoney(summary.income, currency)}
+        </span>
+      </p>
     </Link>
   );
 }
