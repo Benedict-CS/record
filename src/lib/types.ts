@@ -106,6 +106,8 @@ export interface RecurringRule extends SyncMeta {
    * Equal to `amount` means the whole charge is held, the way rent can be.
    */
   held_amount: number | null;
+  /** Name shown on the held row, such as 電費預繳. Null uses the rule name. */
+  held_name: string | null;
   /** Latest YYYY-MM already posted, or null. */
   last_posted: string | null;
   last_error: string | null;

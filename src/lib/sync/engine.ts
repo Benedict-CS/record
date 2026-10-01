@@ -574,6 +574,7 @@ async function mergeRemoteRecurring(remoteRows: CloudRecurringRule[]) {
         "reimbursable_amount",
       );
       const hasHeld = Object.prototype.hasOwnProperty.call(remoteRecord, "held_amount");
+      const hasHeldName = Object.prototype.hasOwnProperty.call(remoteRecord, "held_name");
       const endMonth = hasEnd
         ? typeof remoteRecord.end_month === "string" && remoteRecord.end_month
           ? remoteRecord.end_month
@@ -591,10 +592,16 @@ async function mergeRemoteRecurring(remoteRows: CloudRecurringRule[]) {
           ? remoteHeld
           : null
         : (local?.held_amount ?? null);
+      const heldName = hasHeldName
+        ? typeof remoteRecord.held_name === "string" && remoteRecord.held_name
+          ? remoteRecord.held_name
+          : null
+        : (local?.held_name ?? null);
       const needsUpload =
         (!hasEnd && Boolean(local?.end_month)) ||
         (!hasReimbursable && (local?.reimbursable_amount ?? 0) > 0) ||
-        (!hasHeld && (local?.held_amount ?? 0) > 0);
+        (!hasHeld && (local?.held_amount ?? 0) > 0) ||
+        (!hasHeldName && Boolean(local?.held_name));
       toPut.push({
         ...remote,
         amount: Number(remote.amount),
@@ -602,6 +609,7 @@ async function mergeRemoteRecurring(remoteRows: CloudRecurringRule[]) {
         end_month: endMonth,
         reimbursable_amount: reimbursableAmount,
         held_amount: heldAmount,
+        held_name: heldName,
         last_posted: remote.last_posted ?? null,
         last_error: remote.last_error ?? null,
         category_id: remote.category_id ?? null,
@@ -932,6 +940,7 @@ async function pushPending(userId: string) {
       reimbursable_amount:
         row.reimbursable_amount == null ? null : Number(row.reimbursable_amount),
       held_amount: row.held_amount == null ? null : Number(row.held_amount),
+      held_name: row.held_name ?? null,
       last_posted: row.last_posted ?? null,
       last_error: row.last_error ?? null,
       category_id: row.category_id ?? null,

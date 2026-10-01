@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { useBook } from "@/components/BookProvider";
@@ -11,6 +11,7 @@ import {
   listRecurringRules,
   postDueRecurring,
   softDeleteRecurringRule,
+  updateRecurringRule,
 } from "@/lib/db/recurring-post";
 import { formatMoney } from "@/lib/format";
 import { MAX_SCHEDULED_MONTHS, scheduledMonthCount } from "@/lib/recurring";
@@ -74,11 +75,14 @@ export function RecurringPage({
   const [reimbursableAmount, setReimbursableAmount] = useState("");
   const [holdOn, setHoldOn] = useState(false);
   const [holdAmount, setHoldAmount] = useState("");
+  const [holdName, setHoldName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [accountId, setAccountId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [holdingId, setHoldingId] = useState("");
   const [targetId, setTargetId] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const [saving, setSaving] = useState(false);
 
   const account = accounts.find((row) => row.id === (accountId || accounts[0]?.id));
@@ -133,6 +137,10 @@ export function RecurringPage({
         setError("扣住金額不能大於扣款金額");
         return;
       }
+      if (!holdName.trim()) {
+        setError("請寫扣住名稱，例如電費預繳");
+        return;
+      }
     }
     const spent = parsed - (held ?? 0);
     let reimbursable: number | null = null;
@@ -176,7 +184,7 @@ export function RecurringPage({
     }
     setSaving(true);
     try {
-      const created = await createRecurringRule(bookId, {
+      const draft = {
         name: name.trim(),
         kind,
         amount: parsed,
@@ -185,16 +193,22 @@ export function RecurringPage({
         endMonth: endMonth || null,
         reimbursableAmount: reimbursable,
         heldAmount: held,
+        heldName: holdOn ? holdName.trim() : null,
         accountId: chosenAccount,
         categoryId: kind === "expense" ? categoryId || categories[0]?.id || null : null,
         holdingId: kind === "invest" || bankExpense ? sourceId || null : null,
         targetHoldingId: kind === "invest" ? targetId : null,
-      });
+      };
+      const created = editingId
+        ? await updateRecurringRule(editingId, draft)
+        : await createRecurringRule(bookId, draft);
       const posted = await postDueRecurring(bookId);
       const saved = (await listRecurringRules(bookId)).find((row) => row.id === created.id);
       void runSync();
       if (saved?.last_error) {
         show(saved.last_error, { variant: "error" });
+      } else if (editingId) {
+        show("已更新，入帳的月份也改好了", { variant: "success" });
       } else if (posted > 0 && endMonth) {
         show(`已設定，${posted} 期已入帳`, { variant: "success" });
       } else {
@@ -202,18 +216,49 @@ export function RecurringPage({
           variant: "success",
         });
       }
-      setName("");
-      setAmount("");
-      setEndMonth("");
-      setReimbursableOn(false);
-      setReimbursableAmount("");
-      setHoldOn(false);
-      setHoldAmount("");
+      clearForm();
     } catch (err) {
       setError(err instanceof Error ? err.message : "無法建立");
     } finally {
       setSaving(false);
     }
+  }
+
+  function clearForm() {
+    setEditingId(null);
+    setName("");
+    setAmount("");
+    setKind("expense");
+    setEndMonth("");
+    setReimbursableOn(false);
+    setReimbursableAmount("");
+    setHoldOn(false);
+    setHoldAmount("");
+    setHoldName("");
+    setError(null);
+  }
+
+  function beginEdit(rule: RecurringRule) {
+    setEditingId(rule.id);
+    setName(rule.name);
+    setKind(rule.kind);
+    setAmount(String(rule.amount));
+    setDay(String(rule.day_of_month));
+    setStartMonth(rule.start_month);
+    setEndMonth(rule.end_month ?? "");
+    setHoldOn(rule.held_amount != null && rule.held_amount > 0);
+    setHoldAmount(rule.held_amount != null ? String(rule.held_amount) : "");
+    setHoldName(rule.held_name ?? "");
+    setReimbursableOn(rule.reimbursable_amount != null && rule.reimbursable_amount > 0);
+    setReimbursableAmount(
+      rule.reimbursable_amount != null ? String(rule.reimbursable_amount) : "",
+    );
+    setAccountId(rule.account_id);
+    setCategoryId(rule.category_id ?? "");
+    setHoldingId(rule.holding_id ?? "");
+    setTargetId(rule.target_holding_id ?? "");
+    setError(null);
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function onDelete(rule: RecurringRule) {
@@ -238,9 +283,22 @@ export function RecurringPage({
         </p>
 
         <form
+          ref={formRef}
           onSubmit={onSubmit}
           className="space-y-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4"
         >
+          {editingId ? (
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-[var(--ink)]">修改這筆固定扣款</p>
+              <button
+                type="button"
+                onClick={clearForm}
+                className="text-xs text-[var(--muted)]"
+              >
+                取消
+              </button>
+            </div>
+          ) : null}
           <div className="grid grid-cols-2 gap-2">
             {(
               [
@@ -377,6 +435,19 @@ export function RecurringPage({
                   </p>
                 </label>
               ) : null}
+              {holdOn ? (
+                <label className="block">
+                  <span className="mb-1 block text-xs text-[var(--muted)]">
+                    扣住名稱
+                  </span>
+                  <input
+                    value={holdName}
+                    onChange={(event) => setHoldName(event.target.value)}
+                    placeholder="例如電費預繳"
+                    className="min-h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 text-sm outline-none focus:border-[var(--accent)]"
+                  />
+                </label>
+              ) : null}
               <label className="flex min-h-11 items-center gap-2 text-sm text-[var(--ink)]">
                 <input
                   type="checkbox"
@@ -470,7 +541,7 @@ export function RecurringPage({
             disabled={saving}
             className="min-h-12 w-full rounded-xl bg-[var(--ink)] text-sm font-medium text-[var(--paper)] disabled:opacity-60"
           >
-            {saving ? "儲存中…" : "設定每月扣款"}
+            {saving ? "儲存中…" : editingId ? "儲存修改" : "設定每月扣款"}
           </button>
         </form>
 
@@ -496,8 +567,8 @@ export function RecurringPage({
                       {rule.day_of_month} 號 · {formatMoney(rule.amount, currency)}
                       {rule.held_amount
                         ? rule.held_amount >= rule.amount
-                          ? " · 整筆扣住"
-                          : ` · 扣住 ${formatMoney(rule.held_amount, currency)}`
+                          ? ` · 整筆扣住${rule.held_name ? ` ${rule.held_name}` : ""}`
+                          : ` · 扣住${rule.held_name ? ` ${rule.held_name}` : ""} ${formatMoney(rule.held_amount, currency)}`
                         : ""}
                       {rule.reimbursable_amount
                         ? ` · 可核銷 ${formatMoney(rule.reimbursable_amount, currency)}`
@@ -512,13 +583,22 @@ export function RecurringPage({
                       <p className="mt-1 text-xs text-rose-700">{rule.last_error}</p>
                     ) : null}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void onDelete(rule)}
-                    className="shrink-0 text-xs text-rose-700"
-                  >
-                    停止
-                  </button>
+                  <div className="flex shrink-0 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => beginEdit(rule)}
+                      className="text-xs text-[var(--accent)]"
+                    >
+                      編輯
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void onDelete(rule)}
+                      className="text-xs text-rose-700"
+                    >
+                      停止
+                    </button>
+                  </div>
                 </div>
               </article>
             ))
