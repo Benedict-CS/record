@@ -3,10 +3,13 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { BottomSheet } from "@/components/BottomSheet";
 import { useBook } from "@/components/BookProvider";
 import { TransactionEditor } from "@/components/TransactionEditor";
+import { TransactionForm } from "@/components/TransactionForm";
 import { TransactionList } from "@/components/TransactionList";
-import { formatMoney } from "@/lib/format";
+import { useToast } from "@/components/ToastProvider";
+import { formatDayHeading, formatMoney } from "@/lib/format";
 import { expenseDisplayAmount } from "@/lib/reimbursement";
 import {
   useAccountBalances,
@@ -25,6 +28,8 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
   const balances = useAccountBalances();
   const transactions = useAccountTransactions(accountId);
   const [editing, setEditing] = useState<Transaction | null>(null);
+  const [addDate, setAddDate] = useState<string | null>(null);
+  const { show } = useToast();
 
   const account = accounts.find((item) => item.id === accountId);
   const balance = balances.find((item) => item.account.id === accountId);
@@ -112,6 +117,7 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
             accounts={accounts}
             categories={categories}
             onEdit={setEditing}
+            onAddForDate={setAddDate}
             groupByDay
             emptyMessage="這個帳戶還沒有交易"
           />
@@ -131,6 +137,27 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
           onClose={() => setEditing(null)}
         />
       ) : null}
+      <BottomSheet
+        open={addDate !== null}
+        onClose={() => setAddDate(null)}
+        title={addDate ? `記一筆 · ${formatDayHeading(addDate)}` : "記一筆"}
+        description="支出／收入／扣住（押金）。請客金額可填 0"
+      >
+        {addDate ? (
+          <TransactionForm
+            key={addDate}
+            bare
+            defaultDate={addDate}
+            defaultAccountId={accountId}
+            accounts={accounts}
+            categories={categories}
+            onSaved={() => {
+              setAddDate(null);
+              show("已記一筆", { variant: "success" });
+            }}
+          />
+        ) : null}
+      </BottomSheet>
     </AppShell>
   );
 }

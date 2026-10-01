@@ -1,4 +1,5 @@
 import { getClientId } from "@/lib/client-id";
+import { sameOwner } from "@/lib/db/owner";
 import { sortCategories } from "@/lib/category-order";
 import { db } from "@/lib/db/schema";
 import type { Account, Book, BookCurrency, Category } from "@/lib/types";
@@ -158,7 +159,7 @@ async function seedBookContents(book: Book, clientId: string, stamp: string) {
         ...item,
         id: crypto.randomUUID(),
         book_id: book.id,
-        user_id: null,
+        user_id: book.user_id,
         updated_at: stamp,
         deleted_at: null,
         client_id: clientId,
@@ -186,7 +187,7 @@ async function seedBookContents(book: Book, clientId: string, stamp: string) {
           ...item,
           id: crypto.randomUUID(),
           book_id: book.id,
-          user_id: null,
+          user_id: book.user_id,
           updated_at: stamp,
           deleted_at: null,
           client_id: clientId,
@@ -213,7 +214,7 @@ async function seedBookContents(book: Book, clientId: string, stamp: string) {
           ...item,
           id: crypto.randomUUID(),
           book_id: book.id,
-          user_id: null,
+          user_id: book.user_id,
           updated_at: stamp,
           deleted_at: null,
           client_id: clientId,
@@ -241,7 +242,7 @@ async function dedupeSeedDuplicates() {
   const books = (await db.books.toArray()).filter((row) => !row.deleted_at);
   const bookGroups = groupBy(
     books,
-    (row) => `${row.currency}\0${row.name.trim()}`,
+    (row) => `${row.user_id ?? ""}\0${row.currency}\0${row.name.trim()}`,
   );
 
   for (const group of bookGroups.values()) {
@@ -430,7 +431,7 @@ async function dedupeSeedDuplicates() {
   }
 }
 
-async function runSeed(): Promise<void> {
+async function runSeed(ownerId: string | null): Promise<void> {
   const clientId = getClientId();
   const stamp = nowIso();
 
@@ -438,7 +439,9 @@ async function runSeed(): Promise<void> {
       await dedupeSeedDuplicates();
 
       const books = await db.books.toArray();
-      const active = books.filter((row) => !row.deleted_at);
+      const owned = (row: { user_id: string | null }) =>
+        sameOwner(row.user_id, ownerId);
+      const active = books.filter((row) => !row.deleted_at && owned(row));
 
       for (const def of BOOK_DEFS) {
         const exists = active.some(
@@ -447,11 +450,12 @@ async function runSeed(): Promise<void> {
         );
         if (exists) continue;
 
-        // Restore a soft-deleted twin instead of minting a new empty UUID
-        // (orphans accounts/txs on the tombstoned id and breaks web sync).
+        // Restore a soft-deleted twin of this same owner instead of minting
+        // a new empty UUID (orphans accounts/txs on the tombstoned id).
         const tombstoned = books.find(
           (row) =>
             row.deleted_at &&
+            owned(row) &&
             row.currency === def.currency &&
             row.name.trim() === def.name,
         );
@@ -468,7 +472,7 @@ async function runSeed(): Promise<void> {
         await db.books.add({
           ...def,
           id: crypto.randomUUID(),
-          user_id: null,
+          user_id: ownerId,
           updated_at: stamp,
           deleted_at: null,
           client_id: clientId,
@@ -477,7 +481,7 @@ async function runSeed(): Promise<void> {
       }
 
       const seededBooks = (await db.books.toArray())
-        .filter((row) => !row.deleted_at)
+        .filter((row) => !row.deleted_at && owned(row))
         .sort((a, b) => a.sort_order - b.sort_order);
 
       for (const book of seededBooks) {
@@ -508,7 +512,9 @@ async function runSeed(): Promise<void> {
           db.templates,
           db.holdings,
         ] as const) {
-          const orphans = await table.filter((row) => !row.book_id).toArray();
+          const orphans = await table
+            .filter((row) => !row.book_id && sameOwner(row.user_id, ownerId))
+            .toArray();
           for (const row of orphans) {
             await table.update(row.id, { book_id: defaultBookId });
           }
@@ -529,13 +535,25 @@ async function runSeed(): Promise<void> {
   });
 }
 
-let inflight: Promise<void> | null = null;
+const inflight = new Map<string, Promise<void>>();
 
+function ensureFor(ownerId: string | null): Promise<void> {
+  const key = ownerId ?? "local";
+  const existing = inflight.get(key);
+  if (existing) return existing;
+  const job = runSeed(ownerId).finally(() => {
+    inflight.delete(key);
+  });
+  inflight.set(key, job);
+  return job;
+}
+
+/** Device ledger used while logged out. Never assigned to an account. */
 export function ensureSeedData(): Promise<void> {
-  if (!inflight) {
-    inflight = runSeed().finally(() => {
-      inflight = null;
-    });
-  }
-  return inflight;
+  return ensureFor(null);
+}
+
+/** Default books for one account, only when that account has none yet. */
+export function ensureOwnerLedger(ownerId: string): Promise<void> {
+  return ensureFor(ownerId);
 }

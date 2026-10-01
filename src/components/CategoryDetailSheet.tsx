@@ -1,9 +1,15 @@
 "use client";
 
 import { useEffect, useId, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { formatMoney, type MoneyCurrency } from "@/lib/format";
 import { expenseDisplayAmount } from "@/lib/reimbursement";
+import { TREAT_TAG } from "@/lib/transaction-tag";
 import type { Transaction } from "@/lib/types";
+
+function rowAmount(tx: Transaction) {
+  return tx.type === "expense" ? expenseDisplayAmount(tx) : tx.amount;
+}
 
 type Props = {
   categoryId: string | null;
@@ -27,6 +33,7 @@ export function CategoryDetailSheet({
   onClose,
 }: Props) {
   const titleId = useId();
+  const router = useRouter();
 
   useEffect(() => {
     const previous = document.body.style.overflow;
@@ -57,11 +64,12 @@ export function CategoryDetailSheet({
       });
   }, [transactions, categoryId]);
 
-  const total = rows.reduce((sum, tx) => {
-    if (tx.type === "expense") return sum + expenseDisplayAmount(tx);
-    return sum + tx.amount;
-  }, 0);
+  const total = rows.reduce((sum, tx) => sum + rowAmount(tx), 0);
   const average = rows.length > 0 ? total / rows.length : 0;
+  const treatRows = rows.filter((tx) => tx.tag === TREAT_TAG);
+  const treatTotal = treatRows.reduce((sum, tx) => sum + rowAmount(tx), 0);
+  const restCount = rows.length - treatRows.length;
+  const restAverage = restCount > 0 ? (total - treatTotal) / restCount : 0;
   const isIncome = rows[0]?.type === "income";
   const amountColor = isIncome ? "text-emerald-700" : "text-rose-700";
 
@@ -131,6 +139,14 @@ export function CategoryDetailSheet({
             </p>
           </div>
         </div>
+        {treatTotal > 0 ? (
+          <p className="border-b border-[var(--line)] px-4 py-2 text-xs text-amber-900">
+            請客 {formatMoney(treatTotal, currency)} · {treatRows.length} 筆
+            {restCount > 0
+              ? `，其餘平均 ${formatMoney(restAverage, currency)}`
+              : "，這幾筆都是請客"}
+          </p>
+        ) : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
           {rows.length === 0 ? (
@@ -140,35 +156,43 @@ export function CategoryDetailSheet({
           ) : (
             <ul className="space-y-2">
               {rows.map((tx) => (
-                <li
-                  key={tx.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2.5"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium tabular-nums text-[var(--ink)]">
-                      {tx.date}
-                    </p>
-                    {tx.note ? (
-                      <p className="mt-0.5 truncate text-xs text-[var(--muted)]">
-                        {tx.note}
-                      </p>
-                    ) : null}
-                  </div>
-                  <p
-                    className={`shrink-0 text-sm font-semibold tabular-nums ${
-                      tx.type === "income"
-                        ? "text-emerald-700"
-                        : "text-rose-700"
-                    }`}
+                <li key={tx.id}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(
+                        `/calendar?date=${encodeURIComponent(tx.date)}&tx=${encodeURIComponent(tx.id)}`,
+                      )
+                    }
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2.5 text-left active:bg-[var(--surface)]"
+                    aria-label={`到 ${tx.date} 修改${tx.tag === TREAT_TAG ? "，請客" : ""}${tx.note ? `：${tx.note}` : ""}`}
                   >
-                    {tx.type === "income" ? "+" : "-"}
-                    {formatMoney(
-                      tx.type === "expense"
-                        ? expenseDisplayAmount(tx)
-                        : tx.amount,
-                      currency,
-                    )}
-                  </p>
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-1.5 text-sm font-medium tabular-nums text-[var(--ink)]">
+                        <span>{tx.date}</span>
+                        {tx.tag === TREAT_TAG ? (
+                          <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900">
+                            請客
+                          </span>
+                        ) : null}
+                      </p>
+                      {tx.note ? (
+                        <p className="mt-0.5 truncate text-xs text-[var(--muted)]">
+                          {tx.note}
+                        </p>
+                      ) : null}
+                    </div>
+                    <p
+                      className={`shrink-0 text-sm font-semibold tabular-nums ${
+                        tx.type === "income"
+                          ? "text-emerald-700"
+                          : "text-rose-700"
+                      }`}
+                    >
+                      {tx.type === "income" ? "+" : "-"}
+                      {formatMoney(rowAmount(tx), currency)}
+                    </p>
+                  </button>
                 </li>
               ))}
             </ul>

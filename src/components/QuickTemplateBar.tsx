@@ -14,6 +14,7 @@ const TYPE_SIGN: Record<Template["type"], string> = {
   expense: "-",
   transfer: "",
   hold: "-",
+  invest: "",
 };
 
 /** One-tap reuse of saved templates, shown above the home entry form. */

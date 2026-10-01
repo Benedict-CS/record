@@ -45,6 +45,13 @@ function useBookTotals() {
   const [totals, setTotals] = useState<
     Record<string, { total: number; accounts: number; holdings: number; held: number }>
   >({});
+  const [ownerTick, setOwnerTick] = useState(0);
+
+  useEffect(() => {
+    const onOwner = () => setOwnerTick((tick) => tick + 1);
+    window.addEventListener("ledger-owner-changed", onOwner);
+    return () => window.removeEventListener("ledger-owner-changed", onOwner);
+  }, []);
 
   useEffect(() => {
     const subscription = liveQuery(async () => {
@@ -58,7 +65,7 @@ function useBookTotals() {
       error: () => setTotals({}),
     });
     return () => subscription.unsubscribe();
-  }, []);
+  }, [ownerTick]);
 
   return totals;
 }
