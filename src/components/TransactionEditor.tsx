@@ -265,6 +265,34 @@ export function TransactionEditor({
       ? "選填"
       : formatMoney(reimbursable, book?.currency);
 
+  if (transaction.type === "invest") {
+    return (
+      <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+        <button
+          type="button"
+          aria-label="關閉"
+          className="absolute inset-0 bg-[var(--ink)]/40"
+          onClick={onClose}
+        />
+        <div className="relative z-10 w-full max-w-lg rounded-t-2xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-lg sm:mx-4 sm:rounded-2xl">
+          <h2 className="text-base font-semibold text-[var(--ink)]">定期定額</h2>
+          <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
+            {transaction.note || "這筆"}{" "}
+            {formatMoney(transaction.amount, book?.currency)}{" "}
+            已從銀行換成持股，沒有算進支出。之後每個月請到固定扣款調整。
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-4 min-h-11 w-full rounded-xl bg-[var(--ink)] text-sm font-medium text-[var(--paper)]"
+          >
+            關閉
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">

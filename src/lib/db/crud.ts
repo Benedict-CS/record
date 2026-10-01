@@ -25,6 +25,7 @@ import {
   normalizeTransactionTag,
   tagSearchText,
 } from "@/lib/transaction-tag";
+import { applyInvestMove, reverseInvestMove } from "@/lib/db/invest-move";
 import { expenseDisplayAmount } from "@/lib/reimbursement";
 import type {
   Account,
@@ -531,8 +532,13 @@ export async function createTransaction(
     reimbursement_status?: ReimbursementStatus | null;
     holding_id?: string | null;
     tag?: string | null;
+    id?: string;
   },
 ): Promise<Transaction> {
+  if (input.id) {
+    const existing = await db.transactions.get(input.id);
+    if (existing) return existing;
+  }
   const isHold = input.type === "hold";
   const isExpense = input.type === "expense";
   const reimbursable =
@@ -543,6 +549,7 @@ export async function createTransaction(
       : null;
   const tx: Transaction = {
     ...baseMeta(),
+    ...(input.id ? { id: input.id } : {}),
     book_id: bookId,
     type: input.type,
     amount: Math.abs(input.amount),
@@ -561,6 +568,7 @@ export async function createTransaction(
       : null,
     holding_id: null,
     tag: normalizeTransactionTag(input.type, input.tag),
+    target_holding_id: null,
   };
   await db.transaction(
     "rw",
@@ -709,6 +717,18 @@ export async function softDeleteTransaction(id: string): Promise<void> {
         deleted: true,
       },
     });
+    if (
+      row.type === "invest" &&
+      row.holding_id &&
+      row.target_holding_id
+    ) {
+      await reverseInvestMove({
+        bookId: row.book_id,
+        sourceId: row.holding_id,
+        targetId: row.target_holding_id,
+        amount: row.amount,
+      });
+    }
 
     // Keep hold ↔ release income paired so account balances stay consistent.
     if (row.type === "hold" && row.release_transaction_id) {
@@ -768,6 +788,18 @@ export async function restoreTransaction(id: string): Promise<void> {
             deleted: false,
           },
         });
+        if (
+          existing.type === "invest" &&
+          existing.holding_id &&
+          existing.target_holding_id
+        ) {
+          await applyInvestMove({
+            bookId: existing.book_id,
+            sourceId: existing.holding_id,
+            targetId: existing.target_holding_id,
+            amount: existing.amount,
+          });
+        }
       }
       await db.transactions.update(id, {
         deleted_at: null,
@@ -878,6 +910,7 @@ export async function releaseHold(
       reimbursement_status: null,
       holding_id: null,
       tag: null,
+      target_holding_id: null,
     };
     await db.transactions.add(income);
     await db.transactions.update(existing.id, {
@@ -900,6 +933,8 @@ export async function listTransactionsForAccount(
     .filter(
       (row) =>
         !row.deleted_at &&
+        // Dollar-cost rows move holdings, not this cash-flow account.
+        row.type !== "invest" &&
         (row.account_id === accountId || row.transfer_account_id === accountId),
     )
     .reverse()
@@ -1108,8 +1143,7 @@ export async function accountBalances(
       add(tx.account_id, tx.amount);
     } else if (tx.type === "expense" || tx.type === "hold") {
       add(tx.account_id, -tx.amount);
-    } else {
-      // Transfer: account_id is the source, transfer_account_id the destination.
+    } else if (tx.type === "transfer") {
       add(tx.account_id, -tx.amount);
       add(tx.transfer_account_id, tx.amount);
     }

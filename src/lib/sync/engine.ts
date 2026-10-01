@@ -14,6 +14,7 @@ import type {
   CloudBudget,
   CloudCategory,
   CloudHolding,
+  CloudRecurringRule,
   CloudTemplate,
   CloudTransaction,
   SyncStatus,
@@ -174,6 +175,7 @@ async function collapseDuplicateBooks() {
         db.budgets,
         db.templates,
         db.holdings,
+        db.recurring_rules,
       ] as const) {
         const children = await table
           .where("book_id")
@@ -453,6 +455,10 @@ async function mergeRemoteTransactions(remoteRows: CloudTransaction[]) {
       "holding_id",
     );
     const remoteHasTag = Object.prototype.hasOwnProperty.call(remote, "tag");
+    const remoteHasTarget = Object.prototype.hasOwnProperty.call(
+      remote,
+      "target_holding_id",
+    );
     const normalised: CloudTransaction = {
       ...remote,
       amount: Number(remote.amount),
@@ -469,6 +475,9 @@ async function mergeRemoteTransactions(remoteRows: CloudTransaction[]) {
         ? (remote.holding_id ?? null)
         : (local?.holding_id ?? null),
       tag: remoteHasTag ? (remote.tag ?? null) : (local?.tag ?? null),
+      target_holding_id: remoteHasTarget
+        ? (remote.target_holding_id ?? null)
+        : (local?.target_holding_id ?? null),
     };
     if (!local || remote.updated_at >= local.updated_at) {
       toPut.push(normalised);
@@ -515,6 +524,40 @@ async function mergeRemoteTemplates(remoteRows: CloudTemplate[]) {
   }
   if (toPut.length) {
     await db.templates.bulkPut(
+      toPut.map((row) => ({ ...row, sync_status: "synced" as const })),
+    );
+  }
+}
+
+function isMissingRelation(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const row = error as { code?: string; message?: string };
+  return row.code === "PGRST205" || (row.message ?? "").includes("recurring_rules");
+}
+
+async function mergeRemoteRecurring(remoteRows: CloudRecurringRule[]) {
+  if (!remoteRows.length) return;
+  const locals = await db.recurring_rules.bulkGet(remoteRows.map((row) => row.id));
+  const toPut: CloudRecurringRule[] = [];
+  for (let i = 0; i < remoteRows.length; i += 1) {
+    const remote = remoteRows[i];
+    const local = locals[i];
+    if (local?.sync_status === "pending") continue;
+    if (!local || remote.updated_at >= local.updated_at) {
+      toPut.push({
+        ...remote,
+        amount: Number(remote.amount),
+        day_of_month: Number(remote.day_of_month),
+        last_posted: remote.last_posted ?? null,
+        last_error: remote.last_error ?? null,
+        category_id: remote.category_id ?? null,
+        holding_id: remote.holding_id ?? null,
+        target_holding_id: remote.target_holding_id ?? null,
+      });
+    }
+  }
+  if (toPut.length) {
+    await db.recurring_rules.bulkPut(
       toPut.map((row) => ({ ...row, sync_status: "synced" as const })),
     );
   }
@@ -618,6 +661,12 @@ async function pullAll(userId: string, options: PullOptions = {}) {
   await mergeRemoteBudgets(budgets as CloudBudget[]);
   await mergeRemoteTemplates(templates as CloudTemplate[]);
   await mergeRemoteHoldings(holdings as CloudHolding[]);
+  try {
+    const recurring = await fetchTable("recurring_rules");
+    await mergeRemoteRecurring(recurring as CloudRecurringRule[]);
+  } catch (error) {
+    if (!isMissingRelation(error)) throw error;
+  }
 
   // Defer last_pulled_at until push succeeds so a failed push can re-pull.
   return new Date().toISOString();
@@ -626,7 +675,7 @@ async function pullAll(userId: string, options: PullOptions = {}) {
 async function pushPending(userId: string) {
   const supabase = createClient();
 
-  const [books, accounts, categories, transactions, budgets, templates, holdings] =
+  const [books, accounts, categories, transactions, budgets, templates, holdings, recurringRules] =
     await Promise.all([
       db.books.where("sync_status").equals("pending").toArray(),
       db.accounts.where("sync_status").equals("pending").toArray(),
@@ -635,6 +684,7 @@ async function pushPending(userId: string) {
       db.budgets.where("sync_status").equals("pending").toArray(),
       db.templates.where("sync_status").equals("pending").toArray(),
       db.holdings.where("sync_status").equals("pending").toArray(),
+      db.recurring_rules.where("sync_status").equals("pending").toArray(),
     ]);
 
   // Never push a live empty seed twin when a synced twin already exists —
@@ -705,6 +755,7 @@ async function pushPending(userId: string) {
       reimbursement_status: row.reimbursement_status ?? null,
       holding_id: row.holding_id ?? null,
       tag: row.tag ?? null,
+      target_holding_id: row.target_holding_id ?? null,
     }));
   const ownedBudgets = budgets
     .filter((row) => row.user_id === userId)
@@ -818,6 +869,27 @@ async function pushPending(userId: string) {
     holdingsPayload as Record<string, unknown>[],
     (ids) => markLocalSynced(db.holdings, ids),
   );
+  const ownedRules = recurringRules
+    .filter((row) => row.user_id === userId)
+    .map((row) => ({
+      ...stripSyncStatus(row),
+      amount: Number(row.amount),
+      day_of_month: Number(row.day_of_month),
+      last_posted: row.last_posted ?? null,
+      last_error: row.last_error ?? null,
+      category_id: row.category_id ?? null,
+      holding_id: row.holding_id ?? null,
+      target_holding_id: row.target_holding_id ?? null,
+    }));
+  try {
+    await upsertTable(
+      "recurring_rules",
+      ownedRules as Record<string, unknown>[],
+      (ids) => markLocalSynced(db.recurring_rules, ids),
+    );
+  } catch (error) {
+    if (!isMissingRelation(error)) throw error;
+  }
 
   const state = await db.sync_state.get(syncStateKey(userId));
   await db.sync_state.put({

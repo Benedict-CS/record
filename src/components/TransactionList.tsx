@@ -15,6 +15,7 @@ import {
 import { compareSameDayTransactions } from "@/lib/day-order";
 import { formatDayHeading, formatMoney, todayLocal } from "@/lib/format";
 import { expenseDisplayAmount } from "@/lib/reimbursement";
+import { useHoldings } from "@/lib/hooks/useLedgerData";
 import { TREAT_TAG } from "@/lib/transaction-tag";
 import { runSync } from "@/lib/sync/engine";
 import type { Account, Category, Transaction } from "@/lib/types";
@@ -24,6 +25,7 @@ const TYPE_LABEL: Record<Transaction["type"], string> = {
   expense: "支出",
   transfer: "轉帳",
   hold: "扣住",
+  invest: "定期定額",
 };
 
 function IconPlus({ className }: { className?: string }) {
@@ -129,8 +131,12 @@ export function TransactionList({
   const confirm = useConfirm();
   const { show } = useToast();
 
+  const holdings = useHoldings();
   const accountMap = Object.fromEntries(
     accounts.map((account) => [account.id, account.name]),
+  );
+  const holdingName = Object.fromEntries(
+    holdings.map((holding) => [holding.id, holding.name]),
   );
   const categoryMap = Object.fromEntries(
     categories.map((category) => [category.id, category]),
@@ -139,6 +145,7 @@ export function TransactionList({
     categoryId ? categoryMap[categoryId]?.name : null;
 
   async function onDuplicate(tx: Transaction) {
+    if (tx.type === "invest") return;
     try {
       const copy = await duplicateTransaction(tx.id, todayLocal());
       if (!copy) return;
@@ -357,13 +364,23 @@ export function TransactionList({
                       }`
                     : isHold
                       ? `扣住：${tx.note.trim() || "未命名"}`
-                      : category?.name ?? TYPE_LABEL[tx.type];
+                      : tx.type === "invest"
+                        ? tx.note.trim() || "定期定額"
+                        : category?.name ?? TYPE_LABEL[tx.type];
 
                 const note = isHold ? "" : tx.note.trim();
                 const accountName = accountMap[tx.account_id] ?? "帳戶";
+                const investMove =
+                  tx.type === "invest"
+                    ? [tx.holding_id, tx.target_holding_id]
+                        .map((id) => (id ? holdingName[id] : ""))
+                        .filter(Boolean)
+                        .join(" → ")
+                    : "";
                 const subtitleParts = [
                   !groupByDay && !framed ? tx.date : null,
-                  accountName,
+                  tx.type === "invest" ? "定期定額" : null,
+                  tx.type === "invest" ? investMove || null : accountName,
                   holdReleased ? "已退回" : isHold ? "暫時扣住" : null,
                   reimbPending && reimbAmount != null
                     ? `待報銷 ${formatMoney(reimbAmount, currency)}`
@@ -371,7 +388,7 @@ export function TransactionList({
                   reimbReceived && reimbAmount != null
                     ? `已報銷 ${formatMoney(reimbAmount, currency)}`
                     : null,
-                  note || null,
+                  tx.type === "invest" ? null : note || null,
                 ].filter(Boolean);
 
                 const row = (
@@ -478,6 +495,7 @@ export function TransactionList({
                           <IconEdit className="h-4 w-4" />
                         </button>
                       ) : null}
+                      {tx.type === "invest" ? null : (
                       <button
                         type="button"
                         className={`${actionBtn} hover:text-[var(--accent)]`}
@@ -487,6 +505,7 @@ export function TransactionList({
                       >
                         <IconCopyToday className="h-4 w-4" />
                       </button>
+                      )}
                       <button
                         type="button"
                         className={`${actionBtn} hover:text-rose-600`}

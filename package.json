@@ -7,7 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test": "npx --yes tsx src/lib/money.test.ts && npx --yes tsx src/lib/day-order.test.ts && npx --yes tsx src/lib/category-order.test.ts && npx --yes tsx src/lib/month-summary.test.ts && npx --yes tsx src/lib/summary-display.test.ts && npx --yes tsx src/lib/reimbursement.test.ts && npx --yes tsx src/lib/owner.test.ts && npx --yes tsx src/lib/holding-spend.test.ts && npx --yes tsx src/lib/account-name.test.ts && npx --yes tsx src/lib/sync/schema-compat.test.ts && npx --yes tsx src/lib/transaction-tag.test.ts",
+    "test": "npx --yes tsx src/lib/money.test.ts && npx --yes tsx src/lib/day-order.test.ts && npx --yes tsx src/lib/category-order.test.ts && npx --yes tsx src/lib/month-summary.test.ts && npx --yes tsx src/lib/summary-display.test.ts && npx --yes tsx src/lib/reimbursement.test.ts && npx --yes tsx src/lib/owner.test.ts && npx --yes tsx src/lib/holding-spend.test.ts && npx --yes tsx src/lib/account-name.test.ts && npx --yes tsx src/lib/sync/schema-compat.test.ts && npx --yes tsx src/lib/transaction-tag.test.ts && npx --yes tsx src/lib/recurring.test.ts",
     "health": "node scripts/health-check.js",
     "deploy": "vercel deploy --yes --prod --scope team_sGRRuKcFWr48UE0zblZkTCCe"
   },

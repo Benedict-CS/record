@@ -52,6 +52,11 @@ const LINKS: {
     description: "常用記帳一鍵套用",
   },
   {
+    href: "/recurring",
+    title: "固定扣款",
+    description: "房貸、房租、訂閱，以及 0050 這類定期定額",
+  },
+  {
     href: "/login",
     title: "登入同步",
     description: "選用雲端備份與多裝置同步",

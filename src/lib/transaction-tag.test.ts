@@ -31,6 +31,7 @@ function tx(
     reimbursement_status: null,
     holding_id: null,
     tag: null,
+    target_holding_id: null,
     ...patch,
   };
 }

@@ -12,6 +12,8 @@ import {
 } from "react";
 import { liveQuery } from "dexie";
 import { listBooks } from "@/lib/db/crud";
+import { postDueRecurring } from "@/lib/db/recurring-post";
+import { runSync } from "@/lib/sync/engine";
 import { getOwnerId, readActiveBookId, writeActiveBookId } from "@/lib/db/owner";
 import { ensureSeedData } from "@/lib/db/seed";
 import type { Book } from "@/lib/types";
@@ -130,6 +132,17 @@ export function BookProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("ledger-active-book", onAdopt);
     };
   }, [ready, ownerId]);
+
+  useEffect(() => {
+    if (!ready || !bookId) return;
+    let cancelled = false;
+    void postDueRecurring(bookId).then((count) => {
+      if (!cancelled && count > 0) void runSync();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, bookId]);
 
   const setBookId = useCallback((id: string) => {
     userPicked.current = true;
