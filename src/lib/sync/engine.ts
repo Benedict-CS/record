@@ -452,6 +452,7 @@ async function mergeRemoteTransactions(remoteRows: CloudTransaction[]) {
       remote,
       "holding_id",
     );
+    const remoteHasTag = Object.prototype.hasOwnProperty.call(remote, "tag");
     const normalised: CloudTransaction = {
       ...remote,
       amount: Number(remote.amount),
@@ -467,6 +468,7 @@ async function mergeRemoteTransactions(remoteRows: CloudTransaction[]) {
       holding_id: remoteHasHolding
         ? (remote.holding_id ?? null)
         : (local?.holding_id ?? null),
+      tag: remoteHasTag ? (remote.tag ?? null) : (local?.tag ?? null),
     };
     if (!local || remote.updated_at >= local.updated_at) {
       toPut.push(normalised);
@@ -702,6 +704,7 @@ async function pushPending(userId: string) {
       reimbursable_amount: row.reimbursable_amount ?? null,
       reimbursement_status: row.reimbursement_status ?? null,
       holding_id: row.holding_id ?? null,
+      tag: row.tag ?? null,
     }));
   const ownedBudgets = budgets
     .filter((row) => row.user_id === userId)

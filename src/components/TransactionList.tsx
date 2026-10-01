@@ -15,6 +15,7 @@ import {
 import { compareSameDayTransactions } from "@/lib/day-order";
 import { formatDayHeading, formatMoney, todayLocal } from "@/lib/format";
 import { expenseDisplayAmount } from "@/lib/reimbursement";
+import { TREAT_TAG } from "@/lib/transaction-tag";
 import { runSync } from "@/lib/sync/engine";
 import type { Account, Category, Transaction } from "@/lib/types";
 
@@ -403,8 +404,15 @@ export function TransactionList({
                       onClick={() => onEdit?.(tx)}
                       disabled={!onEdit}
                     >
-                      <span className="min-w-0 truncate text-sm text-[var(--ink)]">
-                        {title}
+                      <span className="flex min-w-0 items-center gap-1">
+                        <span className="min-w-0 truncate text-sm text-[var(--ink)]">
+                          {title}
+                        </span>
+                        {tx.tag === TREAT_TAG ? (
+                          <span className="shrink-0 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900">
+                            請客
+                          </span>
+                        ) : null}
                       </span>
                       <span
                         className={`flex w-full flex-col items-end text-right ${color}`}

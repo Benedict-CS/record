@@ -63,10 +63,15 @@ export interface Transaction extends SyncMeta {
   /** Expense only: pending until marked received with salary. */
   reimbursement_status: ReimbursementStatus | null;
   /**
-   * Bank expense only: 存款 holding this spend draws from.
-   * Cash expenses stay null so holdings are not changed.
+   * Bank expense or income: 存款 holding this row moves.
+   * Cash rows stay null so holdings are not changed.
    */
   holding_id: string | null;
+  /**
+   * Optional expense mark such as 請客. Not a second category:
+   * reports, budgets, and the period total ignore it.
+   */
+  tag: string | null;
 }
 
 export interface Budget extends SyncMeta {

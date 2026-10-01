@@ -280,6 +280,34 @@ export class RecordDB extends Dexie {
           }
         }
       });
+    // v9: optional expense tag (請客). Not a second category.
+    this.version(9)
+      .stores({
+        books:
+          "id, user_id, currency, updated_at, sync_status, deleted_at, sort_order",
+        accounts:
+          "id, book_id, user_id, updated_at, sync_status, deleted_at, sort_order",
+        categories:
+          "id, book_id, user_id, kind, updated_at, sync_status, deleted_at, sort_order, [book_id+kind]",
+        transactions:
+          "id, book_id, user_id, date, account_id, category_id, updated_at, sync_status, deleted_at, type, [book_id+date]",
+        budgets:
+          "id, book_id, user_id, year, month, category_id, updated_at, sync_status, deleted_at, [book_id+year+month]",
+        templates:
+          "id, book_id, user_id, updated_at, sync_status, deleted_at, sort_order, [book_id+sort_order]",
+        holdings:
+          "id, book_id, user_id, kind, updated_at, sync_status, deleted_at, sort_order, [book_id+kind]",
+        sync_state: "id",
+      })
+      .upgrade(async (tx) => {
+        const table = tx.table("transactions");
+        const rows = await table.toArray();
+        for (const row of rows) {
+          if (row.tag === undefined) {
+            await table.update(row.id, { tag: null });
+          }
+        }
+      });
   }
 }
 

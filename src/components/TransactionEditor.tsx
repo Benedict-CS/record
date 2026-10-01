@@ -5,6 +5,7 @@ import { AmountKeypad } from "@/components/AmountKeypad";
 import { BankHoldingField } from "@/components/BankHoldingField";
 import { useBook } from "@/components/BookProvider";
 import { CategoryPickerGrid } from "@/components/CategoryPickerGrid";
+import { TreatTagField } from "@/components/TreatTagField";
 import { useToast } from "@/components/ToastProvider";
 import { formatCalcNumber } from "@/lib/calculator";
 import {
@@ -14,6 +15,7 @@ import {
   updateTransaction,
 } from "@/lib/db/crud";
 import { formatMoney, todayLocal } from "@/lib/format";
+import { TREAT_TAG } from "@/lib/transaction-tag";
 import { useHoldings } from "@/lib/hooks/useLedgerData";
 import { runSync } from "@/lib/sync/engine";
 import type { Account, Category, Transaction, TransactionType } from "@/lib/types";
@@ -57,6 +59,7 @@ export function TransactionEditor({
   const [accountId, setAccountId] = useState(transaction.account_id);
   const [holdingId, setHoldingId] = useState(transaction.holding_id ?? "");
   const [categoryId, setCategoryId] = useState(transaction.category_id ?? "");
+  const [treat, setTreat] = useState(transaction.tag === TREAT_TAG);
   const [keypadTarget, setKeypadTarget] = useState<KeypadTarget | null>(null);
   const [saving, setSaving] = useState(false);
   const [releasing, setReleasing] = useState(false);
@@ -95,6 +98,7 @@ export function TransactionEditor({
     setAccountId(transaction.account_id);
     setCategoryId(transaction.category_id ?? "");
     setHoldingId(transaction.holding_id ?? "");
+    setTreat(transaction.tag === TREAT_TAG);
     setError(null);
   }
 
@@ -241,6 +245,7 @@ export function TransactionEditor({
                 : "pending")
             : null,
         holding_id: bankMove && holdingId ? holdingId : null,
+        tag: type === "expense" && treat ? TREAT_TAG : null,
       });
       void runSync();
       onClose();
@@ -451,6 +456,11 @@ export function TransactionEditor({
                     onChange={setCategoryId}
                   />
                 )}
+                {type === "expense" ? (
+                  <div className="mt-2.5">
+                    <TreatTagField checked={treat} onChange={setTreat} />
+                  </div>
+                ) : null}
               </div>
             ) : null}
 

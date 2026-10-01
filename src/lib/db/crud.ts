@@ -21,6 +21,10 @@ import {
   storedHoldingSpend,
 } from "@/lib/holding-spend";
 import { monthlyInterest, yearlyInterest } from "@/lib/interest";
+import {
+  normalizeTransactionTag,
+  tagSearchText,
+} from "@/lib/transaction-tag";
 import { expenseDisplayAmount } from "@/lib/reimbursement";
 import type {
   Account,
@@ -379,9 +383,11 @@ export async function searchTransactions(
       const cat = row.category_id
         ? (categoryMap.get(row.category_id) ?? "")
         : "";
+      const tag = tagSearchText(row.tag).toLowerCase();
       return (
         note.includes(q) ||
         cat.includes(q) ||
+        tag.includes(q) ||
         String(row.amount).includes(q) ||
         row.date.includes(q)
       );
@@ -524,6 +530,7 @@ export async function createTransaction(
     reimbursable_amount?: number | null;
     reimbursement_status?: ReimbursementStatus | null;
     holding_id?: string | null;
+    tag?: string | null;
   },
 ): Promise<Transaction> {
   const isHold = input.type === "hold";
@@ -553,6 +560,7 @@ export async function createTransaction(
       ? (input.reimbursement_status ?? "pending")
       : null,
     holding_id: null,
+    tag: normalizeTransactionTag(input.type, input.tag),
   };
   await db.transaction(
     "rw",
@@ -594,6 +602,7 @@ export async function updateTransaction(
       | "reimbursable_amount"
       | "reimbursement_status"
       | "holding_id"
+      | "tag"
     >
   >,
 ): Promise<void> {
@@ -656,6 +665,10 @@ export async function updateTransaction(
         reimbursable_amount,
         reimbursement_status,
         holding_id,
+        tag: normalizeTransactionTag(
+          nextType,
+          patch.tag !== undefined ? patch.tag : existing.tag,
+        ),
         updated_at: nowIso(),
         client_id: getClientId(),
         sync_status: "pending",
@@ -786,6 +799,7 @@ export async function duplicateTransaction(
         ? "pending"
         : null,
     holding_id: existing.holding_id,
+    tag: existing.tag,
   });
 }
 
@@ -863,6 +877,7 @@ export async function releaseHold(
       reimbursable_amount: null,
       reimbursement_status: null,
       holding_id: null,
+      tag: null,
     };
     await db.transactions.add(income);
     await db.transactions.update(existing.id, {

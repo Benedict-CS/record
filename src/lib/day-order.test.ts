@@ -33,6 +33,7 @@ function tx(
     reimbursable_amount: null,
     reimbursement_status: null,
     holding_id: null,
+    tag: null,
   };
 }
 

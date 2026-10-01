@@ -23,6 +23,7 @@ import {
   useMonthTransactions,
   useSeedReady,
 } from "@/lib/hooks/useLedgerData";
+import { TREAT_TAG } from "@/lib/transaction-tag";
 import type { Transaction } from "@/lib/types";
 
 export function HomePage() {
@@ -38,6 +39,7 @@ export function HomePage() {
   const [typeFilter, setTypeFilter] = useState<
     "all" | "expense" | "income" | "hold"
   >("all");
+  const [treatOnly, setTreatOnly] = useState(false);
   const { show } = useToast();
   const openedForBook = useRef<string | null>(null);
 
@@ -96,13 +98,14 @@ export function HomePage() {
     };
   }, [ready, bookId, now, transactions.length]);
 
-  const visibleTransactions = useMemo(
-    () =>
+  const visibleTransactions = useMemo(() => {
+    const byType =
       typeFilter === "all"
         ? transactions
-        : transactions.filter((tx) => tx.type === typeFilter),
-    [transactions, typeFilter],
-  );
+        : transactions.filter((tx) => tx.type === typeFilter);
+    if (!treatOnly) return byType;
+    return byType.filter((tx) => tx.tag === TREAT_TAG);
+  }, [transactions, typeFilter, treatOnly]);
 
   const isCurrentMonth =
     year === now.getFullYear() && month === now.getMonth() + 1;
@@ -193,14 +196,30 @@ export function HomePage() {
                 </button>
               ))}
             </div>
-            {typeFilter !== "all" && visibleTransactions.length === 0 ? (
+            <button
+              type="button"
+              aria-pressed={treatOnly}
+              onClick={() => setTreatOnly((current) => !current)}
+              className={[
+                "min-h-10 rounded-xl px-3 text-xs font-medium",
+                treatOnly
+                  ? "bg-amber-800 text-white"
+                  : "border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)]",
+              ].join(" ")}
+            >
+              只看請客
+            </button>
+            {(typeFilter !== "all" || treatOnly) && visibleTransactions.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-[var(--line)] px-4 py-6 text-center">
                 <p className="text-sm text-[var(--muted)]">
                   這個篩選目前沒有紀錄
                 </p>
                 <button
                   type="button"
-                  onClick={() => setTypeFilter("all")}
+                  onClick={() => {
+                    setTypeFilter("all");
+                    setTreatOnly(false);
+                  }}
                   className="mt-3 min-h-10 rounded-xl bg-[var(--ink)] px-4 text-xs font-medium text-[var(--paper)]"
                 >
                   看全部

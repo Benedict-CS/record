@@ -6,10 +6,12 @@ import { AmountKeypad } from "@/components/AmountKeypad";
 import { BankHoldingField } from "@/components/BankHoldingField";
 import { useBook } from "@/components/BookProvider";
 import { CategoryPickerGrid } from "@/components/CategoryPickerGrid";
+import { TreatTagField } from "@/components/TreatTagField";
 import { createTransaction, updateTransaction } from "@/lib/db/crud";
 import { formatCalcNumber } from "@/lib/calculator";
 import { formatMoney, todayLocal } from "@/lib/format";
 import { isSpendableBankHolding } from "@/lib/holding-spend";
+import { TREAT_TAG } from "@/lib/transaction-tag";
 import { useHoldings } from "@/lib/hooks/useLedgerData";
 import { runSync } from "@/lib/sync/engine";
 import type { Account, Category, Transaction, TransactionType } from "@/lib/types";
@@ -67,6 +69,7 @@ export function TransactionForm({
   );
   const [holdingId, setHoldingId] = useState(initial?.holding_id ?? "");
   const [categoryId, setCategoryId] = useState(initial?.category_id ?? "");
+  const [treat, setTreat] = useState(initial?.tag === TREAT_TAG);
   const [keypadTarget, setKeypadTarget] = useState<KeypadTarget | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +93,7 @@ export function TransactionForm({
       setAccountId(initial.account_id);
       setCategoryId(initial.category_id ?? "");
       setHoldingId(initial.holding_id ?? "");
+      setTreat(initial.tag === TREAT_TAG);
     }
   }
 
@@ -200,6 +204,7 @@ export function TransactionForm({
                 : ("pending" as const))
             : null,
         holding_id: bankMove && effectiveHoldingId ? effectiveHoldingId : null,
+        tag: type === "expense" && treat ? TREAT_TAG : null,
       };
 
       if (isEdit && initial) {
@@ -365,6 +370,11 @@ export function TransactionForm({
                 onChange={setCategoryId}
               />
             )}
+            {type === "expense" ? (
+              <div className="mt-2.5">
+                <TreatTagField checked={treat} onChange={setTreat} />
+              </div>
+            ) : null}
           </div>
         ) : null}
 

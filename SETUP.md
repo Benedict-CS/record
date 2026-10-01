@@ -81,6 +81,7 @@
 | 7 | `supabase/migrations/007_reimbursable_expense.sql` |
 | 8 | `supabase/migrations/008_transaction_holding.sql` |
 | 9 | `supabase/migrations/009_username_account.sql` |
+| 10 | `supabase/migrations/010_transaction_tag.sql` |
 
 **每個檔案的操作步驟：**
 
@@ -91,7 +92,7 @@
 5. 確認右下角顯示成功（Success / 無錯誤）。
 6. 再開一個 **New query**，對下一份檔案重複同樣步驟。
 
-執行完成後應有：`accounts`、`categories`、`transactions`、`budgets`、`books`、`templates`、`holdings`，以及各表的 RLS 政策；`003` 會替子表加上 `book_id`；`005` 是存款／資產（定存、基金、電子錢包）；`006` 為交易「扣住（hold）」欄位（`hold_status`、`release_transaction_id`）；`008` 為銀行支出連動存款的 `transactions.holding_id`。如果專案早已跑過前面幾份，只要補跑尚未執行的遷移即可。銀行支出選活存／定存扣款之前，必須先跑 `008`，否則這類交易上傳會失敗。`009` 把既有帳號 `ben111611@gmail.com` 改成帳號名稱 `benedict`（同一個人、同一本帳、密碼不變）。請在任何人用「benedict」註冊之前跑完，否則名稱會被佔走。
+執行完成後應有：`accounts`、`categories`、`transactions`、`budgets`、`books`、`templates`、`holdings`，以及各表的 RLS 政策；`003` 會替子表加上 `book_id`；`005` 是存款／資產（定存、基金、電子錢包）；`006` 為交易「扣住（hold）」欄位（`hold_status`、`release_transaction_id`）；`008` 為銀行支出連動存款的 `transactions.holding_id`。如果專案早已跑過前面幾份，只要補跑尚未執行的遷移即可。銀行支出選活存／定存扣款之前，必須先跑 `008`，否則這類交易上傳會失敗。`009` 把既有帳號 `ben111611@gmail.com` 改成帳號名稱 `benedict`（同一個人、同一本帳、密碼不變）。請在任何人用「benedict」註冊之前跑完，否則名稱會被佔走。`010` 為支出的請客標籤 `transactions.tag`。沒跑之前，標籤只留在這台裝置，同步會略過這個欄位。
 
 ---
 
