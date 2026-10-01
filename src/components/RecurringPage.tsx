@@ -37,7 +37,15 @@ function useRules(bookId: string | null) {
   return rules;
 }
 
-export function RecurringPage() {
+export function RecurringPage({
+  embedded = false,
+  initialDay,
+}: {
+  /** Render inside the home add sheet, without the page shell. */
+  embedded?: boolean;
+  /** Prefill the day of month, for example the day card that opened the sheet. */
+  initialDay?: number;
+} = {}) {
   const { book, bookId } = useBook();
   const accounts = useAccounts();
   const categories = useCategories("expense");
@@ -52,7 +60,13 @@ export function RecurringPage() {
   const [name, setName] = useState("");
   const [kind, setKind] = useState<RecurringRule["kind"]>("expense");
   const [amount, setAmount] = useState("");
-  const [day, setDay] = useState(String(now.getDate()));
+  const [day, setDay] = useState(
+    String(
+      initialDay != null && initialDay >= 1 && initialDay <= 31
+        ? initialDay
+        : now.getDate(),
+    ),
+  );
   const [startMonth, setStartMonth] = useState(defaultMonth);
   const [accountId, setAccountId] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -147,12 +161,12 @@ export function RecurringPage() {
     show("已停止", { variant: "info" });
   }
 
-  return (
-    <AppShell title="固定扣款">
+  const body = (
       <div className="space-y-4">
         <p className="text-sm leading-relaxed text-[var(--muted)]">
-          設一次即可。到了每月那天會自動入帳；沒打開 App 的月份會補上，從開始月份算起，最多補 12 個月。
-          固定支出算進支出一次。定期定額是把活存換成股票或基金，不算支出。
+          {embedded
+            ? "固定支出算進支出一次。定期定額是把活存換成股票或基金，不算支出。"
+            : "設一次即可。到了每月那天會自動入帳；沒打開 App 的月份會補上，從開始月份算起，最多補 12 個月。固定支出算進支出一次。定期定額是把活存換成股票或基金，不算支出。"}
         </p>
 
         <form
@@ -359,6 +373,8 @@ export function RecurringPage() {
           )}
         </section>
       </div>
-    </AppShell>
   );
+
+  if (embedded) return body;
+  return <AppShell title="固定扣款">{body}</AppShell>;
 }

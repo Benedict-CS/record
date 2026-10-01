@@ -7,6 +7,7 @@ import { BottomSheet } from "@/components/BottomSheet";
 import { useBook } from "@/components/BookProvider";
 import { MonthSummary } from "@/components/MonthSummary";
 import { QuickTemplateBar } from "@/components/QuickTemplateBar";
+import { RecurringPage } from "@/components/RecurringPage";
 import { TransactionEditor } from "@/components/TransactionEditor";
 import { TransactionForm } from "@/components/TransactionForm";
 import { TransactionList } from "@/components/TransactionList";
@@ -23,7 +24,6 @@ import {
   useMonthTransactions,
   useSeedReady,
 } from "@/lib/hooks/useLedgerData";
-import { TREAT_TAG } from "@/lib/transaction-tag";
 import type { Transaction } from "@/lib/types";
 
 export function HomePage() {
@@ -36,10 +36,10 @@ export function HomePage() {
   const [addOpen, setAddOpen] = useState(false);
   /** When set, the add sheet is for this day. Null means today (the FAB). */
   const [addDate, setAddDate] = useState<string | null>(null);
+  const [addMode, setAddMode] = useState<"once" | "monthly">("once");
   const [typeFilter, setTypeFilter] = useState<
     "all" | "expense" | "income" | "hold"
   >("all");
-  const [treatOnly, setTreatOnly] = useState(false);
   const { show } = useToast();
   const openedForBook = useRef<string | null>(null);
 
@@ -52,6 +52,7 @@ export function HomePage() {
     function openFromHash() {
       if (window.location.hash === "#quick-add") {
         setAddDate(null);
+        setAddMode("once");
         setAddOpen(true);
       }
     }
@@ -99,13 +100,9 @@ export function HomePage() {
   }, [ready, bookId, now, transactions.length]);
 
   const visibleTransactions = useMemo(() => {
-    const byType =
-      typeFilter === "all"
-        ? transactions
-        : transactions.filter((tx) => tx.type === typeFilter);
-    if (!treatOnly) return byType;
-    return byType.filter((tx) => tx.tag === TREAT_TAG);
-  }, [transactions, typeFilter, treatOnly]);
+    if (typeFilter === "all") return transactions;
+    return transactions.filter((tx) => tx.type === typeFilter);
+  }, [transactions, typeFilter]);
 
   const isCurrentMonth =
     year === now.getFullYear() && month === now.getMonth() + 1;
@@ -123,8 +120,11 @@ export function HomePage() {
 
   function openAdd(date?: string) {
     setAddDate(date ?? null);
+    setAddMode("once");
     setAddOpen(true);
   }
+
+  const addDay = addDate ? Number(addDate.slice(8, 10)) : undefined;
 
   function closeAddSheet() {
     setAddOpen(false);
@@ -196,30 +196,14 @@ export function HomePage() {
                 </button>
               ))}
             </div>
-            <button
-              type="button"
-              aria-pressed={treatOnly}
-              onClick={() => setTreatOnly((current) => !current)}
-              className={[
-                "min-h-10 rounded-xl px-3 text-xs font-medium",
-                treatOnly
-                  ? "bg-amber-800 text-white"
-                  : "border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)]",
-              ].join(" ")}
-            >
-              只看請客
-            </button>
-            {(typeFilter !== "all" || treatOnly) && visibleTransactions.length === 0 ? (
+            {typeFilter !== "all" && visibleTransactions.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-[var(--line)] px-4 py-6 text-center">
                 <p className="text-sm text-[var(--muted)]">
                   這個篩選目前沒有紀錄
                 </p>
                 <button
                   type="button"
-                  onClick={() => {
-                    setTypeFilter("all");
-                    setTreatOnly(false);
-                  }}
+                  onClick={() => setTypeFilter("all")}
                   className="mt-3 min-h-10 rounded-xl bg-[var(--ink)] px-4 text-xs font-medium text-[var(--paper)]"
                 >
                   看全部
@@ -243,20 +227,61 @@ export function HomePage() {
       <BottomSheet
         open={addOpen}
         onClose={closeAddSheet}
-        title={addDate ? `記一筆 · ${formatDayHeading(addDate)}` : "記一筆"}
-        description="支出／收入／扣住（押金）。請客金額可填 0"
+        title={
+          addMode === "monthly"
+            ? "每月固定"
+            : addDate
+              ? `記一筆 · ${formatDayHeading(addDate)}`
+              : "記一筆"
+        }
+        description={
+          addMode === "monthly"
+            ? "房貸、房租、訂閱，或 0050 這類定期定額"
+            : "支出／收入／扣住（押金）。請客金額可填 0"
+        }
       >
-        <TransactionForm
-          key={`${addOpen ? "open" : "closed"}-${addDate ?? "today"}`}
-          bare
-          defaultDate={addDate ?? undefined}
-          accounts={accounts}
-          categories={categories}
-          onSaved={() => {
-            closeAddSheet();
-            show("已記一筆", { variant: "success" });
-          }}
-        />
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          {(
+            [
+              ["once", "記一筆"],
+              ["monthly", "每月固定"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={addMode === id}
+              onClick={() => setAddMode(id)}
+              className={[
+                "min-h-11 rounded-xl text-sm font-medium",
+                addMode === id
+                  ? "bg-[var(--ink)] text-[var(--paper)]"
+                  : "border border-[var(--line)] bg-[var(--paper)] text-[var(--muted)]",
+              ].join(" ")}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {addMode === "once" ? (
+          <TransactionForm
+            key={`${addOpen ? "open" : "closed"}-${addDate ?? "today"}`}
+            bare
+            defaultDate={addDate ?? undefined}
+            accounts={accounts}
+            categories={categories}
+            onSaved={() => {
+              closeAddSheet();
+              show("已記一筆", { variant: "success" });
+            }}
+          />
+        ) : (
+          <RecurringPage
+            key={`monthly-${addDate ?? "today"}`}
+            embedded
+            initialDay={addDay}
+          />
+        )}
       </BottomSheet>
 
       {editing ? (
