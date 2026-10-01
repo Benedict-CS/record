@@ -144,6 +144,8 @@ export interface CategoryBreakdownItem {
   icon: string;
   amount: number;
   percent: number;
+  /** Tagged 請客 amount already included in amount. Absent when this list is not expenses. */
+  treatAmount?: number;
 }
 
 export interface DayBucket {

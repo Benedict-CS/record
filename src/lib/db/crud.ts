@@ -24,6 +24,7 @@ import { monthlyInterest, yearlyInterest } from "@/lib/interest";
 import {
   normalizeTransactionTag,
   tagSearchText,
+  TREAT_TAG,
 } from "@/lib/transaction-tag";
 import { applyInvestMove, reverseInvestMove } from "@/lib/db/invest-move";
 import { expenseDisplayAmount } from "@/lib/reimbursement";
@@ -1384,30 +1385,34 @@ export function categoryBreakdown(
   categories: Category[],
   type: "income" | "expense" = "expense",
 ): CategoryBreakdownItem[] {
-  const map = new Map<string | null, number>();
+  const map = new Map<string | null, { amount: number; treatAmount: number }>();
   for (const tx of transactions) {
     if (tx.type !== type) continue;
     const key = tx.category_id;
     const amount =
       type === "expense" ? expenseDisplayAmount(tx) : tx.amount;
-    map.set(key, (map.get(key) ?? 0) + amount);
+    const bucket = map.get(key) ?? { amount: 0, treatAmount: 0 };
+    bucket.amount += amount;
+    if (type === "expense" && tx.tag === TREAT_TAG) bucket.treatAmount += amount;
+    map.set(key, bucket);
   }
 
-  const total = [...map.values()].reduce((sum, value) => sum + value, 0);
+  const total = [...map.values()].reduce((sum, bucket) => sum + bucket.amount, 0);
   const categoryMap = Object.fromEntries(
     categories.map((category) => [category.id, category]),
   );
 
   return [...map.entries()]
-    .map(([categoryId, amount]) => {
+    .map(([categoryId, bucket]) => {
       const category = categoryId ? categoryMap[categoryId] : undefined;
       return {
         categoryId,
         name: category?.name ?? "未分類",
         color: category?.color ?? "#7f8c8d",
         icon: category?.icon ?? "dots",
-        amount,
-        percent: total > 0 ? (amount / total) * 100 : 0,
+        amount: bucket.amount,
+        percent: total > 0 ? (bucket.amount / total) * 100 : 0,
+        treatAmount: bucket.treatAmount,
       };
     })
     .sort((a, b) => b.amount - a.amount);

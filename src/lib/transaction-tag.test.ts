@@ -82,5 +82,6 @@ assert(breakdown.length === 1, "tagged dinner stays in one category");
 assert(breakdown[0].name === "晚餐", "the category is still 晚餐");
 assert(breakdown[0].amount === 580, "category total is not doubled");
 assert(breakdown[0].percent === 100, "the pie stays at 100 percent");
+assert(breakdown[0].treatAmount === 500, "the report can show how much of the category is 請客");
 
 console.log("transaction tag ok");

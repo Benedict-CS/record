@@ -243,6 +243,11 @@ export function ReportsPage() {
                   <p className="mt-1 text-sm text-[var(--muted)]">
                     占支出 {topExpense.percent.toFixed(1)}%
                   </p>
+                  {topExpense.treatAmount ? (
+                    <p className="mt-1 text-xs font-medium text-amber-800">
+                      含請客 {formatMoney(topExpense.treatAmount, currency)}
+                    </p>
+                  ) : null}
                 </div>
                 <p className="shrink-0 text-lg font-semibold tabular-nums text-rose-700">
                   {formatMoney(topExpense.amount, currency)}
@@ -343,8 +348,15 @@ export function ReportsPage() {
                       />
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline justify-between gap-2">
-                          <span className="truncate text-sm text-[var(--ink)]">
-                            {item.name}
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm text-[var(--ink)]">
+                              {item.name}
+                            </span>
+                            {item.treatAmount ? (
+                              <span className="block truncate text-[10px] font-medium text-amber-800">
+                                含請客 {formatMoney(item.treatAmount, currency)}
+                              </span>
+                            ) : null}
                           </span>
                           <span className="shrink-0 text-sm font-medium tabular-nums text-[var(--ink)]">
                             {formatMoney(item.amount, currency)}
