@@ -32,30 +32,61 @@ async function markRule(
   if (patch.last_error !== undefined) rule.last_error = patch.last_error;
 }
 
+function cents(value: number) {
+  return Math.round(value * 100);
+}
+
 async function postExpense(rule: RecurringRule, period: string) {
   const [year, month] = period.split("-").map(Number);
-  const id = recurringTransactionId(rule.id, period);
-  const existing = await db.transactions.get(id);
-  if (!existing) {
-    await createTransaction(rule.book_id, {
-      id,
-      type: "expense",
-      amount: rule.amount,
-      date: dueDate(year, month, rule.day_of_month),
-      note: rule.name,
-      account_id: rule.account_id,
-      category_id: rule.category_id,
-      holding_id: rule.holding_id,
-      reimbursable_amount:
+  const date = dueDate(year, month, rule.day_of_month);
+  const totalCents = cents(rule.amount);
+  const heldCents = Math.min(
+    totalCents,
+    rule.held_amount != null && rule.held_amount > 0 ? cents(rule.held_amount) : 0,
+  );
+  const spentCents = totalCents - heldCents;
+
+  if (spentCents > 0) {
+    const id = recurringTransactionId(rule.id, period);
+    const existing = await db.transactions.get(id);
+    if (!existing) {
+      const spent = spentCents / 100;
+      const reimbursable =
         rule.reimbursable_amount != null && rule.reimbursable_amount > 0
-          ? rule.reimbursable_amount
-          : null,
-      reimbursement_status:
-        rule.reimbursable_amount != null && rule.reimbursable_amount > 0
-          ? "pending"
-          : null,
-    });
+          ? Math.min(rule.reimbursable_amount, spent)
+          : null;
+      await createTransaction(rule.book_id, {
+        id,
+        type: "expense",
+        amount: spent,
+        date,
+        note: rule.name,
+        account_id: rule.account_id,
+        category_id: rule.category_id,
+        holding_id: rule.holding_id,
+        reimbursable_amount: reimbursable,
+        reimbursement_status: reimbursable ? "pending" : null,
+      });
+    }
   }
+
+  if (heldCents > 0) {
+    const id = recurringTransactionId(`${rule.id}:hold`, period);
+    const existing = await db.transactions.get(id);
+    if (!existing) {
+      await createTransaction(rule.book_id, {
+        id,
+        type: "hold",
+        amount: heldCents / 100,
+        date,
+        note: rule.name,
+        account_id: rule.account_id,
+        category_id: rule.category_id,
+        hold_status: "held",
+      });
+    }
+  }
+
   await markRule(rule, { last_posted: period, last_error: null });
 }
 
@@ -151,6 +182,7 @@ export async function createRecurringRule(
     startMonth: string;
     endMonth: string | null;
     reimbursableAmount: number | null;
+    heldAmount: number | null;
     accountId: string;
     categoryId: string | null;
     holdingId: string | null;
@@ -177,6 +209,12 @@ export async function createRecurringRule(
       input.reimbursableAmount != null &&
       input.reimbursableAmount > 0
         ? input.reimbursableAmount
+        : null,
+    held_amount:
+      input.kind === "expense" &&
+      input.heldAmount != null &&
+      input.heldAmount > 0
+        ? input.heldAmount
         : null,
     last_posted: null,
     last_error: null,

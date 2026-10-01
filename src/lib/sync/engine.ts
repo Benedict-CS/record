@@ -573,6 +573,7 @@ async function mergeRemoteRecurring(remoteRows: CloudRecurringRule[]) {
         remoteRecord,
         "reimbursable_amount",
       );
+      const hasHeld = Object.prototype.hasOwnProperty.call(remoteRecord, "held_amount");
       const endMonth = hasEnd
         ? typeof remoteRecord.end_month === "string" && remoteRecord.end_month
           ? remoteRecord.end_month
@@ -584,15 +585,23 @@ async function mergeRemoteRecurring(remoteRows: CloudRecurringRule[]) {
           ? remoteReimbursable
           : null
         : (local?.reimbursable_amount ?? null);
+      const remoteHeld = Number(remoteRecord.held_amount);
+      const heldAmount = hasHeld
+        ? Number.isFinite(remoteHeld) && remoteHeld > 0
+          ? remoteHeld
+          : null
+        : (local?.held_amount ?? null);
       const needsUpload =
         (!hasEnd && Boolean(local?.end_month)) ||
-        (!hasReimbursable && (local?.reimbursable_amount ?? 0) > 0);
+        (!hasReimbursable && (local?.reimbursable_amount ?? 0) > 0) ||
+        (!hasHeld && (local?.held_amount ?? 0) > 0);
       toPut.push({
         ...remote,
         amount: Number(remote.amount),
         day_of_month: Number(remote.day_of_month),
         end_month: endMonth,
         reimbursable_amount: reimbursableAmount,
+        held_amount: heldAmount,
         last_posted: remote.last_posted ?? null,
         last_error: remote.last_error ?? null,
         category_id: remote.category_id ?? null,
@@ -922,6 +931,7 @@ async function pushPending(userId: string) {
       end_month: row.end_month ?? null,
       reimbursable_amount:
         row.reimbursable_amount == null ? null : Number(row.reimbursable_amount),
+      held_amount: row.held_amount == null ? null : Number(row.held_amount),
       last_posted: row.last_posted ?? null,
       last_error: row.last_error ?? null,
       category_id: row.category_id ?? null,

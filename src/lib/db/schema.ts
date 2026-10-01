@@ -373,6 +373,36 @@ export class RecordDB extends Dexie {
           }
         }
       });
+    // v12: part of a monthly expense can be 扣住 instead of spending.
+    this.version(12)
+      .stores({
+        books:
+          "id, user_id, currency, updated_at, sync_status, deleted_at, sort_order",
+        accounts:
+          "id, book_id, user_id, updated_at, sync_status, deleted_at, sort_order",
+        categories:
+          "id, book_id, user_id, kind, updated_at, sync_status, deleted_at, sort_order, [book_id+kind]",
+        transactions:
+          "id, book_id, user_id, date, account_id, category_id, updated_at, sync_status, deleted_at, type, [book_id+date]",
+        budgets:
+          "id, book_id, user_id, year, month, category_id, updated_at, sync_status, deleted_at, [book_id+year+month]",
+        templates:
+          "id, book_id, user_id, updated_at, sync_status, deleted_at, sort_order, [book_id+sort_order]",
+        holdings:
+          "id, book_id, user_id, kind, updated_at, sync_status, deleted_at, sort_order, [book_id+kind]",
+        recurring_rules:
+          "id, book_id, user_id, updated_at, sync_status, deleted_at, sort_order, [book_id+sort_order]",
+        sync_state: "id",
+      })
+      .upgrade(async (tx) => {
+        const table = tx.table("recurring_rules");
+        const rows = await table.toArray();
+        for (const row of rows) {
+          if (row.held_amount === undefined) {
+            await table.update(row.id, { held_amount: null });
+          }
+        }
+      });
   }
 }
 

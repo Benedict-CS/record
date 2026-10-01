@@ -100,6 +100,12 @@ export interface RecurringRule extends SyncMeta {
    * amount. Null means the charge is not reimbursable.
    */
   reimbursable_amount: number | null;
+  /**
+   * Expense rules only. This much of `amount` is posted as 扣住 (not an
+   * expense) each month. Null means the whole amount is an expense.
+   * Equal to `amount` means the whole charge is held, the way rent can be.
+   */
+  held_amount: number | null;
   /** Latest YYYY-MM already posted, or null. */
   last_posted: string | null;
   last_error: string | null;

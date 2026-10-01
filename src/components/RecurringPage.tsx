@@ -72,6 +72,8 @@ export function RecurringPage({
   const [endMonth, setEndMonth] = useState("");
   const [reimbursableOn, setReimbursableOn] = useState(false);
   const [reimbursableAmount, setReimbursableAmount] = useState("");
+  const [holdOn, setHoldOn] = useState(false);
+  const [holdAmount, setHoldAmount] = useState("");
   const [accountId, setAccountId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [holdingId, setHoldingId] = useState("");
@@ -80,7 +82,14 @@ export function RecurringPage({
   const [saving, setSaving] = useState(false);
 
   const account = accounts.find((row) => row.id === (accountId || accounts[0]?.id));
-  const bankExpense = kind === "expense" && account?.type === "bank";
+  const parsedHold = holdOn ? Number(holdAmount || amount) : NaN;
+  const wholeHeld =
+    kind === "expense" &&
+    holdOn &&
+    Number(amount) > 0 &&
+    Number.isFinite(parsedHold) &&
+    parsedHold >= Number(amount);
+  const bankExpense = kind === "expense" && account?.type === "bank" && !wholeHeld;
   const sources = holdings.filter((row) => isSpendableBankHolding(row.kind));
   const targets = holdings.filter((row) => row.kind === "fund" || row.kind === "stock");
 
@@ -113,15 +122,32 @@ export function RecurringPage({
         return;
       }
     }
+    let held: number | null = null;
+    if (kind === "expense" && holdOn) {
+      held = Number(holdAmount || amount);
+      if (!Number.isFinite(held) || held <= 0) {
+        setError("扣住金額需大於 0");
+        return;
+      }
+      if (held > parsed) {
+        setError("扣住金額不能大於扣款金額");
+        return;
+      }
+    }
+    const spent = parsed - (held ?? 0);
     let reimbursable: number | null = null;
     if (kind === "expense" && reimbursableOn) {
+      if (spent <= 0) {
+        setError("整筆都扣住時，不能再填可核銷");
+        return;
+      }
       reimbursable = Number(reimbursableAmount || amount);
       if (!Number.isFinite(reimbursable) || reimbursable <= 0) {
         setError("可核銷金額需大於 0");
         return;
       }
-      if (reimbursable > parsed) {
-        setError("可核銷金額不能大於扣款金額");
+      if (reimbursable > spent) {
+        setError("可核銷金額不能大於扣掉扣住之後的支出");
         return;
       }
     }
@@ -158,6 +184,7 @@ export function RecurringPage({
         startMonth,
         endMonth: endMonth || null,
         reimbursableAmount: reimbursable,
+        heldAmount: held,
         accountId: chosenAccount,
         categoryId: kind === "expense" ? categoryId || categories[0]?.id || null : null,
         holdingId: kind === "invest" || bankExpense ? sourceId || null : null,
@@ -180,6 +207,8 @@ export function RecurringPage({
       setEndMonth("");
       setReimbursableOn(false);
       setReimbursableAmount("");
+      setHoldOn(false);
+      setHoldAmount("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "無法建立");
     } finally {
@@ -204,8 +233,8 @@ export function RecurringPage({
       <div className="space-y-4">
         <p className="text-sm leading-relaxed text-[var(--muted)]">
           {embedded
-            ? "填了結束月份，開始到結束的每一期會立刻入帳，含還沒到期的月份。固定支出可以標可核銷。定期定額不算支出。"
-            : "沒填結束月份時，到了每月那天會自動入帳，沒打開 App 的月份最多補 12 個月。填了結束月份，開始到結束的每一期會立刻入帳，最多 24 個月，銀行餘額會先扣掉。固定支出可以標可核銷。定期定額是把活存換成股票或基金，不算支出。"}
+            ? "填了結束月份，開始到結束的每一期會立刻入帳。固定支出可以標可核銷，或把其中一段扣住（不算支出）。定期定額不算支出。"
+            : "沒填結束月份時，到了每月那天會自動入帳，沒打開 App 的月份最多補 12 個月。填了結束月份，開始到結束的每一期會立刻入帳，最多 24 個月。固定支出可以標可核銷，或把房租那樣整筆扣住。定期定額是把活存換成股票或基金，不算支出。"}
         </p>
 
         <form
@@ -318,6 +347,36 @@ export function RecurringPage({
                   ))}
                 </select>
               </label>
+              <label className="flex min-h-11 items-center gap-2 text-sm text-[var(--ink)]">
+                <input
+                  type="checkbox"
+                  checked={holdOn}
+                  onChange={(event) => {
+                    const on = event.target.checked;
+                    setHoldOn(on);
+                    if (on && !holdAmount) setHoldAmount(amount);
+                  }}
+                  className="h-4 w-4"
+                />
+                扣住
+              </label>
+              {holdOn ? (
+                <label className="block">
+                  <span className="mb-1 block text-xs text-[var(--muted)]">
+                    扣住金額
+                  </span>
+                  <input
+                    inputMode="decimal"
+                    value={holdAmount}
+                    onChange={(event) => setHoldAmount(event.target.value)}
+                    placeholder={amount || "0"}
+                    className="min-h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 text-sm outline-none focus:border-[var(--accent)]"
+                  />
+                  <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">
+                    這一段不算支出，帳戶還是會扣，之後可以退回。房租整筆先扣住，就填跟金額一樣。
+                  </p>
+                </label>
+              ) : null}
               <label className="flex min-h-11 items-center gap-2 text-sm text-[var(--ink)]">
                 <input
                   type="checkbox"
@@ -435,6 +494,11 @@ export function RecurringPage({
                       {rule.kind === "invest" ? "定期定額" : "固定支出"}
                       {" · 每月 "}
                       {rule.day_of_month} 號 · {formatMoney(rule.amount, currency)}
+                      {rule.held_amount
+                        ? rule.held_amount >= rule.amount
+                          ? " · 整筆扣住"
+                          : ` · 扣住 ${formatMoney(rule.held_amount, currency)}`
+                        : ""}
                       {rule.reimbursable_amount
                         ? ` · 可核銷 ${formatMoney(rule.reimbursable_amount, currency)}`
                         : ""}
