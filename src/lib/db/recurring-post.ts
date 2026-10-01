@@ -46,6 +46,14 @@ async function postExpense(rule: RecurringRule, period: string) {
       account_id: rule.account_id,
       category_id: rule.category_id,
       holding_id: rule.holding_id,
+      reimbursable_amount:
+        rule.reimbursable_amount != null && rule.reimbursable_amount > 0
+          ? rule.reimbursable_amount
+          : null,
+      reimbursement_status:
+        rule.reimbursable_amount != null && rule.reimbursable_amount > 0
+          ? "pending"
+          : null,
     });
   }
   await markRule(rule, { last_posted: period, last_error: null });
@@ -106,6 +114,7 @@ export async function postDueRecurring(
   for (const rule of rules) {
     const periods = periodsDue({
       startMonth: rule.start_month,
+      endMonth: rule.end_month,
       dayOfMonth: rule.day_of_month,
       lastPosted: rule.last_posted,
       today,
@@ -140,6 +149,8 @@ export async function createRecurringRule(
     amount: number;
     dayOfMonth: number;
     startMonth: string;
+    endMonth: string | null;
+    reimbursableAmount: number | null;
     accountId: string;
     categoryId: string | null;
     holdingId: string | null;
@@ -160,6 +171,13 @@ export async function createRecurringRule(
     amount: input.amount,
     day_of_month: input.dayOfMonth,
     start_month: input.startMonth,
+    end_month: input.endMonth,
+    reimbursable_amount:
+      input.kind === "expense" &&
+      input.reimbursableAmount != null &&
+      input.reimbursableAmount > 0
+        ? input.reimbursableAmount
+        : null,
     last_posted: null,
     last_error: null,
     account_id: input.accountId,

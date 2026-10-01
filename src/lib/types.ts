@@ -89,6 +89,17 @@ export interface RecurringRule extends SyncMeta {
   day_of_month: number;
   /** First month that may post, YYYY-MM. Earlier months are never backfilled. */
   start_month: string;
+  /**
+   * Last month that may post, YYYY-MM. Null means open-ended: post when each
+   * due day arrives. A value posts every month in the span as soon as the
+   * rule is saved.
+   */
+  end_month: string | null;
+  /**
+   * Expense rules only. Each posted month is pending reimbursement for this
+   * amount. Null means the charge is not reimbursable.
+   */
+  reimbursable_amount: number | null;
   /** Latest YYYY-MM already posted, or null. */
   last_posted: string | null;
   last_error: string | null;

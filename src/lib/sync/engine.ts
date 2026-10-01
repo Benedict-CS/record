@@ -561,28 +561,49 @@ function isMissingRelation(error: unknown) {
 async function mergeRemoteRecurring(remoteRows: CloudRecurringRule[]) {
   if (!remoteRows.length) return;
   const locals = await db.recurring_rules.bulkGet(remoteRows.map((row) => row.id));
-  const toPut: CloudRecurringRule[] = [];
+  const toPut: Array<CloudRecurringRule & { sync_status: "pending" | "synced" }> = [];
   for (let i = 0; i < remoteRows.length; i += 1) {
     const remote = remoteRows[i];
     const local = locals[i];
     if (local?.sync_status === "pending") continue;
     if (!local || remote.updated_at >= local.updated_at) {
+      const remoteRecord = remote as unknown as Record<string, unknown>;
+      const hasEnd = Object.prototype.hasOwnProperty.call(remoteRecord, "end_month");
+      const hasReimbursable = Object.prototype.hasOwnProperty.call(
+        remoteRecord,
+        "reimbursable_amount",
+      );
+      const endMonth = hasEnd
+        ? typeof remoteRecord.end_month === "string" && remoteRecord.end_month
+          ? remoteRecord.end_month
+          : null
+        : (local?.end_month ?? null);
+      const remoteReimbursable = Number(remoteRecord.reimbursable_amount);
+      const reimbursableAmount = hasReimbursable
+        ? Number.isFinite(remoteReimbursable) && remoteReimbursable > 0
+          ? remoteReimbursable
+          : null
+        : (local?.reimbursable_amount ?? null);
+      const needsUpload =
+        (!hasEnd && Boolean(local?.end_month)) ||
+        (!hasReimbursable && (local?.reimbursable_amount ?? 0) > 0);
       toPut.push({
         ...remote,
         amount: Number(remote.amount),
         day_of_month: Number(remote.day_of_month),
+        end_month: endMonth,
+        reimbursable_amount: reimbursableAmount,
         last_posted: remote.last_posted ?? null,
         last_error: remote.last_error ?? null,
         category_id: remote.category_id ?? null,
         holding_id: remote.holding_id ?? null,
         target_holding_id: remote.target_holding_id ?? null,
+        sync_status: needsUpload ? "pending" : "synced",
       });
     }
   }
   if (toPut.length) {
-    await db.recurring_rules.bulkPut(
-      toPut.map((row) => ({ ...row, sync_status: "synced" as const })),
-    );
+    await db.recurring_rules.bulkPut(toPut);
   }
 }
 
@@ -898,6 +919,9 @@ async function pushPending(userId: string) {
       ...stripSyncStatus(row),
       amount: Number(row.amount),
       day_of_month: Number(row.day_of_month),
+      end_month: row.end_month ?? null,
+      reimbursable_amount:
+        row.reimbursable_amount == null ? null : Number(row.reimbursable_amount),
       last_posted: row.last_posted ?? null,
       last_error: row.last_error ?? null,
       category_id: row.category_id ?? null,

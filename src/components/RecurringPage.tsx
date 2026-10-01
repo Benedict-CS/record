@@ -13,6 +13,7 @@ import {
   softDeleteRecurringRule,
 } from "@/lib/db/recurring-post";
 import { formatMoney } from "@/lib/format";
+import { MAX_SCHEDULED_MONTHS, scheduledMonthCount } from "@/lib/recurring";
 import { isSpendableBankHolding } from "@/lib/holding-spend";
 import {
   useAccounts,
@@ -68,6 +69,9 @@ export function RecurringPage({
     ),
   );
   const [startMonth, setStartMonth] = useState(defaultMonth);
+  const [endMonth, setEndMonth] = useState("");
+  const [reimbursableOn, setReimbursableOn] = useState(false);
+  const [reimbursableAmount, setReimbursableAmount] = useState("");
   const [accountId, setAccountId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [holdingId, setHoldingId] = useState("");
@@ -98,6 +102,29 @@ export function RecurringPage({
       setError("扣款日要在 1 到 31 之間");
       return;
     }
+    if (endMonth) {
+      const span = scheduledMonthCount(startMonth, endMonth);
+      if (span == null || span < 1) {
+        setError("結束月份不能早於開始月份");
+        return;
+      }
+      if (span > MAX_SCHEDULED_MONTHS) {
+        setError(`一次最多先記 ${MAX_SCHEDULED_MONTHS} 個月`);
+        return;
+      }
+    }
+    let reimbursable: number | null = null;
+    if (kind === "expense" && reimbursableOn) {
+      reimbursable = Number(reimbursableAmount || amount);
+      if (!Number.isFinite(reimbursable) || reimbursable <= 0) {
+        setError("可核銷金額需大於 0");
+        return;
+      }
+      if (reimbursable > parsed) {
+        setError("可核銷金額不能大於扣款金額");
+        return;
+      }
+    }
     const chosenAccount = accountId || accounts[0]?.id;
     if (!chosenAccount) {
       setError("請先建立帳戶");
@@ -123,24 +150,36 @@ export function RecurringPage({
     }
     setSaving(true);
     try {
-      await createRecurringRule(bookId, {
+      const created = await createRecurringRule(bookId, {
         name: name.trim(),
         kind,
         amount: parsed,
         dayOfMonth,
         startMonth,
+        endMonth: endMonth || null,
+        reimbursableAmount: reimbursable,
         accountId: chosenAccount,
         categoryId: kind === "expense" ? categoryId || categories[0]?.id || null : null,
         holdingId: kind === "invest" || bankExpense ? sourceId || null : null,
         targetHoldingId: kind === "invest" ? targetId : null,
       });
       const posted = await postDueRecurring(bookId);
+      const saved = (await listRecurringRules(bookId)).find((row) => row.id === created.id);
       void runSync();
-      show(posted > 0 ? "已設定，這期已入帳" : "已設定，到了扣款日會自動入帳", {
-        variant: "success",
-      });
+      if (saved?.last_error) {
+        show(saved.last_error, { variant: "error" });
+      } else if (posted > 0 && endMonth) {
+        show(`已設定，${posted} 期已入帳`, { variant: "success" });
+      } else {
+        show(posted > 0 ? "已設定，這期已入帳" : "已設定，到了扣款日會自動入帳", {
+          variant: "success",
+        });
+      }
       setName("");
       setAmount("");
+      setEndMonth("");
+      setReimbursableOn(false);
+      setReimbursableAmount("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "無法建立");
     } finally {
@@ -165,8 +204,8 @@ export function RecurringPage({
       <div className="space-y-4">
         <p className="text-sm leading-relaxed text-[var(--muted)]">
           {embedded
-            ? "固定支出算進支出一次。定期定額是把活存換成股票或基金，不算支出。"
-            : "設一次即可。到了每月那天會自動入帳；沒打開 App 的月份會補上，從開始月份算起，最多補 12 個月。固定支出算進支出一次。定期定額是把活存換成股票或基金，不算支出。"}
+            ? "填了結束月份，開始到結束的每一期會立刻入帳，含還沒到期的月份。固定支出可以標可核銷。定期定額不算支出。"
+            : "沒填結束月份時，到了每月那天會自動入帳，沒打開 App 的月份最多補 12 個月。填了結束月份，開始到結束的每一期會立刻入帳，最多 24 個月，銀行餘額會先扣掉。固定支出可以標可核銷。定期定額是把活存換成股票或基金，不算支出。"}
         </p>
 
         <form
@@ -225,15 +264,29 @@ export function RecurringPage({
               />
             </label>
           </div>
-          <label className="block">
-            <span className="mb-1 block text-xs text-[var(--muted)]">從哪個月開始</span>
-            <input
-              type="month"
-              value={startMonth}
-              onChange={(event) => setStartMonth(event.target.value)}
-              className="min-h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 text-sm outline-none focus:border-[var(--accent)]"
-            />
-          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="mb-1 block text-xs text-[var(--muted)]">開始月份</span>
+              <input
+                type="month"
+                value={startMonth}
+                onChange={(event) => setStartMonth(event.target.value)}
+                className="min-h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 text-sm outline-none focus:border-[var(--accent)]"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs text-[var(--muted)]">結束月份</span>
+              <input
+                type="month"
+                value={endMonth}
+                onChange={(event) => setEndMonth(event.target.value)}
+                className="min-h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 text-sm outline-none focus:border-[var(--accent)]"
+              />
+            </label>
+          </div>
+          <p className="text-xs leading-relaxed text-[var(--muted)]">
+            結束月份可留空。有填的話，這段每一期會先記上一筆。
+          </p>
 
           {kind === "expense" ? (
             <>
@@ -265,6 +318,36 @@ export function RecurringPage({
                   ))}
                 </select>
               </label>
+              <label className="flex min-h-11 items-center gap-2 text-sm text-[var(--ink)]">
+                <input
+                  type="checkbox"
+                  checked={reimbursableOn}
+                  onChange={(event) => {
+                    const on = event.target.checked;
+                    setReimbursableOn(on);
+                    if (on && !reimbursableAmount) setReimbursableAmount(amount);
+                  }}
+                  className="h-4 w-4"
+                />
+                可核銷
+              </label>
+              {reimbursableOn ? (
+                <label className="block">
+                  <span className="mb-1 block text-xs text-[var(--muted)]">
+                    每期可核銷金額
+                  </span>
+                  <input
+                    inputMode="decimal"
+                    value={reimbursableAmount}
+                    onChange={(event) => setReimbursableAmount(event.target.value)}
+                    placeholder={amount || "0"}
+                    className="min-h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 text-sm outline-none focus:border-[var(--accent)]"
+                  />
+                  <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">
+                    每一期都會標成待核銷。補助入帳後，在那一筆按銷帳。
+                  </p>
+                </label>
+              ) : null}
             </>
           ) : null}
 
@@ -352,9 +435,14 @@ export function RecurringPage({
                       {rule.kind === "invest" ? "定期定額" : "固定支出"}
                       {" · 每月 "}
                       {rule.day_of_month} 號 · {formatMoney(rule.amount, currency)}
+                      {rule.reimbursable_amount
+                        ? ` · 可核銷 ${formatMoney(rule.reimbursable_amount, currency)}`
+                        : ""}
                     </p>
                     <p className="mt-1 text-xs text-[var(--muted)]">
-                      {rule.last_posted ? `已入帳至 ${rule.last_posted}` : "尚未入帳"}
+                      {rule.start_month} 開始
+                      {rule.end_month ? `，${rule.end_month} 結束` : "，沒有結束"}
+                      {rule.last_posted ? ` · 已入帳至 ${rule.last_posted}` : " · 尚未入帳"}
                     </p>
                     {rule.last_error ? (
                       <p className="mt-1 text-xs text-rose-700">{rule.last_error}</p>

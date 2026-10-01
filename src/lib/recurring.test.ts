@@ -47,6 +47,59 @@ const future = periodsDue({
 });
 assert(future.length === 0, "a future start month posts nothing yet");
 
+const spanned = periodsDue({
+  startMonth: "2026-10",
+  endMonth: "2026-12",
+  dayOfMonth: 15,
+  lastPosted: null,
+  today: "2026-10-01",
+});
+assert(
+  spanned.join(",") === "2026-10,2026-11,2026-12",
+  "an end month posts the whole span before the due day",
+);
+
+const stopped = periodsDue({
+  startMonth: "2026-01",
+  endMonth: "2026-03",
+  dayOfMonth: 1,
+  lastPosted: null,
+  today: "2026-10-20",
+});
+assert(
+  stopped.join(",") === "2026-01,2026-02,2026-03",
+  "posting stops at the end month",
+);
+
+const resumed = periodsDue({
+  startMonth: "2026-01",
+  endMonth: "2026-03",
+  dayOfMonth: 1,
+  lastPosted: "2026-01",
+  today: "2026-10-20",
+});
+assert(resumed.join(",") === "2026-02,2026-03", "posted months are not repeated");
+
+assert(
+  periodsDue({
+    startMonth: "2026-06",
+    endMonth: "2026-05",
+    dayOfMonth: 1,
+    lastPosted: null,
+    today: "2026-10-01",
+  }).length === 0,
+  "an end month before the start posts nothing",
+);
+
+const longSpan = periodsDue({
+  startMonth: "2024-01",
+  endMonth: "2026-12",
+  dayOfMonth: 1,
+  lastPosted: null,
+  today: "2026-10-01",
+});
+assert(longSpan.length === 24, "a long span posts at most 24 months at once");
+
 const idA = recurringTransactionId("rule-1", "2026-10");
 const idB = recurringTransactionId("rule-1", "2026-10");
 const idC = recurringTransactionId("rule-1", "2026-11");

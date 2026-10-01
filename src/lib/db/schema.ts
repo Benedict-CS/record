@@ -340,6 +340,39 @@ export class RecordDB extends Dexie {
           }
         }
       });
+    // v11: recurring rules can end, and an expense rule can be reimbursable.
+    this.version(11)
+      .stores({
+        books:
+          "id, user_id, currency, updated_at, sync_status, deleted_at, sort_order",
+        accounts:
+          "id, book_id, user_id, updated_at, sync_status, deleted_at, sort_order",
+        categories:
+          "id, book_id, user_id, kind, updated_at, sync_status, deleted_at, sort_order, [book_id+kind]",
+        transactions:
+          "id, book_id, user_id, date, account_id, category_id, updated_at, sync_status, deleted_at, type, [book_id+date]",
+        budgets:
+          "id, book_id, user_id, year, month, category_id, updated_at, sync_status, deleted_at, [book_id+year+month]",
+        templates:
+          "id, book_id, user_id, updated_at, sync_status, deleted_at, sort_order, [book_id+sort_order]",
+        holdings:
+          "id, book_id, user_id, kind, updated_at, sync_status, deleted_at, sort_order, [book_id+kind]",
+        recurring_rules:
+          "id, book_id, user_id, updated_at, sync_status, deleted_at, sort_order, [book_id+sort_order]",
+        sync_state: "id",
+      })
+      .upgrade(async (tx) => {
+        const table = tx.table("recurring_rules");
+        const rows = await table.toArray();
+        for (const row of rows) {
+          const patch: Record<string, unknown> = {};
+          if (row.end_month === undefined) patch.end_month = null;
+          if (row.reimbursable_amount === undefined) patch.reimbursable_amount = null;
+          if (Object.keys(patch).length > 0) {
+            await table.update(row.id, patch);
+          }
+        }
+      });
   }
 }
 
