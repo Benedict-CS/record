@@ -6,7 +6,11 @@ import {
   writeActiveBookId,
 } from "@/lib/db/owner";
 import { db } from "@/lib/db/schema";
-import { missingColumnName, withoutColumn } from "@/lib/sync/schema-compat";
+import {
+  missingColumnName,
+  preserveUnsyncedField,
+  withoutColumn,
+} from "@/lib/sync/schema-compat";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import type {
   CloudAccount,
@@ -444,7 +448,7 @@ async function mergeRemoteTransactions(remoteRows: CloudTransaction[]) {
   const locals = await db.transactions.bulkGet(
     remoteRows.map((row) => row.id),
   );
-  const toPut: CloudTransaction[] = [];
+  const toPut: Array<CloudTransaction & { sync_status: SyncStatus }> = [];
   for (let i = 0; i < remoteRows.length; i += 1) {
     const remote = remoteRows[i];
     const local = locals[i];
@@ -459,7 +463,31 @@ async function mergeRemoteTransactions(remoteRows: CloudTransaction[]) {
       remote,
       "target_holding_id",
     );
-    const normalised: CloudTransaction = {
+    const fieldTimes = {
+      remoteUpdatedAt: remote.updated_at,
+      localUpdatedAt: local?.updated_at,
+    };
+    const holding = preserveUnsyncedField({
+      remoteHasKey: remoteHasHolding,
+      remoteValue: remote.holding_id,
+      localValue: local?.holding_id,
+      ...fieldTimes,
+    });
+    const tag = preserveUnsyncedField({
+      remoteHasKey: remoteHasTag,
+      remoteValue: remote.tag,
+      localValue: local?.tag,
+      ...fieldTimes,
+    });
+    const target = preserveUnsyncedField({
+      remoteHasKey: remoteHasTarget,
+      remoteValue: remote.target_holding_id,
+      localValue: local?.target_holding_id,
+      ...fieldTimes,
+    });
+    const needsUpload =
+      holding.needsUpload || tag.needsUpload || target.needsUpload;
+    const normalised: CloudTransaction & { sync_status: SyncStatus } = {
       ...remote,
       amount: Number(remote.amount),
       hold_status: (remote.hold_status ??
@@ -471,22 +499,17 @@ async function mergeRemoteTransactions(remoteRows: CloudTransaction[]) {
           : Number(remote.reimbursable_amount),
       reimbursement_status: (remote.reimbursement_status ??
         null) as CloudTransaction["reimbursement_status"],
-      holding_id: remoteHasHolding
-        ? (remote.holding_id ?? null)
-        : (local?.holding_id ?? null),
-      tag: remoteHasTag ? (remote.tag ?? null) : (local?.tag ?? null),
-      target_holding_id: remoteHasTarget
-        ? (remote.target_holding_id ?? null)
-        : (local?.target_holding_id ?? null),
+      holding_id: holding.value,
+      tag: tag.value,
+      target_holding_id: target.value,
+      sync_status: needsUpload ? "pending" : "synced",
     };
     if (!local || remote.updated_at >= local.updated_at) {
       toPut.push(normalised);
     }
   }
   if (toPut.length) {
-    await db.transactions.bulkPut(
-      toPut.map((row) => ({ ...row, sync_status: "synced" as const })),
-    );
+    await db.transactions.bulkPut(toPut);
   }
 }
 
