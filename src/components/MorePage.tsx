@@ -10,12 +10,18 @@ import { useBook } from "@/components/BookProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { ExportCsvButton } from "@/components/ExportCsvButton";
 import { useToast } from "@/components/ToastProvider";
+import { useOpenItems } from "@/lib/hooks/useLedgerData";
 
 const LINKS: {
   href: string;
   title: string;
   description: string;
 }[] = [
+  {
+    href: "/pending",
+    title: "待處理",
+    description: "還沒銷帳的核銷，和還沒退回的扣住",
+  },
   {
     href: "/search",
     title: "搜尋",
@@ -68,6 +74,7 @@ export function MorePage() {
   const confirm = useConfirm();
   const { show } = useToast();
   const { book } = useBook();
+  const openCount = useOpenItems().length;
   const now = useMemo(() => new Date(), []);
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
@@ -140,6 +147,11 @@ export function MorePage() {
                       {item.href === "/login" && user ? (
                         <span className="ml-2 text-xs font-normal text-[var(--accent)]">
                           已登入
+                        </span>
+                      ) : null}
+                      {item.href === "/pending" && openCount > 0 ? (
+                        <span className="ml-2 text-xs font-normal tabular-nums text-[var(--accent)]">
+                          {openCount}
                         </span>
                       ) : null}
                       {item.href === "/books" && book ? (

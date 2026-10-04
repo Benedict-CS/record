@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { BackupNudge } from "@/components/BackupNudge";
 import { BottomSheet } from "@/components/BottomSheet";
-import { PendingList } from "@/components/PendingList";
+import { PendingHomeLink } from "@/components/PendingList";
 import { useBook } from "@/components/BookProvider";
 import { MonthSummary } from "@/components/MonthSummary";
 import { QuickTemplateBar } from "@/components/QuickTemplateBar";
@@ -154,7 +154,7 @@ export function HomePage() {
             onGoCurrent={!isCurrentMonth ? goToCurrentMonth : undefined}
           />
           <BackupNudge />
-          <PendingList />
+          <PendingHomeLink />
           <QuickTemplateBar />
           <section className="space-y-2">
             <div className="flex items-center justify-between gap-2">

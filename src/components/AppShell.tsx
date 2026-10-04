@@ -27,6 +27,8 @@ const MORE_PREFIXES = [
   "/books",
   "/templates",
   "/search",
+  "/pending",
+  "/recurring",
 ];
 
 function isActive(pathname: string, item: (typeof NAV)[number]) {

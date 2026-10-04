@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { AppShell } from "@/components/AppShell";
 import { useBook } from "@/components/BookProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useToast } from "@/components/ToastProvider";
@@ -11,25 +12,39 @@ import { isReimbursementPending } from "@/lib/reimbursement";
 import { runSync } from "@/lib/sync/engine";
 import type { Transaction } from "@/lib/types";
 
-const PREVIEW = 6;
-
 /**
- * Open 待核銷 and unreleased 扣住 across every month, with the same
- * 銷帳 and 退回 actions as the day list.
+ * One row on home. The full 銷帳 / 退回 list lives on /pending.
  */
-export function PendingList() {
+export function PendingHomeLink() {
+  const items = useOpenItems();
+  if (items.length === 0) return null;
+
+  return (
+    <Link
+      href="/pending"
+      className="flex min-h-14 items-center justify-between gap-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5"
+    >
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-[var(--ink)]">待處理</p>
+        <p className="mt-0.5 text-xs text-[var(--muted)]">還沒銷帳或退回</p>
+      </div>
+      <span className="flex shrink-0 items-center gap-1 text-sm font-medium tabular-nums text-[var(--ink)]">
+        {items.length}
+        <span className="text-[var(--muted)]" aria-hidden>
+          ›
+        </span>
+      </span>
+    </Link>
+  );
+}
+
+function OpenItemList() {
   const { book } = useBook();
   const currency = book?.currency;
   const items = useOpenItems();
   const categories = useCategories();
   const confirm = useConfirm();
   const { show } = useToast();
-  const [expanded, setExpanded] = useState(false);
-
-  if (items.length === 0) return null;
-
-  const visible = expanded ? items : items.slice(0, PREVIEW);
-  const hidden = items.length - visible.length;
   const categoryName = new Map(categories.map((row) => [row.id, row.name]));
 
   async function onRelease(tx: Transaction) {
@@ -61,17 +76,19 @@ export function PendingList() {
     show("已銷帳", { variant: "success" });
   }
 
+  if (items.length === 0) {
+    return (
+      <p className="rounded-2xl border border-dashed border-[var(--line)] px-4 py-8 text-center text-sm text-[var(--muted)]">
+        目前沒有待銷帳或待退回。
+      </p>
+    );
+  }
+
   return (
-    <section
-      aria-label="待處理"
-      className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]"
-    >
-      <div className="flex items-baseline justify-between gap-2 px-3 py-2.5">
-        <h2 className="text-sm font-medium text-[var(--ink)]">待處理</h2>
-        <p className="text-xs text-[var(--muted)]">{items.length} 筆還沒銷帳或退回</p>
-      </div>
-      <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
-        {visible.map((tx) => {
+    <section aria-label="待處理" className="space-y-2 pb-16">
+      <p className="text-xs text-[var(--muted)]">{items.length} 筆還沒銷帳或退回</p>
+      <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">
+        {items.map((tx) => {
           const pending = isReimbursementPending(tx);
           const title = pending
             ? tx.note.trim() ||
@@ -86,11 +103,8 @@ export function PendingList() {
                 <p className="mt-0.5 text-[11px] text-[var(--muted)]">
                   {formatDayHeading(tx.date)}
                   {" · "}
-                  {pending ? "待核銷" : "暫時扣住"}
-                  {" "}
-                  <span className="tabular-nums">
-                    {formatMoney(amount, currency)}
-                  </span>
+                  {pending ? "待核銷" : "暫時扣住"}{" "}
+                  <span className="tabular-nums">{formatMoney(amount, currency)}</span>
                 </p>
               </div>
               {pending ? (
@@ -114,15 +128,14 @@ export function PendingList() {
           );
         })}
       </ul>
-      {hidden > 0 || (expanded && items.length > PREVIEW) ? (
-        <button
-          type="button"
-          onClick={() => setExpanded((value) => !value)}
-          className="min-h-11 w-full border-t border-[var(--line)] text-xs font-medium text-[var(--accent)]"
-        >
-          {expanded ? "收合" : `還有 ${hidden} 筆`}
-        </button>
-      ) : null}
     </section>
+  );
+}
+
+export function PendingPage() {
+  return (
+    <AppShell title="待處理">
+      <OpenItemList />
+    </AppShell>
   );
 }
