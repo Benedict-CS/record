@@ -279,7 +279,7 @@ export function TransactionEditor({
           <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
             {transaction.note || "這筆"}{" "}
             {formatMoney(transaction.amount, book?.currency)}{" "}
-            已從銀行換成持股，沒有算進支出。之後每個月請到固定扣款調整。
+            已從銀行換成持股，沒有算進支出。之後每個月請到每月固定調整。
           </p>
           <button
             type="button"

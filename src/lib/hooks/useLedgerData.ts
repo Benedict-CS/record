@@ -18,6 +18,7 @@ import {
   listTransactionsForYear,
   listTransactionsForAccount,
   listHoldings,
+  listOpenItems,
   outstandingHeldTotal,
   searchTransactions,
 } from "@/lib/db/crud";
@@ -78,6 +79,14 @@ export function useMonthTransactions(year: number, month: number) {
         ? listTransactionsForMonth(bookId, year, month)
         : Promise.resolve([]),
     [bookId, year, month],
+  );
+}
+
+export function useOpenItems() {
+  const { bookId } = useBook();
+  return useLiveList(
+    () => (bookId ? listOpenItems(bookId) : Promise.resolve([])),
+    [bookId],
   );
 }
 

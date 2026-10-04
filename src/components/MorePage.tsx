@@ -53,8 +53,8 @@ const LINKS: {
   },
   {
     href: "/recurring",
-    title: "固定扣款",
-    description: "房貸、房租、訂閱，以及 0050 這類定期定額",
+    title: "每月固定",
+    description: "薪水、房貸、房租、訂閱，以及 0050 這類定期定額",
   },
   {
     href: "/login",

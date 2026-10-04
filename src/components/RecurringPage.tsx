@@ -50,7 +50,8 @@ export function RecurringPage({
 } = {}) {
   const { book, bookId } = useBook();
   const accounts = useAccounts();
-  const categories = useCategories("expense");
+  const expenseCategories = useCategories("expense");
+  const incomeCategories = useCategories("income");
   const holdings = useHoldings();
   const rules = useRules(bookId);
   const confirm = useConfirm();
@@ -93,7 +94,10 @@ export function RecurringPage({
     Number(amount) > 0 &&
     Number.isFinite(parsedHold) &&
     parsedHold >= Number(amount);
-  const bankExpense = kind === "expense" && account?.type === "bank" && !wholeHeld;
+  const bankLinked =
+    account?.type === "bank" &&
+    (kind === "income" || (kind === "expense" && !wholeHeld));
+  const categories = kind === "income" ? incomeCategories : expenseCategories;
   const sources = holdings.filter((row) => isSpendableBankHolding(row.kind));
   const targets = holdings.filter((row) => row.kind === "fund" || row.kind === "stock");
 
@@ -164,12 +168,22 @@ export function RecurringPage({
       setError("請先建立帳戶");
       return;
     }
-    if (kind === "expense" && categories.length === 0) {
+    if (kind === "expense" && expenseCategories.length === 0) {
       setError("請先建立支出分類");
       return;
     }
-    if ((kind === "invest" || (kind === "expense" && bankExpense)) && !holdingId && sources.length !== 1) {
-      setError(sources.length === 0 ? "請先到存款新增活存或定存" : "請選擇扣款銀行");
+    if (kind === "income" && incomeCategories.length === 0) {
+      setError("請先建立收入分類");
+      return;
+    }
+    if ((kind === "invest" || bankLinked) && !holdingId && sources.length !== 1) {
+      setError(
+        sources.length === 0
+          ? "請先到存款新增活存或定存"
+          : kind === "income"
+            ? "請選擇入帳銀行"
+            : "請選擇扣款銀行",
+      );
       return;
     }
     const sourceId =
@@ -195,8 +209,11 @@ export function RecurringPage({
         heldAmount: held,
         heldName: holdOn ? holdName.trim() : null,
         accountId: chosenAccount,
-        categoryId: kind === "expense" ? categoryId || categories[0]?.id || null : null,
-        holdingId: kind === "invest" || bankExpense ? sourceId || null : null,
+        categoryId:
+          kind === "expense" || kind === "income"
+            ? categoryId || categories[0]?.id || null
+            : null,
+        holdingId: kind === "invest" || bankLinked ? sourceId || null : null,
         targetHoldingId: kind === "invest" ? targetId : null,
       };
       const created = editingId
@@ -278,8 +295,8 @@ export function RecurringPage({
       <div className="space-y-4">
         <p className="text-sm leading-relaxed text-[var(--muted)]">
           {embedded
-            ? "填了結束月份，開始到結束的每一期會立刻入帳。固定支出可以標可核銷，或把其中一段扣住（不算支出）。定期定額不算支出。"
-            : "沒填結束月份時，到了每月那天會自動入帳，沒打開 App 的月份最多補 12 個月。填了結束月份，開始到結束的每一期會立刻入帳，最多 24 個月。固定支出可以標可核銷，或把房租那樣整筆扣住。定期定額是把活存換成股票或基金，不算支出。"}
+            ? "薪水、房租、訂閱都從這裡設。填了結束月份，開始到結束的每一期會立刻入帳。支出可以標可核銷，或把其中一段扣住。"
+            : "薪水、房貸、房租、訂閱，或 0050 這類定期定額。沒填結束月份時，到了每月那天會自動入帳，沒打開 App 的月份最多補 12 個月。填了結束月份，開始到結束的每一期會立刻入帳，最多 24 個月。"}
         </p>
 
         <form
@@ -289,7 +306,7 @@ export function RecurringPage({
         >
           {editingId ? (
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-medium text-[var(--ink)]">修改這筆固定扣款</p>
+              <p className="text-sm font-medium text-[var(--ink)]">修改這筆每月固定</p>
               <button
                 type="button"
                 onClick={clearForm}
@@ -299,19 +316,23 @@ export function RecurringPage({
               </button>
             </div>
           ) : null}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {(
               [
                 ["expense", "固定支出"],
+                ["income", "固定收入"],
                 ["invest", "定期定額"],
               ] as const
             ).map(([value, label]) => (
               <button
                 key={value}
                 type="button"
-                onClick={() => setKind(value)}
+                onClick={() => {
+                  setKind(value);
+                  setCategoryId("");
+                }}
                 className={[
-                  "min-h-11 rounded-xl text-sm font-medium",
+                  "min-h-11 rounded-xl px-1 text-xs font-medium sm:text-sm",
                   kind === value
                     ? "bg-[var(--ink)] text-[var(--paper)]"
                     : "bg-[var(--paper)] text-[var(--muted)]",
@@ -326,7 +347,13 @@ export function RecurringPage({
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder={kind === "invest" ? "例如 0050" : "例如 房貸、房租、電話費"}
+              placeholder={
+                kind === "invest"
+                  ? "例如 0050"
+                  : kind === "income"
+                    ? "例如 薪水"
+                    : "例如 房貸、房租、電話費"
+              }
               className="min-h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 text-sm outline-none focus:border-[var(--accent)]"
             />
           </label>
@@ -375,7 +402,7 @@ export function RecurringPage({
             結束月份可留空。有填的話，這段每一期會先記上一筆。
           </p>
 
-          {kind === "expense" ? (
+          {kind === "expense" || kind === "income" ? (
             <>
               <label className="block">
                 <span className="mb-1 block text-xs text-[var(--muted)]">分類</span>
@@ -405,6 +432,8 @@ export function RecurringPage({
                   ))}
                 </select>
               </label>
+              {kind === "expense" ? (
+              <>
               <label className="flex min-h-11 items-center gap-2 text-sm text-[var(--ink)]">
                 <input
                   type="checkbox"
@@ -478,12 +507,16 @@ export function RecurringPage({
                   </p>
                 </label>
               ) : null}
+              </>
+              ) : null}
             </>
           ) : null}
 
-          {kind === "invest" || bankExpense ? (
+          {kind === "invest" || bankLinked ? (
             <label className="block">
-              <span className="mb-1 block text-xs text-[var(--muted)]">從哪張銀行扣</span>
+              <span className="mb-1 block text-xs text-[var(--muted)]">
+                {kind === "income" ? "入到哪張銀行" : "從哪張銀行扣"}
+              </span>
               {sources.length === 0 ? (
                 <p className="text-xs text-[var(--muted)]">
                   還沒有活存或定存。
@@ -541,14 +574,14 @@ export function RecurringPage({
             disabled={saving}
             className="min-h-12 w-full rounded-xl bg-[var(--ink)] text-sm font-medium text-[var(--paper)] disabled:opacity-60"
           >
-            {saving ? "儲存中…" : editingId ? "儲存修改" : "設定每月扣款"}
+            {saving ? "儲存中…" : editingId ? "儲存修改" : "設定每月固定"}
           </button>
         </form>
 
         <section className="space-y-2">
           {rules.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-[var(--line)] px-4 py-6 text-center text-sm text-[var(--muted)]">
-              還沒有固定扣款
+              還沒有每月固定
             </p>
           ) : (
             rules.map((rule) => (
@@ -562,7 +595,11 @@ export function RecurringPage({
                       {rule.name}
                     </p>
                     <p className="mt-1 text-xs text-[var(--muted)]">
-                      {rule.kind === "invest" ? "定期定額" : "固定支出"}
+                      {rule.kind === "invest"
+                        ? "定期定額"
+                        : rule.kind === "income"
+                          ? "固定收入"
+                          : "固定支出"}
                       {" · 每月 "}
                       {rule.day_of_month} 號 · {formatMoney(rule.amount, currency)}
                       {rule.held_amount
@@ -608,5 +645,5 @@ export function RecurringPage({
   );
 
   if (embedded) return body;
-  return <AppShell title="固定扣款">{body}</AppShell>;
+  return <AppShell title="每月固定">{body}</AppShell>;
 }

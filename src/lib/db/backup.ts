@@ -7,12 +7,13 @@ import type {
   CloudBudget,
   CloudCategory,
   CloudHolding,
+  CloudRecurringRule,
   CloudTemplate,
   CloudTransaction,
   SyncMeta,
 } from "@/lib/types";
 
-export const BACKUP_VERSION = 2;
+export const BACKUP_VERSION = 3;
 
 export interface RecordBackup {
   version: number;
@@ -24,6 +25,8 @@ export interface RecordBackup {
   budgets: CloudBudget[];
   templates: CloudTemplate[];
   holdings: CloudHolding[];
+  /** Absent on backups exported before monthly rules existed. */
+  recurring_rules?: CloudRecurringRule[];
 }
 
 const TABLE_KEYS = [
@@ -34,6 +37,7 @@ const TABLE_KEYS = [
   "budgets",
   "templates",
   "holdings",
+  "recurring_rules",
 ] as const;
 
 type TableKey = (typeof TABLE_KEYS)[number];
@@ -49,7 +53,7 @@ function stripSyncStatus<T extends { sync_status?: unknown }>(row: T) {
  * restore; `sync_status` is dropped because it is a device-local concern.
  */
 export async function exportBackup(): Promise<string> {
-  const [books, accounts, categories, transactions, budgets, templates, holdings] =
+  const [books, accounts, categories, transactions, budgets, templates, holdings, recurringRules] =
     await Promise.all([
       db.books.toArray(),
       db.accounts.toArray(),
@@ -58,6 +62,7 @@ export async function exportBackup(): Promise<string> {
       db.budgets.toArray(),
       db.templates.toArray(),
       db.holdings.toArray(),
+      db.recurring_rules.toArray(),
     ]);
 
   const payload: RecordBackup = {
@@ -70,6 +75,7 @@ export async function exportBackup(): Promise<string> {
     budgets: budgets.map(stripSyncStatus),
     templates: templates.map(stripSyncStatus),
     holdings: holdings.map(stripSyncStatus),
+    recurring_rules: recurringRules.map(stripSyncStatus),
   };
 
   return JSON.stringify(payload);
@@ -84,6 +90,7 @@ function invalid(message: string): never {
 function parseBackup(json: string): {
   version: number;
   exported_at: string;
+  present: Set<TableKey>;
   rows: Record<TableKey, ImportRow[]>;
 } {
   let parsed: unknown;
@@ -114,8 +121,10 @@ function parseBackup(json: string): {
     budgets: [],
     templates: [],
     holdings: [],
+    recurring_rules: [],
   } as Record<TableKey, ImportRow[]>;
 
+  const present = new Set<TableKey>();
   let hasAnyTable = false;
   for (const key of TABLE_KEYS) {
     const value = record[key];
@@ -124,6 +133,7 @@ function parseBackup(json: string): {
       invalid(`${key} 必須是陣列`);
     }
     hasAnyTable = true;
+    present.add(key);
     for (const row of value) {
       if (typeof row !== "object" || row === null || Array.isArray(row)) {
         invalid(`${key} 內含非物件資料`);
@@ -149,6 +159,7 @@ function parseBackup(json: string): {
       typeof record.exported_at === "string"
         ? record.exported_at
         : new Date().toISOString(),
+    present,
     rows,
   };
 }
@@ -203,7 +214,7 @@ export async function importBackup(
     throw new Error("匯入模式只能是 merge 或 replace");
   }
 
-  const { rows } = parseBackup(json);
+  const { rows, present } = parseBackup(json);
   const clientId = getClientId();
   let imported = 0;
 
@@ -217,6 +228,7 @@ export async function importBackup(
       db.budgets,
       db.templates,
       db.holdings,
+      db.recurring_rules,
     ],
     async () => {
       if (mode === "replace") {
@@ -227,6 +239,8 @@ export async function importBackup(
         await db.budgets.clear();
         await db.templates.clear();
         await db.holdings.clear();
+        // Older files omit the table. Leave local rules in place then.
+        if (present.has("recurring_rules")) await db.recurring_rules.clear();
       }
 
       imported += await writeRows(db.books, rows.books, mode, clientId);
@@ -246,6 +260,12 @@ export async function importBackup(
       imported += await writeRows(db.budgets, rows.budgets, mode, clientId);
       imported += await writeRows(db.templates, rows.templates, mode, clientId);
       imported += await writeRows(db.holdings, rows.holdings, mode, clientId);
+      imported += await writeRows(
+        db.recurring_rules,
+        rows.recurring_rules,
+        mode,
+        clientId,
+      );
     },
   );
 

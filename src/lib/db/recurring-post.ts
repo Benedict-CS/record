@@ -71,7 +71,7 @@ async function writeGenerated(
   rule: RecurringRule,
   input: {
     id: string;
-    type: "expense" | "hold";
+    type: "expense" | "income" | "hold";
     amount: number;
     date: string;
     note: string;
@@ -85,6 +85,7 @@ async function writeGenerated(
     rule.reimbursable_amount > 0
       ? Math.min(rule.reimbursable_amount, input.amount)
       : null;
+  const movesBank = input.type === "expense" || input.type === "income";
   await createTransaction(rule.book_id, {
     id: input.id,
     type: input.type,
@@ -93,7 +94,7 @@ async function writeGenerated(
     note: input.note,
     account_id: rule.account_id,
     category_id: rule.category_id,
-    holding_id: input.type === "expense" ? rule.holding_id : null,
+    holding_id: movesBank ? rule.holding_id : null,
     hold_status: input.type === "hold" ? "held" : null,
     reimbursable_amount: reimbursable,
     reimbursement_status: reimbursable ? "pending" : null,
@@ -122,6 +123,18 @@ async function postExpense(rule: RecurringRule, period: string) {
       note: holdNote(rule),
     });
   }
+  await markRule(rule, { last_posted: period, last_error: null });
+}
+
+async function postIncome(rule: RecurringRule, period: string) {
+  const [year, month] = period.split("-").map(Number);
+  await writeGenerated(rule, {
+    id: recurringTransactionId(rule.id, period),
+    type: "income",
+    amount: rule.amount,
+    date: dueDate(year, month, rule.day_of_month),
+    note: rule.name,
+  });
   await markRule(rule, { last_posted: period, last_error: null });
 }
 
@@ -188,6 +201,7 @@ export async function postDueRecurring(
     for (const period of periods) {
       try {
         if (rule.kind === "invest") await postInvest(rule, period);
+        else if (rule.kind === "income") await postIncome(rule, period);
         else await postExpense(rule, period);
         posted += 1;
       } catch (error) {
@@ -330,6 +344,22 @@ async function alignPeriod(rule: RecurringRule, period: string) {
     return;
   }
 
+  if (rule.kind === "income") {
+    await dropGeneratedHold(holdId);
+    const posted = await db.transactions.get(mainId);
+    if (posted && !posted.deleted_at && posted.type === "invest") {
+      await dropGenerated(rule.id, period);
+    }
+    await alignCashRow(rule, {
+      id: mainId,
+      type: "income",
+      amount: rule.amount,
+      date,
+      note: rule.name,
+    });
+    return;
+  }
+
   const main = await db.transactions.get(mainId);
   if (main && !main.deleted_at && main.type === "invest") {
     await dropGenerated(rule.id, period);
@@ -424,7 +454,7 @@ async function alignCashRow(
   rule: RecurringRule,
   input: {
     id: string;
-    type: "expense" | "hold";
+    type: "expense" | "income" | "hold";
     amount: number;
     date: string;
     note: string;
@@ -472,7 +502,10 @@ async function alignCashRow(
         note: input.note,
         account_id: rule.account_id,
         category_id: rule.category_id,
-        holding_id: input.type === "expense" ? rule.holding_id : null,
+        holding_id:
+          input.type === "expense" || input.type === "income"
+            ? rule.holding_id
+            : null,
         hold_status: input.type === "hold" ? "held" : null,
         reimbursable_amount: reimbursable,
         reimbursement_status: reimbursable ? "pending" : null,
@@ -482,7 +515,10 @@ async function alignCashRow(
         client_id: getClientId(),
         sync_status: "pending",
       });
-      if (input.type === "expense" && rule.holding_id) {
+      if (
+        (input.type === "expense" || input.type === "income") &&
+        rule.holding_id
+      ) {
         await updateTransaction(input.id, {
           amount: input.amount,
           holding_id: rule.holding_id,
@@ -498,7 +534,8 @@ async function alignCashRow(
     note: input.note,
     account_id: rule.account_id,
     category_id: rule.category_id,
-    holding_id: input.type === "expense" ? rule.holding_id : null,
+    holding_id:
+      input.type === "expense" || input.type === "income" ? rule.holding_id : null,
     hold_status: input.type === "hold" ? "held" : null,
     reimbursable_amount: reimbursable,
     reimbursement_status: reimbursable ? "pending" : null,

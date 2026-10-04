@@ -83,7 +83,7 @@ export interface Transaction extends SyncMeta {
 export interface RecurringRule extends SyncMeta {
   book_id: string;
   name: string;
-  kind: "expense" | "invest";
+  kind: "expense" | "income" | "invest";
   amount: number;
   /** 1–31. Shorter months use the last day. */
   day_of_month: number;

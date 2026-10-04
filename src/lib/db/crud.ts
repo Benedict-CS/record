@@ -27,6 +27,7 @@ import {
   TREAT_TAG,
 } from "@/lib/transaction-tag";
 import { applyInvestMove, reverseInvestMove } from "@/lib/db/invest-move";
+import { isOpenItem } from "@/lib/open-items";
 import { expenseDisplayAmount } from "@/lib/reimbursement";
 import type {
   Account,
@@ -1154,6 +1155,18 @@ export async function accountBalances(
     account,
     balance: (account.opening_balance ?? 0) + (deltas.get(account.id) ?? 0),
   }));
+}
+
+/** Pending 核銷 and unreleased 扣住, oldest first. Not limited to one month. */
+export async function listOpenItems(bookId: string): Promise<Transaction[]> {
+  const rows = await bookTransactions(bookId)
+    .filter((row) => !row.deleted_at && isOpenItem(row))
+    .toArray();
+  return rows.sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      a.note.localeCompare(b.note, "zh-Hant"),
+  );
 }
 
 /** Sum of live 扣住 rows that have not been refunded yet. */

@@ -44,8 +44,8 @@ const LINKS: { href: string; title: string; description: string }[] = [
   { href: "/templates", title: "範本", description: "常用記帳一鍵套用" },
   {
     href: "/recurring",
-    title: "固定扣款",
-    description: "每月固定支出與定期定額",
+    title: "每月固定",
+    description: "薪水、固定支出與定期定額",
   },
   { href: "/budgets", title: "預算", description: "設定每月預算上限" },
 ];

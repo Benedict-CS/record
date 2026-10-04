@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
+import { BackupNudge } from "@/components/BackupNudge";
 import { BottomSheet } from "@/components/BottomSheet";
+import { PendingList } from "@/components/PendingList";
 import { useBook } from "@/components/BookProvider";
 import { MonthSummary } from "@/components/MonthSummary";
 import { QuickTemplateBar } from "@/components/QuickTemplateBar";
@@ -151,6 +153,8 @@ export function HomePage() {
             onNext={() => shiftMonth(1)}
             onGoCurrent={!isCurrentMonth ? goToCurrentMonth : undefined}
           />
+          <BackupNudge />
+          <PendingList />
           <QuickTemplateBar />
           <section className="space-y-2">
             <div className="flex items-center justify-between gap-2">
@@ -236,7 +240,7 @@ export function HomePage() {
         }
         description={
           addMode === "monthly"
-            ? "房貸、房租、訂閱，或 0050 這類定期定額"
+            ? "薪水、房貸、房租、訂閱，或 0050 這類定期定額"
             : "支出／收入／扣住（押金）。請客金額可填 0"
         }
       >

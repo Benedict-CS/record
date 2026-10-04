@@ -73,6 +73,17 @@ export function BudgetsPage() {
       ),
     [breakdown],
   );
+  const treatByCategory = useMemo(
+    () =>
+      Object.fromEntries(
+        breakdown.map((item) => [item.categoryId ?? "", item.treatAmount ?? 0]),
+      ),
+    [breakdown],
+  );
+  const treatTotal = useMemo(
+    () => breakdown.reduce((sum, item) => sum + (item.treatAmount ?? 0), 0),
+    [breakdown],
+  );
 
   const overallBudget = budgets.find((b) => b.category_id === null);
   const budgetByCategory = useMemo(
@@ -209,6 +220,11 @@ export function BudgetsPage() {
                 </span>
               ) : null}
             </p>
+            {treatTotal > 0 ? (
+              <p className="mt-1 text-[11px] font-medium text-amber-200">
+                含請客 {formatMoney(treatTotal, currency)}
+              </p>
+            ) : null}
             {summary.held > 0 ? (
               <p className="mt-1 text-[11px] opacity-80">
                 另有暫時扣住{" "}
@@ -267,6 +283,7 @@ export function BudgetsPage() {
               {categories.map((category) => {
                 const budget = budgetByCategory[category.id];
                 const spent = spentByCategory[category.id] ?? 0;
+                const treat = treatByCategory[category.id] ?? 0;
                 const key = draftKey(category.id);
                 return (
                   <li
@@ -284,6 +301,11 @@ export function BudgetsPage() {
                             ? ` · 預算 ${formatMoney(budget.amount, currency)}`
                             : " · 尚未設定"}
                         </p>
+                        {treat > 0 ? (
+                          <p className="mt-0.5 text-xs font-medium text-amber-800">
+                            含請客 {formatMoney(treat, currency)}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                     {budget ? (
