@@ -32,6 +32,21 @@ const listeners = new Set<Listener>();
 let currentStatus: SyncUiStatus = "local";
 let currentMessage: string | undefined;
 let syncing = false;
+let syncBlocked = false;
+let syncIdle: Promise<void> = Promise.resolve();
+
+/** Stop new syncs until unblockSync. In-flight work is left to finish. */
+export function blockSync() {
+  syncBlocked = true;
+}
+
+export function unblockSync() {
+  syncBlocked = false;
+}
+
+export function waitForSyncIdle() {
+  return syncIdle;
+}
 
 export function getSyncStatus() {
   return { status: currentStatus, message: currentMessage };
@@ -1004,6 +1019,7 @@ function needsMaintenance(forceFull: boolean): boolean {
 
 export async function runSync(options: RunSyncOptions = {}): Promise<void> {
   if (typeof window === "undefined") return;
+  if (syncBlocked) return;
   if (!navigator.onLine) {
     setStatus("offline");
     return;
@@ -1016,6 +1032,10 @@ export async function runSync(options: RunSyncOptions = {}): Promise<void> {
 
   const forceFull = Boolean(options.forceFull);
   syncing = true;
+  let releaseIdle: () => void = () => undefined;
+  syncIdle = new Promise<void>((resolve) => {
+    releaseIdle = resolve;
+  });
   setStatus(
     "syncing",
     forceFull ? "正在完整同步…" : "正在同步…",
@@ -1095,6 +1115,8 @@ export async function runSync(options: RunSyncOptions = {}): Promise<void> {
     setStatus("error", formatSyncError(error, table));
   } finally {
     syncing = false;
+    releaseIdle();
+    syncIdle = Promise.resolve();
   }
 }
 

@@ -234,6 +234,12 @@ export function SettingsPage() {
                   >
                     登出 {accountLabel(user)}
                   </button>
+                  <Link
+                    href="/delete-account"
+                    className="mt-2 inline-flex min-h-11 items-center text-sm text-rose-800 underline-offset-2 hover:underline"
+                  >
+                    刪除帳號
+                  </Link>
                 </div>
               </div>
             ) : (
@@ -374,6 +380,14 @@ export function SettingsPage() {
           <ul className="mt-1.5 space-y-1.5 text-xs leading-relaxed text-[var(--muted)]">
             <li>資料存在本機（IndexedDB），離線也能記帳。</li>
             <li>登入後才會同步到雲端，未登入時只留在這台裝置。</li>
+            <li>
+              <Link
+                href="/privacy"
+                className="text-[var(--accent)] underline-offset-2 hover:underline"
+              >
+                隱私權說明
+              </Link>
+            </li>
             <li>深色模式已停用，介面固定使用淺色。</li>
           </ul>
         </section>

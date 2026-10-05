@@ -165,7 +165,7 @@ export function MorePage() {
                       {item.href === "/login" && !configured
                         ? "尚未設定雲端，可先本機使用"
                         : item.href === "/login" && user
-                          ? "改密碼、登出"
+                          ? "改密碼、登出、刪除帳號"
                           : item.description}
                     </p>
                   </div>

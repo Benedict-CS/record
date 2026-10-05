@@ -16,10 +16,11 @@ import {
   signInAccountError,
   toAuthEmail,
 } from "@/lib/account-name";
-import { formatAuthError } from "@/lib/auth-errors";
+import { formatAuthError, formatDeleteAccountError } from "@/lib/auth-errors";
+import { removeLocalAccount } from "@/lib/db/delete-account";
 import { setOwnerId } from "@/lib/db/owner";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
-import { runSync } from "@/lib/sync/engine";
+import { blockSync, runSync, unblockSync, waitForSyncIdle } from "@/lib/sync/engine";
 
 type AuthContextValue = {
   user: User | null;
@@ -35,6 +36,7 @@ type AuthContextValue = {
   ) => Promise<{ error?: string; needsEmailConfirm?: boolean }>;
   setPassword: (password: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<{ error?: string }>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -142,6 +144,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const deleteAccount = useCallback(async () => {
+    if (!isSupabaseConfigured()) {
+      return { error: "尚未設定 Supabase 環境變數" };
+    }
+    const supabase = createClient();
+    const {
+      data: { user: current },
+    } = await supabase.auth.getUser();
+    if (!current) return { error: "尚未登入，請先登入再刪除帳號" };
+
+    blockSync();
+    try {
+      await waitForSyncIdle();
+      const { error } = await supabase.rpc("delete_own_account");
+      if (error) {
+        return {
+          error: formatDeleteAccountError(
+            `${error.code ?? ""} ${error.message ?? ""}`,
+          ),
+        };
+      }
+
+      let localError: string | undefined;
+      try {
+        await removeLocalAccount(current.id);
+      } catch {
+        localError =
+          "雲端帳號已刪除，但這台有一部分紀錄清不掉。請到瀏覽器清除這個網站的資料。";
+      }
+      await supabase.auth.signOut().catch(() => undefined);
+      setOwnerId(null);
+      setUser(null);
+      return localError ? { error: localError } : {};
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "";
+      return { error: formatDeleteAccountError(message) };
+    } finally {
+      unblockSync();
+    }
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
@@ -151,6 +194,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUpWithPassword,
       setPassword,
       signOut,
+      deleteAccount,
     }),
     [
       user,
@@ -160,6 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUpWithPassword,
       setPassword,
       signOut,
+      deleteAccount,
     ],
   );
 

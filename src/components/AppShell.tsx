@@ -31,6 +31,8 @@ const MORE_PREFIXES = [
   "/search",
   "/pending",
   "/recurring",
+  "/privacy",
+  "/delete-account",
 ];
 
 function isActive(pathname: string, item: (typeof NAV)[number]) {
