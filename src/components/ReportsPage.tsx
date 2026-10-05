@@ -16,7 +16,12 @@ import {
   monthlyTotalsForYear,
   topCategories,
 } from "@/lib/db/crud";
-import { formatMoney, shiftYearMonth, type MoneyCurrency } from "@/lib/format";
+import {
+  formatMoney,
+  shiftYearMonth,
+  throughToday,
+  type MoneyCurrency,
+} from "@/lib/format";
 import {
   useCategories,
   useMonthTransactions,
@@ -64,9 +69,13 @@ export function ReportsPage() {
   );
 
   const activeTransactions =
-    scope === "month" ? monthTransactions : yearTransactions;
+    scope === "month" ? monthTransactions : throughToday(yearTransactions);
   const previousTransactions =
-    scope === "month" ? previousMonthTransactions : previousYearTransactions;
+    scope === "month"
+      ? previousMonthTransactions
+      : throughToday(previousYearTransactions);
+  const laterCount =
+    scope === "year" ? yearTransactions.length - activeTransactions.length : 0;
 
   const summary = useMemo(
     () => monthSummary(activeTransactions),
@@ -93,8 +102,8 @@ export function ReportsPage() {
     [activeTransactions, categories, pieKind],
   );
   const monthlyTotals = useMemo(
-    () => monthlyTotalsForYear(yearTransactions),
-    [yearTransactions],
+    () => monthlyTotalsForYear(scope === "year" ? activeTransactions : yearTransactions),
+    [scope, activeTransactions, yearTransactions],
   );
 
   const trendPoints = useMemo<TrendPoint[]>(() => {
@@ -182,9 +191,16 @@ export function ReportsPage() {
               >
                 ‹
               </button>
-              <p className="text-sm font-semibold tracking-wide text-[var(--ink)]">
-                {periodLabel}
-              </p>
+              <div className="min-w-0 text-center">
+                <p className="text-sm font-semibold tracking-wide text-[var(--ink)]">
+                  {periodLabel}
+                </p>
+                {laterCount > 0 ? (
+                  <p className="text-[11px] text-[var(--muted)]">
+                    不含今天之後先入帳的 {laterCount} 筆
+                  </p>
+                ) : null}
+              </div>
               <button
                 type="button"
                 onClick={() => shiftPeriod(1)}

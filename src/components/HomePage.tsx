@@ -143,7 +143,7 @@ export function HomePage() {
       {!ready ? (
         <p className="text-sm text-[var(--muted)]">載入本機資料…</p>
       ) : (
-        <div className="space-y-3 pb-16">
+        <div className="space-y-3">
           <YearSpendCard year={year} />
           <MonthSummary
             year={year}

@@ -38,26 +38,15 @@ export function SimpleSummary({
   const spend = periodSpend(summary);
   const balance = periodBalance(summary);
   const reimbursed = reimbursedAmount(summary);
+  const pending = summary.reimbursablePending;
+  const kept = Math.max(0, summary.selfPay - pending);
+  const showSplit = pending > 0 || summary.held > 0;
   const notes: Array<{ key: string; text: string; tone: string }> = [];
-  if (summary.held > 0) {
-    notes.push({
-      key: "held",
-      text: `押金 ${formatMoney(summary.held, currency)} 不算支出`,
-      tone: "text-amber-900/80",
-    });
-  }
   if (reimbursed > 0) {
     notes.push({
       key: "reimbursed",
       text: `已銷帳 ${formatMoney(reimbursed, currency)} 已從支出扣掉`,
       tone: "text-[var(--muted)]",
-    });
-  }
-  if (summary.reimbursablePending > 0) {
-    notes.push({
-      key: "pending",
-      text: `待報銷 ${formatMoney(summary.reimbursablePending, currency)} 還算在支出裡`,
-      tone: "text-sky-900/80",
     });
   }
 
@@ -83,6 +72,28 @@ export function SimpleSummary({
           tone="text-[var(--ink)]"
         />
       </div>
+      {showSplit ? (
+        <div className="mt-2 grid grid-cols-3 gap-1.5 border-t border-[var(--line)] pt-2">
+          <p className="text-[11px] text-[var(--muted)]">
+            自付
+            <span className="mt-0.5 block font-medium tabular-nums text-[var(--ink)]">
+              {formatMoney(kept, currency)}
+            </span>
+          </p>
+          <p className="text-[11px] text-sky-900/80">
+            待核銷
+            <span className="mt-0.5 block font-medium tabular-nums">
+              {formatMoney(pending, currency)}
+            </span>
+          </p>
+          <p className="text-[11px] text-amber-900/80">
+            扣住
+            <span className="mt-0.5 block font-medium tabular-nums">
+              {formatMoney(summary.held, currency)}
+            </span>
+          </p>
+        </div>
+      ) : null}
       {notes.length > 0 ? (
         <ul className="mt-2 space-y-0.5 border-t border-[var(--line)] pt-2">
           {notes.map((note) => (

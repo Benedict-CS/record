@@ -1,5 +1,6 @@
 import {
   missingColumnName,
+  plainSyncFailure,
   preserveUnsyncedField,
   withoutColumn,
 } from "./schema-compat";
@@ -53,5 +54,27 @@ const missing = preserveUnsyncedField({
   localUpdatedAt: stamp,
 });
 assert(missing.value === "treat" && !missing.needsUpload, "a missing column keeps the local tag");
+
+assert(
+  plainSyncFailure({
+    code: "PGRST204",
+    message: "Could not find the 'holding_id' column of 'transactions' in the schema cache",
+  }) === "這台已存好，雲端還沒這欄，所以上不去。",
+  "a missing column is explained in plain language",
+);
+assert(
+  plainSyncFailure({ code: "PGRST205", message: "Could not find the table public.recurring_rules" }) ===
+    "這台已存好，雲端還沒這張表，所以上不去。",
+  "a missing table is explained in plain language",
+);
+assert(
+  plainSyncFailure({ code: "23514", message: "new row violates check constraint" }) ===
+    "這台已存好，雲端還不接受這筆資料，所以上不去。",
+  "a check constraint is explained in plain language",
+);
+assert(
+  plainSyncFailure({ code: "42501", message: "permission denied" }) === null,
+  "other failures keep the detailed formatter",
+);
 
 console.log("schema compat tests ok");

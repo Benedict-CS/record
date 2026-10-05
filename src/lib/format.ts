@@ -25,6 +25,14 @@ export function formatRate(rate: number) {
   return `${rounded}%`;
 }
 
+/** Drop rows dated after `today`. Year totals use this so pre-posted months stay out. */
+export function throughToday<T extends { date: string }>(
+  rows: T[],
+  today = todayLocal(),
+): T[] {
+  return rows.filter((row) => row.date <= today);
+}
+
 export function todayLocal() {
   const now = new Date();
   const y = now.getFullYear();

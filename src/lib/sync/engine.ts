@@ -8,6 +8,7 @@ import {
 import { db } from "@/lib/db/schema";
 import {
   missingColumnName,
+  plainSyncFailure,
   preserveUnsyncedField,
   withoutColumn,
 } from "@/lib/sync/schema-compat";
@@ -61,6 +62,8 @@ function formatSyncError(error: unknown, context?: string): string {
     hint?: string;
     code?: string;
   };
+  const plain = plainSyncFailure(row);
+  if (plain) return plain;
   const parts = [row.message, row.details, row.hint, row.code ? `(${row.code})` : ""]
     .map((part) => (typeof part === "string" ? part.trim() : ""))
     .filter(Boolean);
@@ -733,7 +736,7 @@ async function pullAll(userId: string, options: PullOptions = {}) {
   return new Date().toISOString();
 }
 
-async function pushPending(userId: string) {
+async function pushPending(userId: string): Promise<"column" | "table" | null> {
   const supabase = createClient();
 
   const [books, accounts, categories, transactions, budgets, templates, holdings, recurringRules] =
@@ -839,6 +842,7 @@ async function pushPending(userId: string) {
     }));
 
   const UPSERT_CHUNK = 150;
+  let schemaGap: "column" | "table" | null = null;
 
   async function upsertTable(
     table: string,
@@ -848,6 +852,7 @@ async function pushPending(userId: string) {
     if (!rows.length) return;
     for (let i = 0; i < rows.length; i += UPSERT_CHUNK) {
       let payload = rows.slice(i, i + UPSERT_CHUNK);
+      let strippedValue = false;
       for (let attempt = 0; attempt < 6; attempt += 1) {
         const { error } = await supabase.from(table).upsert(payload);
         if (!error) {
@@ -858,12 +863,24 @@ async function pushPending(userId: string) {
         if (!column || !payload.some((row) => column in row)) {
           throw Object.assign(error, { __table: table });
         }
+        if (
+          payload.some((row) => {
+            const value = row[column];
+            return value != null && value !== "";
+          })
+        ) {
+          strippedValue = true;
+        }
         payload = withoutColumn(payload, column);
       }
       if (payload.length) {
         throw Object.assign(new Error("同步時略過的欄位仍無法上傳"), {
           __table: table,
         });
+      }
+      if (strippedValue) {
+        schemaGap = "column";
+        continue;
       }
       await markSynced(rows.slice(i, i + UPSERT_CHUNK).map((row) => String(row.id)));
     }
@@ -955,6 +972,7 @@ async function pushPending(userId: string) {
     );
   } catch (error) {
     if (!isMissingRelation(error)) throw error;
+    schemaGap = schemaGap ?? "table";
   }
 
   const state = await db.sync_state.get(syncStateKey(userId));
@@ -963,6 +981,7 @@ async function pushPending(userId: string) {
     last_pulled_at: state?.last_pulled_at ?? null,
     last_pushed_at: new Date().toISOString(),
   });
+  return schemaGap;
 }
 
 export type RunSyncOptions = {
@@ -1054,14 +1073,20 @@ export async function runSync(options: RunSyncOptions = {}): Promise<void> {
       }
     }
 
-    await pushPending(user.id);
+    const schemaGap = await pushPending(user.id);
     const syncState = await db.sync_state.get(syncStateKey(user.id));
     await db.sync_state.put({
       id: syncStateKey(user.id),
       last_pulled_at: pulledAt,
       last_pushed_at: syncState?.last_pushed_at ?? new Date().toISOString(),
     });
-    setStatus("synced");
+    if (schemaGap === "column") {
+      setStatus("error", "這台已存好，雲端還沒這欄，所以上不去。");
+    } else if (schemaGap === "table") {
+      setStatus("error", "這台已存好，雲端還沒這張表，所以上不去。");
+    } else {
+      setStatus("synced");
+    }
   } catch (error) {
     const table =
       error && typeof error === "object" && "__table" in error

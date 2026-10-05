@@ -1,4 +1,4 @@
-import { isOpenItem, isUnreleasedHold } from "./open-items";
+import { groupOpenItems, isOpenItem, isUnreleasedHold } from "./open-items";
 
 function assert(condition: unknown, label: string): asserts condition {
   if (!condition) throw new Error(label);
@@ -47,6 +47,61 @@ assert(
     reimbursement_status: null,
   }),
   "an unreleased hold stays on the list",
+);
+
+const grouped = groupOpenItems([
+  {
+    id: "h1",
+    type: "hold",
+    date: "2026-10-15",
+    note: "電費預繳",
+    amount: 1000,
+    category_id: null,
+    hold_status: "held",
+    reimbursable_amount: null,
+    reimbursement_status: null,
+  },
+  {
+    id: "h2",
+    type: "hold",
+    date: "2026-11-15",
+    note: "電費預繳",
+    amount: 1000,
+    category_id: null,
+    hold_status: "held",
+    reimbursable_amount: null,
+    reimbursement_status: null,
+  },
+  {
+    id: "g1",
+    type: "expense",
+    date: "2026-10-01",
+    note: "健身房",
+    amount: 1088,
+    category_id: null,
+    hold_status: null,
+    reimbursable_amount: 400,
+    reimbursement_status: "pending",
+  },
+  {
+    id: "done",
+    type: "hold",
+    date: "2026-09-15",
+    note: "電費預繳",
+    amount: 1000,
+    category_id: null,
+    hold_status: "released",
+    reimbursable_amount: null,
+    reimbursement_status: null,
+  },
+]);
+assert(grouped.length === 2, "same hold name across months is one group, plus the gym");
+assert(grouped[0].title === "健身房" && grouped[0].amount === 400, "gym stays its own reimbursement");
+assert(
+  grouped[1].title === "扣住：電費預繳" &&
+    grouped[1].items.length === 2 &&
+    grouped[1].amount === 2000,
+  "utility holds add up and a released row stays out",
 );
 
 console.log("open-items.test.ts ok");

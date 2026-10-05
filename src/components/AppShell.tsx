@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { BookSwitcher } from "@/components/BookSwitcher";
+import { InstallPrompt } from "@/components/InstallPrompt";
+import { PwaUpdatePrompt } from "@/components/PwaUpdatePrompt";
 import { QuickAddFab } from "@/components/QuickAddFab";
 import { SyncBadge, SyncBootBanner } from "@/components/SyncBadge";
 import { accountLabel } from "@/lib/account-name";
@@ -93,12 +95,16 @@ export function AppShell({
         </div>
         <BookSwitcher />
         <SyncBootBanner />
+        <div className="space-y-2 empty:hidden">
+          <PwaUpdatePrompt />
+          <InstallPrompt />
+        </div>
       </header>
 
       <main
         id="main-content"
         tabIndex={-1}
-        className="app-shell-main flex-1 pb-[calc(4.25rem+env(safe-area-inset-bottom))] outline-none"
+        className="app-shell-main flex-1 pb-[calc(var(--bottom-nav-height)+4.5rem+env(safe-area-inset-bottom))] outline-none"
       >
         {children}
       </main>

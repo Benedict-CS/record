@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { useBook } from "@/components/BookProvider";
 import { monthSummary } from "@/lib/db/crud";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, throughToday } from "@/lib/format";
 import { useYearTransactions } from "@/lib/hooks/useLedgerData";
 import { periodBalance, periodSpend } from "@/lib/summary-display";
 
@@ -13,10 +13,9 @@ export function YearSpendCard({ year }: { year: number }) {
   const { book } = useBook();
   const currency = book?.currency;
   const transactions = useYearTransactions(year);
-  const summary = useMemo(
-    () => monthSummary(transactions),
-    [transactions],
-  );
+  const counted = useMemo(() => throughToday(transactions), [transactions]);
+  const later = transactions.length - counted.length;
+  const summary = useMemo(() => monthSummary(counted), [counted]);
 
   return (
     <Link
@@ -27,6 +26,11 @@ export function YearSpendCard({ year }: { year: number }) {
         <p className="text-[11px] text-[var(--muted)]">{year} 年</p>
         <span className="shrink-0 text-xs text-[var(--accent)]">報表 ›</span>
       </div>
+      {later > 0 ? (
+        <p className="mb-2 text-[11px] text-[var(--muted)]">
+          不含今天之後先入帳的 {later} 筆
+        </p>
+      ) : null}
       <div className="grid grid-cols-3 gap-1.5">
         <div className="min-w-0">
           <p className="text-[11px] text-[var(--muted)]">支出</p>

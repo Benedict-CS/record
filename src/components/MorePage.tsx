@@ -11,6 +11,7 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import { ExportCsvButton } from "@/components/ExportCsvButton";
 import { useToast } from "@/components/ToastProvider";
 import { useOpenItems } from "@/lib/hooks/useLedgerData";
+import { groupOpenItems } from "@/lib/open-items";
 
 const LINKS: {
   href: string;
@@ -74,7 +75,7 @@ export function MorePage() {
   const confirm = useConfirm();
   const { show } = useToast();
   const { book } = useBook();
-  const openCount = useOpenItems().length;
+  const openCount = groupOpenItems(useOpenItems()).length;
   const now = useMemo(() => new Date(), []);
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
@@ -151,7 +152,7 @@ export function MorePage() {
                       ) : null}
                       {item.href === "/pending" && openCount > 0 ? (
                         <span className="ml-2 text-xs font-normal tabular-nums text-[var(--accent)]">
-                          {openCount}
+                          {openCount} 件
                         </span>
                       ) : null}
                       {item.href === "/books" && book ? (

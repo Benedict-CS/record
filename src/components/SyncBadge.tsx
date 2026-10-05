@@ -105,12 +105,7 @@ export function SyncBadge() {
 
   const label = busy || status === "syncing" ? "同步中" : LABELS[status];
   const detail = message ? `，${message}` : "";
-  const shortError =
-    status === "error" && message
-      ? message.length > 28
-        ? `${message.slice(0, 28)}…`
-        : message
-      : null;
+  const shortError = status === "error" && message ? message : null;
 
   return (
     <button
@@ -146,7 +141,7 @@ export function SyncBadge() {
         <span aria-hidden>{label}</span>
       </span>
       {shortError ? (
-        <span className="mt-0.5 max-w-full truncate text-[10px] leading-tight opacity-90">
+        <span className="mt-0.5 line-clamp-3 max-w-full text-[10px] leading-tight opacity-90">
           {shortError}
         </span>
       ) : null}

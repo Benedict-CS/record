@@ -1,4 +1,5 @@
 import { backupMonthKey, shouldRemindBackup } from "./backup-nudge";
+import { throughToday } from "./format";
 
 function assert(condition: unknown, label: string): asserts condition {
   if (!condition) throw new Error(label);
@@ -17,6 +18,19 @@ assert(
 assert(
   shouldRemindBackup("2026-10", october) === false,
   "this month's download or dismiss hides the card",
+);
+
+const dated = throughToday(
+  [
+    { date: "2026-10-05", amount: 1 },
+    { date: "2026-11-15", amount: 2 },
+    { date: "2026-10-04", amount: 3 },
+  ],
+  "2026-10-05",
+);
+assert(
+  dated.map((row) => row.date).join(",") === "2026-10-05,2026-10-04",
+  "year totals drop dates after today",
 );
 
 console.log("backup-nudge.test.ts ok");

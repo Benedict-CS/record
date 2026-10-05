@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useBook } from "@/components/BookProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
@@ -8,16 +9,22 @@ import { useToast } from "@/components/ToastProvider";
 import { markReimbursementReceived, releaseHold } from "@/lib/db/crud";
 import { formatDayHeading, formatMoney, todayLocal } from "@/lib/format";
 import { useCategories, useOpenItems } from "@/lib/hooks/useLedgerData";
-import { isReimbursementPending } from "@/lib/reimbursement";
+import { groupOpenItems, type OpenGroup } from "@/lib/open-items";
 import { runSync } from "@/lib/sync/engine";
 import type { Transaction } from "@/lib/types";
 
-/**
- * One row on home. The full 銷帳 / 退回 list lives on /pending.
- */
-export function PendingHomeLink() {
+function useOpenGroups() {
   const items = useOpenItems();
-  if (items.length === 0) return null;
+  const categories = useCategories();
+  const names = new Map(categories.map((row) => [row.id, row.name]));
+  const groups = groupOpenItems(items, (id) => (id ? names.get(id) : undefined));
+  return { items, groups };
+}
+
+/** One row on home. The full list, grouped by name, lives on /pending. */
+export function PendingHomeLink() {
+  const { groups } = useOpenGroups();
+  if (groups.length === 0) return null;
 
   return (
     <Link
@@ -29,7 +36,7 @@ export function PendingHomeLink() {
         <p className="mt-0.5 text-xs text-[var(--muted)]">還沒銷帳或退回</p>
       </div>
       <span className="flex shrink-0 items-center gap-1 text-sm font-medium tabular-nums text-[var(--ink)]">
-        {items.length}
+        {groups.length} 件
         <span className="text-[var(--muted)]" aria-hidden>
           ›
         </span>
@@ -41,42 +48,52 @@ export function PendingHomeLink() {
 function OpenItemList() {
   const { book } = useBook();
   const currency = book?.currency;
-  const items = useOpenItems();
-  const categories = useCategories();
+  const { items, groups } = useOpenGroups();
   const confirm = useConfirm();
   const { show } = useToast();
-  const categoryName = new Map(categories.map((row) => [row.id, row.name]));
+  const [openKey, setOpenKey] = useState<string | null>(null);
 
-  async function onRelease(tx: Transaction) {
+  async function releaseAll(rows: Transaction[]) {
     const ok = await confirm({
-      title: "標記已退回？",
-      message: "會在今天記入一筆同額收入，帳戶餘額加回，且不再算「暫時扣住」。",
+      title: rows.length > 1 ? `退回這 ${rows.length} 筆？` : "標記已退回？",
+      message:
+        rows.length > 1
+          ? "每一筆都會在今天記入同額收入，帳戶餘額加回，且不再算「暫時扣住」。"
+          : "會在今天記入一筆同額收入，帳戶餘額加回，且不再算「暫時扣住」。",
       confirmLabel: "已退回",
     });
     if (!ok) return;
-    const income = await releaseHold(tx.id, todayLocal());
-    if (!income) {
-      show("無法退回", { variant: "error" });
-      return;
+    for (const tx of rows) {
+      const income = await releaseHold(tx.id, todayLocal());
+      if (!income) {
+        show("有一筆無法退回", { variant: "error" });
+        return;
+      }
     }
     void runSync();
-    show("已退回", { variant: "success" });
+    show(rows.length > 1 ? `已退回 ${rows.length} 筆` : "已退回", {
+      variant: "success",
+    });
   }
 
-  async function onMarkReimbursed(tx: Transaction) {
+  async function reimburseAll(rows: Transaction[]) {
     const ok = await confirm({
-      title: "銷帳待報銷？",
+      title: rows.length > 1 ? `銷帳這 ${rows.length} 筆？` : "銷帳待報銷？",
       message:
         "確認補助或退稅已入帳（薪水裡／銀行入帳另記過）。只標記狀態，不另記收入。帳戶仍保留實付全額。",
       confirmLabel: "銷帳",
     });
     if (!ok) return;
-    await markReimbursementReceived(tx.id);
+    for (const tx of rows) {
+      await markReimbursementReceived(tx.id);
+    }
     void runSync();
-    show("已銷帳", { variant: "success" });
+    show(rows.length > 1 ? `已銷帳 ${rows.length} 筆` : "已銷帳", {
+      variant: "success",
+    });
   }
 
-  if (items.length === 0) {
+  if (groups.length === 0) {
     return (
       <p className="rounded-2xl border border-dashed border-[var(--line)] px-4 py-8 text-center text-sm text-[var(--muted)]">
         目前沒有待銷帳或待退回。
@@ -85,50 +102,117 @@ function OpenItemList() {
   }
 
   return (
-    <section aria-label="待處理" className="space-y-2 pb-16">
-      <p className="text-xs text-[var(--muted)]">{items.length} 筆還沒銷帳或退回</p>
-      <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">
-        {items.map((tx) => {
-          const pending = isReimbursementPending(tx);
-          const title = pending
-            ? tx.note.trim() ||
-              (tx.category_id ? categoryName.get(tx.category_id) : "") ||
-              "待核銷"
-            : `扣住：${tx.note.trim() || "未命名"}`;
-          const amount = pending ? (tx.reimbursable_amount ?? tx.amount) : tx.amount;
-          return (
-            <li key={tx.id} className="flex items-center gap-2 px-3 py-2">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm text-[var(--ink)]">{title}</p>
-                <p className="mt-0.5 text-[11px] text-[var(--muted)]">
-                  {formatDayHeading(tx.date)}
-                  {" · "}
-                  {pending ? "待核銷" : "暫時扣住"}{" "}
-                  <span className="tabular-nums">{formatMoney(amount, currency)}</span>
-                </p>
-              </div>
-              {pending ? (
-                <button
-                  type="button"
-                  onClick={() => void onMarkReimbursed(tx)}
-                  className="inline-flex min-h-10 shrink-0 items-center rounded-xl bg-sky-100 px-3 text-xs font-medium text-sky-950"
-                >
-                  銷帳
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => void onRelease(tx)}
-                  className="inline-flex min-h-10 shrink-0 items-center rounded-xl bg-amber-100 px-3 text-xs font-medium text-amber-950"
-                >
-                  退回
-                </button>
-              )}
-            </li>
-          );
-        })}
+    <section aria-label="待處理" className="space-y-2">
+      <p className="text-xs text-[var(--muted)]">
+        {groups.length} 件
+        {items.length === groups.length ? "" : ` · ${items.length} 筆`}
+        {" "}
+        還沒銷帳或退回
+      </p>
+      <ul className="space-y-2">
+        {groups.map((group) => (
+          <GroupCard
+            key={group.key}
+            group={group}
+            currency={currency}
+            expanded={openKey === group.key}
+            onToggle={() =>
+              setOpenKey((current) => (current === group.key ? null : group.key))
+            }
+            onRelease={() => void releaseAll(group.items)}
+            onReimburse={() => void reimburseAll(group.items)}
+            onReleaseOne={(tx) => void releaseAll([tx])}
+            onReimburseOne={(tx) => void reimburseAll([tx])}
+          />
+        ))}
       </ul>
     </section>
+  );
+}
+
+function GroupCard({
+  group,
+  currency,
+  expanded,
+  onToggle,
+  onRelease,
+  onReimburse,
+  onReleaseOne,
+  onReimburseOne,
+}: {
+  group: OpenGroup<Transaction>;
+  currency: string | undefined;
+  expanded: boolean;
+  onToggle: () => void;
+  onRelease: () => void;
+  onReimburse: () => void;
+  onReleaseOne: (tx: Transaction) => void;
+  onReimburseOne: (tx: Transaction) => void;
+}) {
+  const many = group.items.length > 1;
+  const actionLabel = group.kind === "hold" ? "退回" : "銷帳";
+  const months = new Set(group.items.map((tx) => tx.date.slice(0, 7))).size;
+  const span = months > 1 ? `${months} 個月` : `${group.items.length} 筆`;
+  const detail =
+    group.kind === "hold" ? `${span} · 暫時扣住` : `${span} · 待核銷`;
+
+  return (
+    <li className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="min-w-0 flex-1 text-left"
+          aria-expanded={expanded}
+        >
+          <p className="truncate text-sm font-medium text-[var(--ink)]">{group.title}</p>
+          <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+            {many ? detail : formatDayHeading(group.items[0].date)}
+            {" · "}
+            <span className="tabular-nums">{formatMoney(group.amount, currency)}</span>
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={group.kind === "hold" ? onRelease : onReimburse}
+          className={[
+            "inline-flex min-h-10 shrink-0 items-center rounded-xl px-3 text-xs font-medium",
+            group.kind === "hold"
+              ? "bg-amber-100 text-amber-950"
+              : "bg-sky-100 text-sky-950",
+          ].join(" ")}
+        >
+          {many ? `全部${actionLabel}` : actionLabel}
+        </button>
+      </div>
+      {expanded && many ? (
+        <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
+          {group.items.map((tx) => (
+            <li key={tx.id} className="flex items-center gap-2 px-3 py-2">
+              <p className="min-w-0 flex-1 text-[11px] text-[var(--muted)]">
+                {formatDayHeading(tx.date)}
+                {" · "}
+                <span className="tabular-nums">
+                  {formatMoney(
+                    group.kind === "hold" ? tx.amount : (tx.reimbursable_amount ?? tx.amount),
+                    currency,
+                  )}
+                </span>
+              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  group.kind === "hold" ? onReleaseOne(tx) : onReimburseOne(tx)
+                }
+                className="inline-flex min-h-10 shrink-0 items-center rounded-xl px-3 text-xs font-medium text-[var(--muted)]"
+              >
+                {actionLabel}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </li>
   );
 }
 
