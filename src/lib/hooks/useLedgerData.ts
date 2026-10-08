@@ -16,6 +16,7 @@ import {
   listTransactionsForDate,
   listTransactionsForMonth,
   listTransactionsForYear,
+  listTransactionsBetween,
   listTransactionsForAccount,
   listHoldings,
   listOpenItems,
@@ -98,6 +99,21 @@ export function useYearTransactions(year: number, enabled = true) {
         ? listTransactionsForYear(bookId, year)
         : Promise.resolve([]),
     [bookId, year, enabled],
+  );
+}
+
+export function useTransactionsBetween(
+  start: string,
+  endExclusive: string,
+  enabled = true,
+) {
+  const { bookId } = useBook();
+  return useLiveList(
+    () =>
+      enabled && bookId
+        ? listTransactionsBetween(bookId, start, endExclusive)
+        : Promise.resolve([]),
+    [bookId, start, endExclusive, enabled],
   );
 }
 

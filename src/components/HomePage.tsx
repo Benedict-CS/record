@@ -13,7 +13,6 @@ import { RecurringPage } from "@/components/RecurringPage";
 import { TransactionEditor } from "@/components/TransactionEditor";
 import { TransactionForm } from "@/components/TransactionForm";
 import { TransactionList } from "@/components/TransactionList";
-import { YearSpendCard } from "@/components/YearSpendCard";
 import { useToast } from "@/components/ToastProvider";
 import {
   findLatestTransactionMonth,
@@ -115,9 +114,13 @@ export function HomePage() {
     setMonth(date.getMonth() + 1);
   }
 
+  function jumpTo(nextYear: number, nextMonth: number) {
+    setYear(nextYear);
+    setMonth(nextMonth);
+  }
+
   function goToCurrentMonth() {
-    setYear(now.getFullYear());
-    setMonth(now.getMonth() + 1);
+    jumpTo(now.getFullYear(), now.getMonth() + 1);
   }
 
   function openAdd(date?: string) {
@@ -144,17 +147,19 @@ export function HomePage() {
         <p className="text-sm text-[var(--muted)]">載入本機資料…</p>
       ) : (
         <div className="space-y-3">
-          <YearSpendCard year={year} />
           <MonthSummary
             year={year}
             month={month}
             transactions={transactions}
             onPrev={() => shiftMonth(-1)}
             onNext={() => shiftMonth(1)}
+            onJump={jumpTo}
             onGoCurrent={!isCurrentMonth ? goToCurrentMonth : undefined}
           />
-          <BackupNudge />
-          <PendingHomeLink />
+          <div className="flex gap-2 empty:hidden">
+            <BackupNudge />
+            <PendingHomeLink />
+          </div>
           <QuickTemplateBar />
           <section className="space-y-2">
             <div className="flex items-center justify-between gap-2">

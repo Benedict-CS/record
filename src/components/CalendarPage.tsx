@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useBook } from "@/components/BookProvider";
 import { DayTransactionPanel } from "@/components/DayTransactionPanel";
+import { PeriodJump } from "@/components/PeriodJump";
 import { CalendarSkeleton, ListSkeleton } from "@/components/Skeleton";
 import { TransactionEditor } from "@/components/TransactionEditor";
 import { groupTransactionsByDay } from "@/lib/db/crud";
@@ -70,6 +71,9 @@ export function CalendarPage() {
     if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
       const [y, m] = date.split("-").map(Number);
       if (y && m) {
+        // The query string exists only in the browser. Setting it during render
+        // would disagree with the server HTML.
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- see above
         setYear(y);
         setMonth(m);
         setSelectedDate(date);
@@ -120,13 +124,17 @@ export function CalendarPage() {
 
   function shiftMonth(delta: number) {
     const next = shiftYearMonth(year, month, delta);
-    setYear(next.year);
-    setMonth(next.month);
-    const prefix = `${next.year}-${String(next.month).padStart(2, "0")}`;
+    jumpTo(next.year, next.month);
+  }
+
+  function jumpTo(nextYear: number, nextMonth: number) {
+    setYear(nextYear);
+    setMonth(nextMonth);
+    const prefix = `${nextYear}-${String(nextMonth).padStart(2, "0")}`;
     if (today.startsWith(prefix)) {
       setSelectedDate(today);
     } else {
-      setSelectedDate(toDateKey(next.year, next.month, 1));
+      setSelectedDate(toDateKey(nextYear, nextMonth, 1));
     }
   }
 
@@ -149,12 +157,7 @@ export function CalendarPage() {
               >
                 ‹
               </button>
-              <p
-                className="text-sm font-semibold tracking-wide tabular-nums text-[var(--ink)]"
-                aria-live="polite"
-              >
-                {year} 年 {month} 月
-              </p>
+              <PeriodJump year={year} month={month} onChange={jumpTo} />
               <button
                 type="button"
                 onClick={() => shiftMonth(1)}

@@ -50,30 +50,27 @@ export function BackupNudge() {
   return (
     <section
       aria-label="每月備份"
-      className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 py-3"
+      className="flex min-h-11 min-w-0 flex-1 items-center gap-1 rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-2.5"
     >
-      <p className="text-sm font-semibold text-[var(--ink)]">這個月還沒備份</p>
-      <p className="mt-0.5 text-xs leading-relaxed text-[var(--muted)]">
-        下載一份 JSON，放在手機或電腦。換裝置時可以從「更多」匯入。
+      <p className={`min-w-0 flex-1 truncate text-sm ${error ? "text-rose-700" : "text-[var(--ink)]"}`}>
+        {error ?? "還沒備份"}
       </p>
-      {error ? <p className="mt-1 text-xs text-rose-700">{error}</p> : null}
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void onDownload()}
-          className="inline-flex min-h-11 items-center rounded-xl bg-[var(--ink)] px-3 text-sm font-semibold text-[var(--paper)] disabled:opacity-60"
-        >
-          {busy ? "下載中…" : "下載備份"}
-        </button>
-        <button
-          type="button"
-          onClick={() => markBackupDone()}
-          className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm text-[var(--muted)]"
-        >
-          這個月先不用
-        </button>
-      </div>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void onDownload()}
+        className="inline-flex min-h-10 shrink-0 items-center rounded-xl px-2 text-sm font-semibold text-[var(--accent)] disabled:opacity-60"
+      >
+        {busy ? "下載中…" : "下載"}
+      </button>
+      <button
+        type="button"
+        onClick={() => markBackupDone()}
+        aria-label="這個月先不用"
+        className="inline-flex min-h-10 shrink-0 items-center rounded-xl px-2 text-sm text-[var(--muted)]"
+      >
+        ×
+      </button>
     </section>
   );
 }

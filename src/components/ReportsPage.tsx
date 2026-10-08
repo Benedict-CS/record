@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useBook } from "@/components/BookProvider";
 import { CategoryDetailSheet } from "@/components/CategoryDetailSheet";
+import { PeriodJump } from "@/components/PeriodJump";
 import { SimpleSummary } from "@/components/SimpleSummary";
 import { CategoryPieChart } from "@/components/CategoryPieChart";
 import { TrendLineChart, type TrendPoint } from "@/components/TrendLineChart";
@@ -192,9 +193,15 @@ export function ReportsPage() {
                 ‹
               </button>
               <div className="min-w-0 text-center">
-                <p className="text-sm font-semibold tracking-wide text-[var(--ink)]">
-                  {periodLabel}
-                </p>
+                <PeriodJump
+                  year={year}
+                  month={month}
+                  scope={scope}
+                  onChange={(nextYear, nextMonth) => {
+                    setYear(nextYear);
+                    if (scope === "month") setMonth(nextMonth);
+                  }}
+                />
                 {laterCount > 0 ? (
                   <p className="text-[11px] text-[var(--muted)]">
                     不含今天之後先入帳的 {laterCount} 筆

@@ -29,12 +29,9 @@ export function PendingHomeLink() {
   return (
     <Link
       href="/pending"
-      className="flex min-h-14 items-center justify-between gap-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5"
+      className="flex min-h-11 min-w-0 flex-1 items-center justify-between gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3"
     >
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-[var(--ink)]">待處理</p>
-        <p className="mt-0.5 text-xs text-[var(--muted)]">還沒銷帳或退回</p>
-      </div>
+      <span className="truncate text-sm text-[var(--ink)]">待處理</span>
       <span className="flex shrink-0 items-center gap-1 text-sm font-medium tabular-nums text-[var(--ink)]">
         {groups.length} 件
         <span className="text-[var(--muted)]" aria-hidden>

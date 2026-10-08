@@ -2,7 +2,9 @@
 
 import { useEffect } from "react";
 import { useBook } from "@/components/BookProvider";
+import { PeriodJump } from "@/components/PeriodJump";
 import { SimpleSummary } from "@/components/SimpleSummary";
+import { YearSpendCard } from "@/components/YearSpendCard";
 import { monthSummary } from "@/lib/db/crud";
 import type { Transaction } from "@/lib/types";
 
@@ -12,6 +14,7 @@ export function MonthSummary({
   transactions,
   onPrev,
   onNext,
+  onJump,
   onGoCurrent,
 }: {
   year: number;
@@ -19,6 +22,7 @@ export function MonthSummary({
   transactions: Transaction[];
   onPrev: () => void;
   onNext: () => void;
+  onJump: (year: number, month: number) => void;
   onGoCurrent?: () => void;
 }) {
   const { book } = useBook();
@@ -64,15 +68,13 @@ export function MonthSummary({
         >
           ‹
         </button>
-        <div className="min-w-0 text-center">
-          <p className="text-sm font-semibold tracking-wide tabular-nums text-[var(--ink)]">
-            {year} 年 {month} 月
-          </p>
+        <div className="flex min-w-0 flex-col items-center">
+          <PeriodJump year={year} month={month} onChange={onJump} />
           {onGoCurrent ? (
             <button
               type="button"
               onClick={onGoCurrent}
-              className="mt-0.5 text-[11px] text-[var(--accent)] underline-offset-2 hover:underline"
+              className="text-[11px] text-[var(--accent)] underline-offset-2 hover:underline"
             >
               回到本月
             </button>
@@ -90,6 +92,9 @@ export function MonthSummary({
       </div>
 
       <SimpleSummary summary={summary} currency={currency} />
+      <div className="mt-2 border-t border-[var(--line)] pt-2">
+        <YearSpendCard year={year} />
+      </div>
     </section>
   );
 }

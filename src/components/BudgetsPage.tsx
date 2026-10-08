@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useBook } from "@/components/BookProvider";
 import { ExportCsvButton } from "@/components/ExportCsvButton";
+import { PeriodJump } from "@/components/PeriodJump";
 import { CardSkeleton, ListSkeleton } from "@/components/Skeleton";
 import { useToast } from "@/components/ToastProvider";
 import {
@@ -170,11 +171,15 @@ export function BudgetsPage() {
     }
   }
 
+  function jumpTo(nextYear: number, nextMonth: number) {
+    setYear(nextYear);
+    setMonth(nextMonth);
+    setDrafts({});
+  }
+
   function shiftMonth(delta: number) {
     const next = shiftYearMonth(year, month, delta);
-    setYear(next.year);
-    setMonth(next.month);
-    setDrafts({});
+    jumpTo(next.year, next.month);
   }
 
   return (
@@ -196,12 +201,12 @@ export function BudgetsPage() {
               >
                 ‹
               </button>
-              <p
-                className="text-sm font-semibold tracking-wide tabular-nums"
-                aria-live="polite"
-              >
-                {year} 年 {month} 月
-              </p>
+              <PeriodJump
+                year={year}
+                month={month}
+                onChange={jumpTo}
+                className="text-sm font-semibold tracking-wide tabular-nums text-[var(--paper)]"
+              />
               <button
                 type="button"
                 onClick={() => shiftMonth(1)}

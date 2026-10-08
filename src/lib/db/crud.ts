@@ -335,9 +335,17 @@ export async function listTransactionsForYear(
 ): Promise<Transaction[]> {
   const start = `${year}-01-01`;
   const end = `${year + 1}-01-01`;
+  return listTransactionsBetween(bookId, start, end);
+}
+
+export async function listTransactionsBetween(
+  bookId: string,
+  start: string,
+  endExclusive: string,
+): Promise<Transaction[]> {
   const rows = await db.transactions
     .where("[book_id+date]")
-    .between([bookId, start], [bookId, end], true, false)
+    .between([bookId, start], [bookId, endExclusive], true, false)
     .filter((row) => !row.deleted_at && row.type !== "transfer")
     .reverse()
     .toArray();
@@ -362,6 +370,9 @@ export async function listTransactionsForDate(
   return rows.sort((a, b) => compareSameDayTransactions(a, b, nameOf));
 }
 
+/** Keyword search stops after this many hits so a common word does not build a huge list. */
+export const SEARCH_MATCH_CAP = 1000;
+
 export async function searchTransactions(
   bookId: string,
   query: string,
@@ -373,8 +384,7 @@ export async function searchTransactions(
     categories.map((category) => [category.id, category.name.toLowerCase()]),
   );
 
-  // Walking the index in reverse yields newest-first, so `limit` can stop early
-  // instead of loading and sorting the whole book.
+  // Newest first, then stop. A common word like 午餐 would otherwise return every year.
   return db.transactions
     .where("[book_id+date]")
     .between([bookId, Dexie.minKey], [bookId, Dexie.maxKey])
@@ -395,7 +405,7 @@ export async function searchTransactions(
         row.date.includes(q)
       );
     })
-    .limit(200)
+    .limit(SEARCH_MATCH_CAP)
     .toArray();
 }
 
