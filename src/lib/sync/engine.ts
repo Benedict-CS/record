@@ -6,6 +6,7 @@ import {
   writeActiveBookId,
 } from "@/lib/db/owner";
 import { db } from "@/lib/db/schema";
+import { PULL_PAGE_SIZE, takePullPage } from "@/lib/sync/pull-page";
 import {
   missingColumnName,
   plainSyncFailure,
@@ -703,15 +704,30 @@ async function pullAll(userId: string, options: PullOptions = {}) {
       : null;
 
   async function fetchTable(table: string) {
-    let query = supabase
-      .from(table)
-      .select("*")
-      .eq("user_id", userId)
-      .order("updated_at", { ascending: true });
-    if (sinceWithOverlap) query = query.gt("updated_at", sinceWithOverlap);
-    const { data, error } = await query;
-    if (error) throw error;
-    return data ?? [];
+    const seenFirstIds = new Set<string>();
+    const rows: Record<string, unknown>[] = [];
+    // 200 pages is 200k rows. Past that, fail the sync so last_pulled_at
+    // does not jump forward and hide the rest.
+    for (let page = 0; page < 200; page += 1) {
+      const from = page * PULL_PAGE_SIZE;
+      let query = supabase
+        .from(table)
+        .select("*")
+        .eq("user_id", userId)
+        .order("updated_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, from + PULL_PAGE_SIZE - 1);
+      if (sinceWithOverlap) query = query.gt("updated_at", sinceWithOverlap);
+      const { data, error } = await query;
+      if (error) throw error;
+      const taken = takePullPage(
+        (data ?? []) as Array<{ id?: string | null }>,
+        seenFirstIds,
+      );
+      rows.push(...(taken.rows as Record<string, unknown>[]));
+      if (taken.done) return rows;
+    }
+    throw new Error(`${table} 的雲端資料超過一次同步能拉完的筆數`);
   }
 
   // Parallel network pulls; merge stays sequential by table dependency order.
