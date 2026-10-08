@@ -144,6 +144,8 @@ export interface SyncState {
   id: string;
   last_pulled_at: string | null;
   last_pushed_at: string | null;
+  /** Missing on devices that synced before paged pulls. Forces one full download. */
+  pull_version?: number;
 }
 
 export type CloudBook = Omit<Book, "sync_status">;

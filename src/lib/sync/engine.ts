@@ -6,7 +6,12 @@ import {
   writeActiveBookId,
 } from "@/lib/db/owner";
 import { db } from "@/lib/db/schema";
-import { PULL_PAGE_SIZE, takePullPage } from "@/lib/sync/pull-page";
+import {
+  FULL_PULL_VERSION,
+  PULL_PAGE_SIZE,
+  needsFullCloudPull,
+  takePullPage,
+} from "@/lib/sync/pull-page";
 import {
   missingColumnName,
   plainSyncFailure,
@@ -682,12 +687,16 @@ async function pullAll(userId: string, options: PullOptions = {}) {
   const localTxCount = await db.transactions.count();
   // First sync / empty DB / explicit full: download everything.
   // Later syncs only fetch rows newer than last_pulled_at (much faster).
-  const full =
-    options.forceFull ||
-    !since ||
-    localTxCount === 0 ||
-    (typeof localStorage !== "undefined" &&
-      localStorage.getItem("ledger_force_full_pull") === "1");
+  const storageFlag =
+    typeof localStorage !== "undefined" &&
+    localStorage.getItem("ledger_force_full_pull") === "1";
+  const full = needsFullCloudPull({
+    forceFull: options.forceFull,
+    since,
+    localCount: localTxCount,
+    pullVersion: state?.pull_version,
+    storageFlag,
+  });
 
   if (
     full &&
@@ -1011,6 +1020,7 @@ async function pushPending(userId: string): Promise<"column" | "table" | null> {
     id: syncStateKey(userId),
     last_pulled_at: state?.last_pulled_at ?? null,
     last_pushed_at: new Date().toISOString(),
+    pull_version: state?.pull_version,
   });
   return schemaGap;
 }
@@ -1115,6 +1125,7 @@ export async function runSync(options: RunSyncOptions = {}): Promise<void> {
       id: syncStateKey(user.id),
       last_pulled_at: pulledAt,
       last_pushed_at: syncState?.last_pushed_at ?? new Date().toISOString(),
+      pull_version: FULL_PULL_VERSION,
     });
     if (schemaGap === "column") {
       setStatus("error", "這台已存好，雲端還沒這欄，所以上不去。");
