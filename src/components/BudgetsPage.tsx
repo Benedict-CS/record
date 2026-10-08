@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useBook } from "@/components/BookProvider";
 import { ExportCsvButton } from "@/components/ExportCsvButton";
+import { HoldStepButton } from "@/components/HoldStepButton";
 import { PeriodJump } from "@/components/PeriodJump";
 import { CardSkeleton, ListSkeleton } from "@/components/Skeleton";
 import { useToast } from "@/components/ToastProvider";
@@ -193,28 +194,30 @@ export function BudgetsPage() {
         <div className="space-y-4">
           <section className="rounded-2xl bg-[var(--ink)] px-4 py-4 text-[var(--paper)]">
             <div className="mb-3 flex items-center justify-between gap-1">
-              <button
-                type="button"
-                onClick={() => shiftMonth(-1)}
-                aria-label="上一個月"
+              <HoldStepButton
+                ariaLabel="上一個月"
+                title="上一個月，長按跳一年"
                 className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-lg text-[var(--paper)] opacity-80 hover:opacity-100"
+                onStep={() => shiftMonth(-1)}
+                onHold={() => shiftMonth(-12)}
               >
                 ‹
-              </button>
+              </HoldStepButton>
               <PeriodJump
                 year={year}
                 month={month}
                 onChange={jumpTo}
                 className="text-sm font-semibold tracking-wide tabular-nums text-[var(--paper)]"
               />
-              <button
-                type="button"
-                onClick={() => shiftMonth(1)}
-                aria-label="下一個月"
+              <HoldStepButton
+                ariaLabel="下一個月"
+                title="下一個月，長按跳一年"
                 className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-lg text-[var(--paper)] opacity-80 hover:opacity-100"
+                onStep={() => shiftMonth(1)}
+                onHold={() => shiftMonth(12)}
               >
                 ›
-              </button>
+              </HoldStepButton>
             </div>
             <p className="text-[11px] opacity-70">本月實際花掉（不含扣住）</p>
             <p className="mt-1 text-xl font-semibold tabular-nums">

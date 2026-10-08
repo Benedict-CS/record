@@ -43,10 +43,29 @@ export function HomePage() {
   >("all");
   const { show } = useToast();
   const openedForBook = useRef<string | null>(null);
+  const pinnedPeriod = useRef(false);
 
   const accounts = useAccounts();
   const categories = useCategories();
   const transactions = useMonthTransactions(year, month);
+
+  // /?y=2025&m=12 opens that month (year report). Done before the empty-month jump.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const nextYear = Number(params.get("y"));
+    const nextMonth = Number(params.get("m"));
+    if (!nextYear || nextMonth < 1 || nextMonth > 12) return;
+    pinnedPeriod.current = true;
+    // The query string exists only in the browser, so the server render stays on this month.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- see above
+    setYear(nextYear);
+    setMonth(nextMonth);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("y");
+    url.searchParams.delete("m");
+    const next = `${url.pathname}${url.search}${url.hash}`;
+    window.history.replaceState(null, "", next);
+  }, []);
 
   // Deep link /#quick-add (reminder, other pages) opens the add sheet.
   useEffect(() => {
@@ -66,6 +85,10 @@ export function HomePage() {
   // (once per book). Stay on the real current month when the book is empty.
   useEffect(() => {
     if (!ready || !bookId) return;
+    if (pinnedPeriod.current) {
+      openedForBook.current = bookId;
+      return;
+    }
     if (transactions.length > 0) {
       openedForBook.current = bookId;
       return;

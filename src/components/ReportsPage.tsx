@@ -1,9 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { useBook } from "@/components/BookProvider";
 import { CategoryDetailSheet } from "@/components/CategoryDetailSheet";
+import { HoldStepButton } from "@/components/HoldStepButton";
 import { PeriodJump } from "@/components/PeriodJump";
 import { SimpleSummary } from "@/components/SimpleSummary";
 import { CategoryPieChart } from "@/components/CategoryPieChart";
@@ -184,14 +186,15 @@ export function ReportsPage() {
 
           <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-4">
             <div className="mb-3 flex items-center justify-between gap-1">
-              <button
-                type="button"
-                onClick={() => shiftPeriod(-1)}
-                aria-label={scope === "month" ? "上一期" : "上一年"}
+              <HoldStepButton
+                ariaLabel={scope === "month" ? "上一期" : "上一年"}
+                title={scope === "month" ? "上一個月，長按跳一年" : "上一年，長按跳五年"}
                 className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-[var(--line)] bg-[var(--paper)] text-lg text-[var(--ink)]"
+                onStep={() => shiftPeriod(-1)}
+                onHold={() => shiftPeriod(scope === "month" ? -12 : -5)}
               >
                 ‹
-              </button>
+              </HoldStepButton>
               <div className="min-w-0 text-center">
                 <PeriodJump
                   year={year}
@@ -208,14 +211,15 @@ export function ReportsPage() {
                   </p>
                 ) : null}
               </div>
-              <button
-                type="button"
-                onClick={() => shiftPeriod(1)}
-                aria-label={scope === "month" ? "下一期" : "下一年"}
+              <HoldStepButton
+                ariaLabel={scope === "month" ? "下一期" : "下一年"}
+                title={scope === "month" ? "下一個月，長按跳一年" : "下一年，長按跳五年"}
                 className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-[var(--line)] bg-[var(--paper)] text-lg text-[var(--ink)]"
+                onStep={() => shiftPeriod(1)}
+                onHold={() => shiftPeriod(scope === "month" ? 12 : 5)}
               >
                 ›
-              </button>
+              </HoldStepButton>
             </div>
             <SimpleSummary summary={summary} currency={currency} />
           </section>
@@ -299,6 +303,17 @@ export function ReportsPage() {
               <h2 className="text-sm font-medium text-[var(--ink)]">各月收支</h2>
               <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-2 py-3 sm:px-3">
                 <YearBarChart months={monthlyTotals} currency={currency} />
+                <div className="mt-3 grid grid-cols-6 gap-1.5 px-1">
+                  {monthlyTotals.map((row) => (
+                    <Link
+                      key={row.month}
+                      href={`/?y=${year}&m=${row.month}`}
+                      className="flex min-h-10 items-center justify-center rounded-lg text-xs font-medium text-[var(--ink)] active:bg-[var(--paper)]"
+                    >
+                      {row.month}月
+                    </Link>
+                  ))}
+                </div>
               </div>
             </section>
           ) : null}

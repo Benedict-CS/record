@@ -11,6 +11,11 @@ import { createTransaction, updateTransaction } from "@/lib/db/crud";
 import { formatCalcNumber } from "@/lib/calculator";
 import { formatMoney, todayLocal } from "@/lib/format";
 import { isSpendableBankHolding } from "@/lib/holding-spend";
+import {
+  preferredCategoryId,
+  rememberCategory,
+  useRememberedCategory,
+} from "@/lib/last-category";
 import { TREAT_TAG } from "@/lib/transaction-tag";
 import { useHoldings } from "@/lib/hooks/useLedgerData";
 import { runSync } from "@/lib/sync/engine";
@@ -119,10 +124,15 @@ export function TransactionForm({
     (!isEdit && bankMove && spendableHoldings.length === 1
       ? spendableHoldings[0].id
       : "");
+  const rememberedCategory = useRememberedCategory(type);
   const effectiveCategoryId =
     type === "hold"
       ? categoryId || null
-      : categoryId || filteredCategories[0]?.id || "";
+      : preferredCategoryId(
+          categoryId,
+          rememberedCategory,
+          filteredCategories.map((category) => category.id),
+        );
 
   const estimatedSelfPay =
     type === "expense" &&
@@ -215,6 +225,9 @@ export function TransactionForm({
         setReimbursable(null);
         setNote("");
         if (spendableHoldings.length !== 1) setHoldingId("");
+      }
+      if ((type === "expense" || type === "income") && effectiveCategoryId) {
+        rememberCategory(type, String(effectiveCategoryId));
       }
       void runSync();
       onSaved?.();

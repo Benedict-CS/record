@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useBook } from "@/components/BookProvider";
 import { DayTransactionPanel } from "@/components/DayTransactionPanel";
+import { HoldStepButton } from "@/components/HoldStepButton";
 import { PeriodJump } from "@/components/PeriodJump";
 import { CalendarSkeleton, ListSkeleton } from "@/components/Skeleton";
 import { TransactionEditor } from "@/components/TransactionEditor";
@@ -149,23 +150,25 @@ export function CalendarPage() {
         <div className="space-y-4">
           <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-3">
             <div className="mb-3 flex items-center justify-between gap-1">
-              <button
-                type="button"
-                onClick={() => shiftMonth(-1)}
-                aria-label="上一個月"
+              <HoldStepButton
+                ariaLabel="上一個月"
+                title="上一個月，長按跳一年"
                 className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-[var(--line)] bg-[var(--paper)] text-lg text-[var(--ink)] active:scale-[0.98]"
+                onStep={() => shiftMonth(-1)}
+                onHold={() => shiftMonth(-12)}
               >
                 ‹
-              </button>
+              </HoldStepButton>
               <PeriodJump year={year} month={month} onChange={jumpTo} />
-              <button
-                type="button"
-                onClick={() => shiftMonth(1)}
-                aria-label="下一個月"
+              <HoldStepButton
+                ariaLabel="下一個月"
+                title="下一個月，長按跳一年"
                 className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-[var(--line)] bg-[var(--paper)] text-lg text-[var(--ink)] active:scale-[0.98]"
+                onStep={() => shiftMonth(1)}
+                onHold={() => shiftMonth(12)}
               >
                 ›
-              </button>
+              </HoldStepButton>
             </div>
 
             <div className="mb-1 grid grid-cols-7 gap-1">
