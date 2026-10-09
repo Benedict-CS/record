@@ -28,7 +28,12 @@ import {
 } from "@/lib/transaction-tag";
 import { applyInvestMove, reverseInvestMove } from "@/lib/db/invest-move";
 import { isOpenItem } from "@/lib/open-items";
-import { expenseDisplayAmount } from "@/lib/reimbursement";
+import {
+  expenseDisplayAmount,
+  HOLD_REFUND_NOTE_PREFIX,
+  holdRefundIncomeIds,
+  isHoldRefundIncome,
+} from "@/lib/reimbursement";
 import type {
   Account,
   AccountBalance,
@@ -327,17 +332,15 @@ export async function findLatestBookedYear(
 export async function findLatestTransactionMonth(
   bookId: string,
 ): Promise<{ year: number; month: number } | null> {
-  const rows = await db.transactions
-    .where("book_id")
-    .equals(bookId)
-    .filter((row) => !row.deleted_at && row.type !== "transfer" && Boolean(row.date))
-    .toArray();
-  if (!rows.length) return null;
-  let maxDate = rows[0].date;
-  for (const row of rows) {
-    if (row.date > maxDate) maxDate = row.date;
-  }
-  const [yearText, monthText] = maxDate.split("-");
+  // Walk the [book_id+date] index from the newest date instead of loading the book.
+  const row = await db.transactions
+    .where("[book_id+date]")
+    .between([bookId, ""], [bookId, "\uffff"])
+    .reverse()
+    .filter((item) => !item.deleted_at && item.type !== "transfer" && Boolean(item.date))
+    .first();
+  if (!row) return null;
+  const [yearText, monthText] = row.date.split("-");
   const year = Number(yearText);
   const month = Number(monthText);
   if (!year || !month) return null;
@@ -763,10 +766,13 @@ export async function softDeleteTransaction(id: string): Promise<void> {
       if (income && !income.deleted_at) {
         await db.transactions.update(income.id, tombstone);
       }
-    } else if (row.type === "income") {
-      const hold = await db.transactions
-        .where("book_id")
-        .equals(row.book_id)
+    } else if (
+      row.type === "income" &&
+      row.note.startsWith(HOLD_REFUND_NOTE_PREFIX)
+    ) {
+      // Removing the refund reopens the hold instead of erasing the deposit.
+      // release_transaction_id is not indexed; the note prefix keeps this scan rare.
+      const hold = await bookTransactions(row.book_id)
         .filter(
           (tx) =>
             !tx.deleted_at &&
@@ -775,7 +781,13 @@ export async function softDeleteTransaction(id: string): Promise<void> {
         )
         .first();
       if (hold) {
-        await db.transactions.update(hold.id, tombstone);
+        await db.transactions.update(hold.id, {
+          hold_status: "held",
+          release_transaction_id: null,
+          updated_at: stamp,
+          client_id: getClientId(),
+          sync_status: "pending",
+        });
       }
     }
 
@@ -918,8 +930,8 @@ export async function releaseHold(
     }
 
     const note = existing.note.trim()
-      ? `退回：${existing.note.trim()}`
-      : "退回：扣住款項";
+      ? `${HOLD_REFUND_NOTE_PREFIX}${existing.note.trim()}`
+      : `${HOLD_REFUND_NOTE_PREFIX}扣住款項`;
 
     income = {
       ...baseMeta(),
@@ -1370,12 +1382,7 @@ export async function recordHoldingInterest(
 }
 
 export function monthSummary(transactions: Transaction[]): PeriodSummary {
-  // Same-period holds point at their refund income; cross-month refunds use the note prefix.
-  const releaseIncomeIds = new Set(
-    transactions
-      .filter((tx) => tx.type === "hold" && tx.release_transaction_id)
-      .map((tx) => tx.release_transaction_id as string),
-  );
+  const refundIds = holdRefundIncomeIds(transactions);
 
   let income = 0;
   let expense = 0;
@@ -1384,12 +1391,7 @@ export function monthSummary(transactions: Transaction[]): PeriodSummary {
   let reimbursableReceived = 0;
   for (const tx of transactions) {
     if (tx.type === "income") {
-      if (
-        releaseIncomeIds.has(tx.id) ||
-        tx.note.startsWith("退回：")
-      ) {
-        continue;
-      }
+      if (isHoldRefundIncome(tx, refundIds)) continue;
       income += tx.amount;
     }
     if (tx.type === "expense") {
@@ -1424,8 +1426,11 @@ export function categoryBreakdown(
   type: "income" | "expense" = "expense",
 ): CategoryBreakdownItem[] {
   const map = new Map<string | null, { amount: number; treatAmount: number }>();
+  const refundIds =
+    type === "income" ? holdRefundIncomeIds(transactions) : new Set<string>();
   for (const tx of transactions) {
     if (tx.type !== type) continue;
+    if (type === "income" && isHoldRefundIncome(tx, refundIds)) continue;
     const key = tx.category_id;
     const amount =
       type === "expense" ? expenseDisplayAmount(tx) : tx.amount;
@@ -1489,18 +1494,13 @@ export function yearlyTotals(
     income: 0,
     expense: 0,
   }));
-  // Match monthSummary: a hold refund is not earnings.
-  const releaseIncomeIds = new Set(
-    transactions
-      .filter((tx) => tx.type === "hold" && tx.release_transaction_id)
-      .map((tx) => tx.release_transaction_id as string),
-  );
+  const refundIds = holdRefundIncomeIds(transactions);
   for (const tx of transactions) {
     const year = Number(tx.date.slice(0, 4));
     const row = years[year - startYear];
     if (!row) continue;
     if (tx.type === "income") {
-      if (releaseIncomeIds.has(tx.id) || tx.note.startsWith("退回：")) continue;
+      if (isHoldRefundIncome(tx, refundIds)) continue;
       row.income += tx.amount;
     }
     if (tx.type === "expense") row.expense += expenseDisplayAmount(tx);
@@ -1514,10 +1514,14 @@ export function monthlyTotalsForYear(transactions: Transaction[]) {
     income: 0,
     expense: 0,
   }));
+  // Match monthSummary: a hold refund is not earnings.
+  const refundIds = holdRefundIncomeIds(transactions);
   for (const tx of transactions) {
     const month = Number(tx.date.slice(5, 7));
     if (!month || month < 1 || month > 12) continue;
-    if (tx.type === "income") months[month - 1].income += tx.amount;
+    if (tx.type === "income" && !isHoldRefundIncome(tx, refundIds)) {
+      months[month - 1].income += tx.amount;
+    }
     if (tx.type === "expense") {
       months[month - 1].expense += expenseDisplayAmount(tx);
     }
@@ -1555,13 +1559,16 @@ export function compareSummaries(
 
 export function dailyTrend(transactions: Transaction[]): DailyTrendPoint[] {
   const map = new Map<string, DailyTrendPoint>();
+  const refundIds = holdRefundIncomeIds(transactions);
   for (const tx of transactions) {
     const point = map.get(tx.date) ?? {
       date: tx.date,
       income: 0,
       expense: 0,
     };
-    if (tx.type === "income") point.income += tx.amount;
+    if (tx.type === "income" && !isHoldRefundIncome(tx, refundIds)) {
+      point.income += tx.amount;
+    }
     if (tx.type === "expense") point.expense += expenseDisplayAmount(tx);
     map.set(tx.date, point);
   }

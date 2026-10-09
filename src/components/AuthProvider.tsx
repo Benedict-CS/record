@@ -66,12 +66,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       const next = session?.user ?? null;
       setOwnerId(next?.id ?? null);
       setUser(next);
       setAuthResolved(true);
-      if (next) {
+      // Pull this account's ledger when a session appears. Token refreshes
+      // fire hourly and must not start a sync each time.
+      if (next && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
         void runSync();
       }
     });

@@ -45,6 +45,25 @@ export function preserveUnsyncedField<T extends string>(input: {
 }
 
 /**
+ * Last-writer-wins on updated_at: true when `candidate` is at or after `other`.
+ * Local rows carry `…Z`; PostgREST returns `…+00:00` and may trim trailing
+ * zeros, so compare instants, not strings.
+ */
+export function remoteWins(
+  candidateUpdatedAt: string | null | undefined,
+  otherUpdatedAt: string | null | undefined,
+): boolean {
+  if (!otherUpdatedAt) return true;
+  if (!candidateUpdatedAt) return false;
+  const candidateMs = Date.parse(candidateUpdatedAt);
+  const otherMs = Date.parse(otherUpdatedAt);
+  if (Number.isFinite(candidateMs) && Number.isFinite(otherMs)) {
+    return candidateMs >= otherMs;
+  }
+  return candidateUpdatedAt >= otherUpdatedAt;
+}
+
+/**
  * Schema mismatches should read as a saved-local / not-uploaded note,
  * not a PostgREST paragraph.
  */

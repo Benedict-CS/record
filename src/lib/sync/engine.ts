@@ -16,6 +16,7 @@ import {
   missingColumnName,
   plainSyncFailure,
   preserveUnsyncedField,
+  remoteWins,
   withoutColumn,
 } from "@/lib/sync/schema-compat";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
@@ -396,7 +397,7 @@ async function mergeRemoteBooks(remoteRows: CloudBook[]) {
   for (let i = 0; i < remoteRows.length; i += 1) {
     const remote = remoteRows[i];
     const local = locals[i];
-    if (!local || remote.updated_at >= local.updated_at) {
+    if (!local || remoteWins(remote.updated_at, local.updated_at)) {
       toPut.push(remote);
     }
   }
@@ -422,11 +423,11 @@ async function mergeRemoteAccounts(remoteRows: CloudAccount[]) {
       local?.sync_status === "pending" &&
       local.deleted_at &&
       !remote.deleted_at &&
-      local.updated_at >= remote.updated_at
+      remoteWins(local.updated_at, remote.updated_at)
     ) {
       continue;
     }
-    if (!local || remote.updated_at >= local.updated_at) {
+    if (!local || remoteWins(remote.updated_at, local.updated_at)) {
       toPut.push(normalised);
     }
   }
@@ -452,11 +453,11 @@ async function mergeRemoteCategories(remoteRows: CloudCategory[]) {
       local?.sync_status === "pending" &&
       local.deleted_at &&
       !remote.deleted_at &&
-      local.updated_at >= remote.updated_at
+      remoteWins(local.updated_at, remote.updated_at)
     ) {
       continue;
     }
-    if (!local || remote.updated_at >= local.updated_at) {
+    if (!local || remoteWins(remote.updated_at, local.updated_at)) {
       toPut.push(withColor);
     }
   }
@@ -528,7 +529,7 @@ async function mergeRemoteTransactions(remoteRows: CloudTransaction[]) {
       target_holding_id: target.value,
       sync_status: needsUpload ? "pending" : "synced",
     };
-    if (!local || remote.updated_at >= local.updated_at) {
+    if (!local || remoteWins(remote.updated_at, local.updated_at)) {
       toPut.push(normalised);
     }
   }
@@ -545,7 +546,7 @@ async function mergeRemoteBudgets(remoteRows: CloudBudget[]) {
     const remote = remoteRows[i];
     const local = locals[i];
     if (local?.sync_status === "pending") continue;
-    if (!local || remote.updated_at >= local.updated_at) {
+    if (!local || remoteWins(remote.updated_at, local.updated_at)) {
       toPut.push({ ...remote, amount: Number(remote.amount) });
     }
   }
@@ -565,7 +566,7 @@ async function mergeRemoteTemplates(remoteRows: CloudTemplate[]) {
     const normalised = { ...remote, amount: Number(remote.amount) };
     const local = locals[i];
     if (local?.sync_status === "pending") continue;
-    if (!local || remote.updated_at >= local.updated_at) {
+    if (!local || remoteWins(remote.updated_at, local.updated_at)) {
       toPut.push(normalised);
     }
   }
@@ -590,7 +591,7 @@ async function mergeRemoteRecurring(remoteRows: CloudRecurringRule[]) {
     const remote = remoteRows[i];
     const local = locals[i];
     if (local?.sync_status === "pending") continue;
-    if (!local || remote.updated_at >= local.updated_at) {
+    if (!local || remoteWins(remote.updated_at, local.updated_at)) {
       const remoteRecord = remote as unknown as Record<string, unknown>;
       const hasEnd = Object.prototype.hasOwnProperty.call(remoteRecord, "end_month");
       const hasReimbursable = Object.prototype.hasOwnProperty.call(
@@ -663,7 +664,7 @@ async function mergeRemoteHoldings(remoteRows: CloudHolding[]) {
     };
     const local = locals[i];
     if (local?.sync_status === "pending") continue;
-    if (!local || remote.updated_at >= local.updated_at) {
+    if (!local || remoteWins(remote.updated_at, local.updated_at)) {
       toPut.push(normalised);
     }
   }
@@ -682,6 +683,9 @@ function syncStateKey(userId: string) {
 
 async function pullAll(userId: string, options: PullOptions = {}) {
   const supabase = createClient();
+  // Stamp before the fetch: rows written on the server while pages download
+  // must fall inside the next incremental window, not before it.
+  const pullStartedAt = new Date().toISOString();
   const state = await db.sync_state.get(syncStateKey(userId));
   const since = state?.last_pulled_at;
   const localTxCount = await db.transactions.count();
@@ -773,7 +777,7 @@ async function pullAll(userId: string, options: PullOptions = {}) {
   }
 
   // Defer last_pulled_at until push succeeds so a failed push can re-pull.
-  return new Date().toISOString();
+  return pullStartedAt;
 }
 
 async function pushPending(userId: string): Promise<"column" | "table" | null> {
@@ -884,10 +888,12 @@ async function pushPending(userId: string): Promise<"column" | "table" | null> {
   const UPSERT_CHUNK = 150;
   let schemaGap: "column" | "table" | null = null;
 
+  type PushedRow = { id: string; updated_at: string };
+
   async function upsertTable(
     table: string,
     rows: Record<string, unknown>[],
-    markSynced: (ids: string[]) => Promise<void>,
+    markSynced: (pushed: PushedRow[]) => Promise<void>,
   ) {
     if (!rows.length) return;
     for (let i = 0; i < rows.length; i += UPSERT_CHUNK) {
@@ -922,53 +928,64 @@ async function pushPending(userId: string): Promise<"column" | "table" | null> {
         schemaGap = "column";
         continue;
       }
-      await markSynced(rows.slice(i, i + UPSERT_CHUNK).map((row) => String(row.id)));
+      await markSynced(
+        rows.slice(i, i + UPSERT_CHUNK).map((row) => ({
+          id: String(row.id),
+          updated_at: String(row.updated_at),
+        })),
+      );
     }
   }
 
-  async function markLocalSynced<T extends { id: string; sync_status: SyncStatus }>(
+  async function markLocalSynced<
+    T extends { id: string; updated_at: string; sync_status: SyncStatus },
+  >(
     table: {
       bulkGet: (keys: string[]) => Promise<Array<T | undefined>>;
       bulkPut: (items: T[]) => Promise<unknown>;
     },
-    ids: string[],
+    pushed: PushedRow[],
   ) {
-    const locals = await table.bulkGet(ids);
-    const stamped = locals
-      .filter((row): row is T => Boolean(row))
-      .map((row) => ({ ...row, sync_status: "synced" as const }));
+    const locals = await table.bulkGet(pushed.map((row) => row.id));
+    const stamped: T[] = [];
+    locals.forEach((row, index) => {
+      // An edit saved while the upload was in flight has a newer updated_at.
+      // Leave it pending so the next push carries that change.
+      if (!row || row.updated_at !== pushed[index].updated_at) return;
+      stamped.push({ ...row, sync_status: "synced" as const });
+    });
     if (stamped.length) await table.bulkPut(stamped);
   }
 
   await upsertTable(
     "books",
     ownedBooks as Record<string, unknown>[],
-    (ids) => markLocalSynced(db.books, ids),
+    (pushed) => markLocalSynced(db.books, pushed),
   );
   await upsertTable(
     "accounts",
     ownedAccounts as Record<string, unknown>[],
-    (ids) => markLocalSynced(db.accounts, ids),
+    (pushed) => markLocalSynced(db.accounts, pushed),
   );
   await upsertTable(
     "categories",
     ownedCategories as Record<string, unknown>[],
-    (ids) => markLocalSynced(db.categories, ids),
+    (pushed) => markLocalSynced(db.categories, pushed),
   );
   await upsertTable(
     "transactions",
     ownedTransactions as Record<string, unknown>[],
-    (ids) => markLocalSynced(db.transactions, ids),
+    (pushed) => markLocalSynced(db.transactions, pushed),
   );
   await upsertTable(
     "budgets",
     ownedBudgets as Record<string, unknown>[],
-    (ids) => markLocalSynced(db.budgets, ids),
+    (pushed) => markLocalSynced(db.budgets, pushed),
   );
   await upsertTable(
     "templates",
     ownedTemplates as Record<string, unknown>[],
-    (ids) => markLocalSynced(db.templates, ids),
+    (pushed) => markLocalSynced(db.templates, pushed),
   );
 
   const holdingsPayload = ownedHoldings.map((row) => ({
@@ -985,7 +1002,7 @@ async function pushPending(userId: string): Promise<"column" | "table" | null> {
   await upsertTable(
     "holdings",
     holdingsPayload as Record<string, unknown>[],
-    (ids) => markLocalSynced(db.holdings, ids),
+    (pushed) => markLocalSynced(db.holdings, pushed),
   );
   const ownedRules = recurringRules
     .filter((row) => row.user_id === userId)
@@ -1008,7 +1025,7 @@ async function pushPending(userId: string): Promise<"column" | "table" | null> {
     await upsertTable(
       "recurring_rules",
       ownedRules as Record<string, unknown>[],
-      (ids) => markLocalSynced(db.recurring_rules, ids),
+      (pushed) => markLocalSynced(db.recurring_rules, pushed),
     );
   } catch (error) {
     if (!isMissingRelation(error)) throw error;
@@ -1068,15 +1085,6 @@ export async function runSync(options: RunSyncOptions = {}): Promise<void> {
   );
 
   try {
-    const state = await db.sync_state.get("default");
-    const isFirstPull = !state?.last_pulled_at || forceFull;
-    // Seed only when local is empty / first cloud pull — BookProvider already
-    // seeds on boot; re-running pin/dedupe on every sync was a major cost.
-    if (isFirstPull) {
-      const { ensureSeedData } = await import("@/lib/db/seed");
-      await ensureSeedData();
-    }
-
     const supabase = createClient();
     const {
       data: { user },
@@ -1097,6 +1105,15 @@ export async function runSync(options: RunSyncOptions = {}): Promise<void> {
     if (!user) {
       setStatus("local", "未登入");
       return;
+    }
+
+    // Seed only on this account's first cloud pull. BookProvider already seeds
+    // on boot; re-running pin/dedupe on every sync was a major cost. The state
+    // row is keyed per user, so look it up by that key.
+    const state = await db.sync_state.get(syncStateKey(user.id));
+    if (!state?.last_pulled_at || forceFull) {
+      const { ensureSeedData } = await import("@/lib/db/seed");
+      await ensureSeedData();
     }
 
     // Do not adopt this device's logged-out ledger, or another account's rows.

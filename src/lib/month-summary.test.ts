@@ -1,4 +1,10 @@
-import { monthSummary, yearlyTotals } from "./db/crud";
+import {
+  categoryBreakdown,
+  dailyTrend,
+  monthSummary,
+  monthlyTotalsForYear,
+  yearlyTotals,
+} from "./db/crud";
 import type { Transaction } from "./types";
 
 function assert(condition: unknown, label: string): asserts condition {
@@ -133,5 +139,43 @@ const withRefund = yearlyTotals(
 );
 assert(withRefund[0].income === 100, "hold refund is not counted as income");
 assert(withRefund[0].expense === 50, "received reimbursement is taken out of spend");
+
+// Every income aggregation must agree with monthSummary on hold refunds.
+const linkedRefundId = crypto.randomUUID();
+const mixed = [
+  tx({ type: "income", amount: 300, date: "2026-03-05", note: "薪水", category_id: "c-salary" }),
+  tx({
+    type: "hold",
+    amount: 120,
+    date: "2026-03-06",
+    hold_status: "released",
+    release_transaction_id: linkedRefundId,
+  }),
+  tx({ id: linkedRefundId, type: "income", amount: 120, date: "2026-03-20", note: "押金" }),
+  tx({ type: "income", amount: 80, date: "2026-04-02", note: "退回：電費預繳" }),
+  tx({ type: "expense", amount: 50, date: "2026-04-03" }),
+];
+const months = monthlyTotalsForYear(mixed);
+assert(months[2].income === 300, "year chart drops a linked refund (March)");
+assert(months[3].income === 0, "year chart drops a note-prefixed refund (April)");
+assert(months[3].expense === 50, "year chart keeps the expense");
+const trend = dailyTrend(mixed);
+assert(
+  trend.find((point) => point.date === "2026-03-20")?.income === 0,
+  "daily trend drops a linked refund",
+);
+assert(
+  trend.find((point) => point.date === "2026-04-02")?.income === 0,
+  "daily trend drops a note-prefixed refund",
+);
+const incomeByCategory = categoryBreakdown(mixed, [], "income");
+assert(
+  incomeByCategory.length === 1 && incomeByCategory[0].amount === 300,
+  "income breakdown has no 未分類 bucket from refunds",
+);
+assert(
+  monthSummary(mixed).income === months.reduce((sum, row) => sum + row.income, 0),
+  "monthly chart income sums to the summary income",
+);
 
 console.log("month-summary tests passed");

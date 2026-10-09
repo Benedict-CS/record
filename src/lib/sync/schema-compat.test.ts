@@ -2,6 +2,7 @@ import {
   missingColumnName,
   plainSyncFailure,
   preserveUnsyncedField,
+  remoteWins,
   withoutColumn,
 } from "./schema-compat";
 
@@ -76,5 +77,21 @@ assert(
   plainSyncFailure({ code: "42501", message: "permission denied" }) === null,
   "other failures keep the detailed formatter",
 );
+
+// PostgREST trims trailing zeros and uses +00:00; the device writes …Z.
+assert(
+  remoteWins("2026-10-09T15:22:43.5+00:00", "2026-10-09T15:22:43.499Z"),
+  "a later cloud instant wins even when the string sorts lower",
+);
+assert(
+  !remoteWins("2026-10-09T15:22:43+00:00", "2026-10-09T15:22:43.001Z"),
+  "a 1ms newer local row is kept",
+);
+assert(
+  remoteWins("2026-10-09T15:22:43.030+00:00", "2026-10-09T15:22:43.030Z"),
+  "the same instant lets the cloud row through",
+);
+assert(remoteWins("2026-10-09T15:22:43.030Z", undefined), "no local row means the cloud row is taken");
+assert(!remoteWins(null, "2026-10-09T15:22:43.030Z"), "a cloud row without a stamp never overwrites");
 
 console.log("schema compat tests ok");

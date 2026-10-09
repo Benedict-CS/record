@@ -21,6 +21,37 @@ export function expenseDisplayAmount(tx: Pick<
   return tx.amount;
 }
 
+/** Note prefix releaseHold() writes on the refund income. */
+export const HOLD_REFUND_NOTE_PREFIX = "退回：";
+
+/**
+ * Ids of refund incomes that belong to a hold in the same list.
+ * Pair with isHoldRefundIncome so every aggregation skips the same rows.
+ */
+export function holdRefundIncomeIds(
+  transactions: readonly Pick<Transaction, "type" | "release_transaction_id">[],
+): Set<string> {
+  const ids = new Set<string>();
+  for (const tx of transactions) {
+    if (tx.type === "hold" && tx.release_transaction_id) {
+      ids.add(tx.release_transaction_id);
+    }
+  }
+  return ids;
+}
+
+/**
+ * A hold refund is cash coming back, not earnings. Same-period refunds are
+ * matched by id; a refund booked in a later month is matched by note prefix.
+ */
+export function isHoldRefundIncome(
+  tx: Pick<Transaction, "id" | "type" | "note">,
+  refundIds: ReadonlySet<string>,
+): boolean {
+  if (tx.type !== "income") return false;
+  return refundIds.has(tx.id) || tx.note.startsWith(HOLD_REFUND_NOTE_PREFIX);
+}
+
 export function isReimbursementPending(
   tx: Pick<
     Transaction,
