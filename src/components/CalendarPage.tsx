@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useBook } from "@/components/BookProvider";
 import { DayTransactionPanel } from "@/components/DayTransactionPanel";
@@ -56,10 +56,39 @@ export function CalendarPage() {
   const today = todayLocal();
   const [selectedDate, setSelectedDate] = useState(today);
   const [editing, setEditing] = useState<Transaction | null>(null);
+  const pendingEditId = useRef<string | null>(null);
 
   const accounts = useAccounts();
   const categories = useCategories();
   const transactions = useMonthTransactions(year, month);
+
+  // Report rows link here as /calendar?date=YYYY-MM-DD&tx=<id>.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const date = params.get("date");
+    const txId = params.get("tx");
+    if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      const [y, m] = date.split("-").map(Number);
+      if (y && m) {
+        setYear(y);
+        setMonth(m);
+        setSelectedDate(date);
+      }
+    }
+    if (txId) pendingEditId.current = txId;
+  }, []);
+
+  useEffect(() => {
+    const id = pendingEditId.current;
+    if (!id || !ready) return;
+    const tx = transactions.find((item) => item.id === id);
+    if (!tx) return;
+    pendingEditId.current = null;
+    setEditing(tx);
+    if (window.location.search) {
+      window.history.replaceState(null, "", "/calendar");
+    }
+  }, [ready, transactions]);
 
   const dayMap = useMemo(() => {
     const map = new Map<

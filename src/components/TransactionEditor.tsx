@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { AmountKeypad } from "@/components/AmountKeypad";
+import { BankHoldingField } from "@/components/BankHoldingField";
 import { useBook } from "@/components/BookProvider";
 import { CategoryPickerGrid } from "@/components/CategoryPickerGrid";
+import { TreatTagField } from "@/components/TreatTagField";
 import { useToast } from "@/components/ToastProvider";
 import { formatCalcNumber } from "@/lib/calculator";
 import {
@@ -13,6 +15,8 @@ import {
   updateTransaction,
 } from "@/lib/db/crud";
 import { formatMoney, todayLocal } from "@/lib/format";
+import { TREAT_TAG } from "@/lib/transaction-tag";
+import { useHoldings } from "@/lib/hooks/useLedgerData";
 import { runSync } from "@/lib/sync/engine";
 import type { Account, Category, Transaction, TransactionType } from "@/lib/types";
 
@@ -37,6 +41,7 @@ export function TransactionEditor({
   onClose: () => void;
 }) {
   const { book } = useBook();
+  const holdings = useHoldings();
   const { show } = useToast();
   const [type, setType] = useState<FormType>(toFormType(transaction.type));
   const [amount, setAmount] = useState<number | null>(
@@ -52,7 +57,9 @@ export function TransactionEditor({
   const [date, setDate] = useState(transaction.date);
   const [note, setNote] = useState(transaction.note);
   const [accountId, setAccountId] = useState(transaction.account_id);
+  const [holdingId, setHoldingId] = useState(transaction.holding_id ?? "");
   const [categoryId, setCategoryId] = useState(transaction.category_id ?? "");
+  const [treat, setTreat] = useState(transaction.tag === TREAT_TAG);
   const [keypadTarget, setKeypadTarget] = useState<KeypadTarget | null>(null);
   const [saving, setSaving] = useState(false);
   const [releasing, setReleasing] = useState(false);
@@ -90,6 +97,8 @@ export function TransactionEditor({
     setNote(transaction.note);
     setAccountId(transaction.account_id);
     setCategoryId(transaction.category_id ?? "");
+    setHoldingId(transaction.holding_id ?? "");
+    setTreat(transaction.tag === TREAT_TAG);
     setError(null);
   }
 
@@ -107,6 +116,12 @@ export function TransactionEditor({
   );
 
   const effectiveAccountId = accountId || accounts[0]?.id || "";
+  const selectedAccount =
+    accounts.find((account) => account.id === effectiveAccountId) ?? null;
+  const bankMove =
+    (type === "expense" || type === "income") && selectedAccount?.type === "bank";
+  const cashMove =
+    (type === "expense" || type === "income") && selectedAccount?.type === "cash";
   const effectiveCategoryId =
     type === "hold"
       ? categoryId || null
@@ -229,6 +244,8 @@ export function TransactionEditor({
                 ? "received"
                 : "pending")
             : null,
+        holding_id: bankMove && holdingId ? holdingId : null,
+        tag: type === "expense" && treat ? TREAT_TAG : null,
       });
       void runSync();
       onClose();
@@ -247,6 +264,34 @@ export function TransactionEditor({
     reimbursable === null
       ? "選填"
       : formatMoney(reimbursable, book?.currency);
+
+  if (transaction.type === "invest") {
+    return (
+      <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+        <button
+          type="button"
+          aria-label="關閉"
+          className="absolute inset-0 bg-[var(--ink)]/40"
+          onClick={onClose}
+        />
+        <div className="relative z-10 w-full max-w-lg rounded-t-2xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-lg sm:mx-4 sm:rounded-2xl">
+          <h2 className="text-base font-semibold text-[var(--ink)]">定期定額</h2>
+          <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
+            {transaction.note || "這筆"}{" "}
+            {formatMoney(transaction.amount, book?.currency)}{" "}
+            已從銀行換成持股，沒有算進支出。之後每個月請到固定扣款調整。
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-4 min-h-11 w-full rounded-xl bg-[var(--ink)] text-sm font-medium text-[var(--paper)]"
+          >
+            關閉
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -314,7 +359,7 @@ export function TransactionEditor({
 
             {type === "hold" && !isReleasedHold ? (
               <p className="text-xs leading-relaxed text-[var(--muted)]">
-                錢被扣住、之後會退或結算（押金、電費預繳）。不計入「實際花掉」。
+                錢被扣住、之後會退或結算（押金、電費預繳）。不計入支出。
               </p>
             ) : null}
 
@@ -395,6 +440,22 @@ export function TransactionEditor({
               </label>
             </div>
 
+            {bankMove ? (
+              <BankHoldingField
+                holdings={holdings}
+                value={holdingId}
+                onChange={setHoldingId}
+                currency={book?.currency}
+                purpose={type === "income" ? "income" : "expense"}
+              />
+            ) : null}
+
+            {cashMove ? (
+              <p className="text-[11px] leading-relaxed text-[var(--muted)]">
+                現金不會自動改動存款，請自己到存款頁調整現金。
+              </p>
+            ) : null}
+
             <label className="block">
               <span className="mb-1 block text-xs text-[var(--muted)]">
                 {type === "hold" ? "扣住項目" : "備註"}
@@ -423,6 +484,11 @@ export function TransactionEditor({
                     onChange={setCategoryId}
                   />
                 )}
+                {type === "expense" ? (
+                  <div className="mt-2.5">
+                    <TreatTagField checked={treat} onChange={setTreat} />
+                  </div>
+                ) : null}
               </div>
             ) : null}
 

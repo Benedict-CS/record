@@ -2,11 +2,14 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
+import { accountLabel } from "@/lib/account-name";
 import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/components/AuthProvider";
 import { BackupPanel } from "@/components/BackupPanel";
 import { useBook } from "@/components/BookProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
 import { ExportCsvButton } from "@/components/ExportCsvButton";
+import { useToast } from "@/components/ToastProvider";
 
 const LINKS: {
   href: string;
@@ -49,6 +52,11 @@ const LINKS: {
     description: "常用記帳一鍵套用",
   },
   {
+    href: "/recurring",
+    title: "固定扣款",
+    description: "房貸、房租、訂閱，以及 0050 這類定期定額",
+  },
+  {
     href: "/login",
     title: "登入同步",
     description: "選用雲端備份與多裝置同步",
@@ -56,7 +64,9 @@ const LINKS: {
 ];
 
 export function MorePage() {
-  const { user, configured } = useAuth();
+  const { user, configured, signOut } = useAuth();
+  const confirm = useConfirm();
+  const { show } = useToast();
   const { book } = useBook();
   const now = useMemo(() => new Date(), []);
   const year = now.getFullYear();
@@ -68,6 +78,46 @@ export function MorePage() {
         <p className="text-sm text-[var(--muted)]">
           管理帳本、帳戶、分類與備份設定。
         </p>
+
+        {configured && user ? (
+          <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3">
+            <p className="text-xs text-[var(--muted)]">目前登入</p>
+            <p className="mt-1 break-all text-sm font-medium text-[var(--ink)]">
+              {accountLabel(user)}
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">
+              只同步這個帳號。登出後是這台自己的帳，不會把這台的紀錄上傳到下一個帳號。
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                void (async () => {
+                  const ok = await confirm({
+                    title: "登出這個帳號？",
+                    message:
+                      "登出後看到的是這台裝置自己的帳，可以繼續離線記。那些紀錄不會同步到雲端，也不會在下次登入別的帳號時被上傳。",
+                    confirmLabel: "登出",
+                  });
+                  if (!ok) return;
+                  try {
+                    await signOut();
+                    show("已登出", { variant: "success" });
+                  } catch (caught) {
+                    show(
+                      caught instanceof Error && caught.message
+                        ? caught.message
+                        : "登出失敗",
+                      { variant: "error" },
+                    );
+                  }
+                })();
+              }}
+              className="mt-3 min-h-11 w-full rounded-xl border border-rose-200 bg-rose-50 text-sm font-medium text-rose-800"
+            >
+              登出
+            </button>
+          </section>
+        ) : null}
 
         <ul className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">
           {LINKS.map((item, index) => {

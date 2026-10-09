@@ -1,0 +1,97 @@
+import { formatMoney, type MoneyCurrency } from "@/lib/format";
+import {
+  periodBalance,
+  periodSpend,
+  reimbursedAmount,
+} from "@/lib/summary-display";
+import type { PeriodSummary } from "@/lib/types";
+
+function AmountBlock({
+  label,
+  amount,
+  currency,
+  tone,
+}: {
+  label: string;
+  amount: number;
+  currency?: MoneyCurrency;
+  tone: string;
+}) {
+  return (
+    <div className="min-w-0 rounded-xl bg-[var(--paper)] px-2 py-2.5 sm:px-2.5">
+      <p className="text-[11px] text-[var(--muted)]">{label}</p>
+      <p className={`mt-1 truncate text-sm font-semibold tabular-nums sm:text-base ${tone}`}>
+        {formatMoney(amount, currency)}
+      </p>
+    </div>
+  );
+}
+
+/** Three equal totals. Holds and reimbursements sit under them, only when non-zero. */
+export function SimpleSummary({
+  summary,
+  currency,
+}: {
+  summary: PeriodSummary;
+  currency?: MoneyCurrency;
+}) {
+  const spend = periodSpend(summary);
+  const balance = periodBalance(summary);
+  const reimbursed = reimbursedAmount(summary);
+  const notes: Array<{ key: string; text: string; tone: string }> = [];
+  if (summary.held > 0) {
+    notes.push({
+      key: "held",
+      text: `押金 ${formatMoney(summary.held, currency)} 不算支出`,
+      tone: "text-amber-900/80",
+    });
+  }
+  if (reimbursed > 0) {
+    notes.push({
+      key: "reimbursed",
+      text: `已銷帳 ${formatMoney(reimbursed, currency)} 已從支出扣掉`,
+      tone: "text-[var(--muted)]",
+    });
+  }
+  if (summary.reimbursablePending > 0) {
+    notes.push({
+      key: "pending",
+      text: `待報銷 ${formatMoney(summary.reimbursablePending, currency)} 還算在支出裡`,
+      tone: "text-sky-900/80",
+    });
+  }
+
+  return (
+    <div>
+      <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+        <AmountBlock
+          label="支出"
+          amount={spend}
+          currency={currency}
+          tone="text-rose-700"
+        />
+        <AmountBlock
+          label="收入"
+          amount={summary.income}
+          currency={currency}
+          tone="text-emerald-800"
+        />
+        <AmountBlock
+          label="結餘"
+          amount={balance}
+          currency={currency}
+          tone="text-[var(--ink)]"
+        />
+      </div>
+      {notes.length > 0 ? (
+        <ul className="mt-2 space-y-0.5 border-t border-[var(--line)] pt-2">
+          {notes.map((note) => (
+            <li key={note.key} className={`text-[11px] tabular-nums ${note.tone}`}>
+              {note.text}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}

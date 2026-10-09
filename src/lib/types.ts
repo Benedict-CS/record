@@ -1,6 +1,6 @@
 export type SyncStatus = "synced" | "pending" | "conflict";
 
-export type TransactionType = "income" | "expense" | "transfer" | "hold";
+export type TransactionType = "income" | "expense" | "transfer" | "hold" | "invest";
 
 /** Only for type === "hold": money locked until refunded. */
 export type HoldStatus = "held" | "released";
@@ -62,6 +62,43 @@ export interface Transaction extends SyncMeta {
   reimbursable_amount: number | null;
   /** Expense only: pending until marked received with salary. */
   reimbursement_status: ReimbursementStatus | null;
+  /**
+   * Bank expense or income: 存款 holding this row moves.
+   * Cash rows stay null so holdings are not changed.
+   */
+  holding_id: string | null;
+  /**
+   * Optional expense mark such as 請客. Not a second category:
+   * reports, budgets, and the period total ignore it.
+   */
+  tag: string | null;
+  /**
+   * Invest rows only: fund or stock holding that received the purchase.
+   * Expense rows leave this null.
+   */
+  target_holding_id: string | null;
+}
+
+/** Monthly bill or dollar-cost purchase. One row posts at most once per month. */
+export interface RecurringRule extends SyncMeta {
+  book_id: string;
+  name: string;
+  kind: "expense" | "invest";
+  amount: number;
+  /** 1–31. Shorter months use the last day. */
+  day_of_month: number;
+  /** First month that may post, YYYY-MM. Earlier months are never backfilled. */
+  start_month: string;
+  /** Latest YYYY-MM already posted, or null. */
+  last_posted: string | null;
+  last_error: string | null;
+  account_id: string;
+  category_id: string | null;
+  /** Bank card to deduct. Required for invest; required for a bank expense. */
+  holding_id: string | null;
+  /** Invest only: stock or fund that receives the amount. */
+  target_holding_id: string | null;
+  sort_order: number;
 }
 
 export interface Budget extends SyncMeta {
@@ -96,6 +133,7 @@ export type CloudCategory = Omit<Category, "sync_status">;
 export type CloudTransaction = Omit<Transaction, "sync_status">;
 export type CloudBudget = Omit<Budget, "sync_status">;
 export type CloudTemplate = Omit<Template, "sync_status">;
+export type CloudRecurringRule = Omit<RecurringRule, "sync_status">;
 
 export type SyncUiStatus = "offline" | "syncing" | "synced" | "error" | "local";
 
@@ -106,6 +144,8 @@ export interface CategoryBreakdownItem {
   icon: string;
   amount: number;
   percent: number;
+  /** Tagged 請客 amount already included in amount. Absent when this list is not expenses. */
+  treatAmount?: number;
 }
 
 export interface DayBucket {

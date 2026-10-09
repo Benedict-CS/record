@@ -7,6 +7,7 @@ import { BottomSheet } from "@/components/BottomSheet";
 import { useBook } from "@/components/BookProvider";
 import { MonthSummary } from "@/components/MonthSummary";
 import { QuickTemplateBar } from "@/components/QuickTemplateBar";
+import { RecurringPage } from "@/components/RecurringPage";
 import { TransactionEditor } from "@/components/TransactionEditor";
 import { TransactionForm } from "@/components/TransactionForm";
 import { TransactionList } from "@/components/TransactionList";
@@ -16,6 +17,7 @@ import {
   findLatestTransactionMonth,
   listTransactionsForMonth,
 } from "@/lib/db/crud";
+import { formatDayHeading } from "@/lib/format";
 import {
   useAccounts,
   useCategories,
@@ -32,6 +34,9 @@ export function HomePage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  /** When set, the add sheet is for this day. Null means today (the FAB). */
+  const [addDate, setAddDate] = useState<string | null>(null);
+  const [addMode, setAddMode] = useState<"once" | "monthly">("once");
   const [typeFilter, setTypeFilter] = useState<
     "all" | "expense" | "income" | "hold"
   >("all");
@@ -46,6 +51,8 @@ export function HomePage() {
   useEffect(() => {
     function openFromHash() {
       if (window.location.hash === "#quick-add") {
+        setAddDate(null);
+        setAddMode("once");
         setAddOpen(true);
       }
     }
@@ -92,13 +99,10 @@ export function HomePage() {
     };
   }, [ready, bookId, now, transactions.length]);
 
-  const visibleTransactions = useMemo(
-    () =>
-      typeFilter === "all"
-        ? transactions
-        : transactions.filter((tx) => tx.type === typeFilter),
-    [transactions, typeFilter],
-  );
+  const visibleTransactions = useMemo(() => {
+    if (typeFilter === "all") return transactions;
+    return transactions.filter((tx) => tx.type === typeFilter);
+  }, [transactions, typeFilter]);
 
   const isCurrentMonth =
     year === now.getFullYear() && month === now.getMonth() + 1;
@@ -114,8 +118,17 @@ export function HomePage() {
     setMonth(now.getMonth() + 1);
   }
 
+  function openAdd(date?: string) {
+    setAddDate(date ?? null);
+    setAddMode("once");
+    setAddOpen(true);
+  }
+
+  const addDay = addDate ? Number(addDate.slice(8, 10)) : undefined;
+
   function closeAddSheet() {
     setAddOpen(false);
+    setAddDate(null);
     if (window.location.hash === "#quick-add") {
       history.replaceState(null, "", window.location.pathname);
     }
@@ -202,6 +215,7 @@ export function HomePage() {
                 accounts={accounts}
                 categories={categories}
                 onEdit={setEditing}
+                onAddForDate={openAdd}
                 groupByDay
                 emptyMessage="這個月還沒有紀錄，點右下角 + 開始。"
               />
@@ -213,19 +227,61 @@ export function HomePage() {
       <BottomSheet
         open={addOpen}
         onClose={closeAddSheet}
-        title="記一筆"
-        description="支出／收入／扣住（押金）。請客金額可填 0"
+        title={
+          addMode === "monthly"
+            ? "每月固定"
+            : addDate
+              ? `記一筆 · ${formatDayHeading(addDate)}`
+              : "記一筆"
+        }
+        description={
+          addMode === "monthly"
+            ? "房貸、房租、訂閱，或 0050 這類定期定額"
+            : "支出／收入／扣住（押金）。請客金額可填 0"
+        }
       >
-        <TransactionForm
-          key={addOpen ? "open" : "closed"}
-          bare
-          accounts={accounts}
-          categories={categories}
-          onSaved={() => {
-            closeAddSheet();
-            show("已記一筆", { variant: "success" });
-          }}
-        />
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          {(
+            [
+              ["once", "記一筆"],
+              ["monthly", "每月固定"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={addMode === id}
+              onClick={() => setAddMode(id)}
+              className={[
+                "min-h-11 rounded-xl text-sm font-medium",
+                addMode === id
+                  ? "bg-[var(--ink)] text-[var(--paper)]"
+                  : "border border-[var(--line)] bg-[var(--paper)] text-[var(--muted)]",
+              ].join(" ")}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {addMode === "once" ? (
+          <TransactionForm
+            key={`${addOpen ? "open" : "closed"}-${addDate ?? "today"}`}
+            bare
+            defaultDate={addDate ?? undefined}
+            accounts={accounts}
+            categories={categories}
+            onSaved={() => {
+              closeAddSheet();
+              show("已記一筆", { variant: "success" });
+            }}
+          />
+        ) : (
+          <RecurringPage
+            key={`monthly-${addDate ?? "today"}`}
+            embedded
+            initialDay={addDay}
+          />
+        )}
       </BottomSheet>
 
       {editing ? (
@@ -239,7 +295,7 @@ export function HomePage() {
 
       <button
         type="button"
-        onClick={() => setAddOpen(true)}
+        onClick={() => openAdd()}
         aria-label="記一筆"
         title="記一筆"
         className="quick-add-fab fixed z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent)] text-2xl font-light leading-none text-[var(--paper)] shadow-lg shadow-[rgba(15,122,95,0.35)] transition"

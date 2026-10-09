@@ -19,10 +19,10 @@ export function LoginPage() {
   } = useAuth();
   const router = useRouter();
   const { show } = useToast();
-  const emailId = useId();
+  const accountId = useId();
   const passwordId = useId();
   const [mode, setMode] = useState<Mode>("signin");
-  const [email, setEmail] = useState("");
+  const [account, setAccount] = useState("");
   const [password, setPasswordField] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +41,7 @@ export function LoginPage() {
     setError(null);
     setSubmitting(true);
 
-    const trimmed = email.trim();
+    const trimmed = account.trim();
     const result =
       mode === "signin"
         ? await signInWithPassword(trimmed, password)
@@ -59,8 +59,10 @@ export function LoginPage() {
       "needsEmailConfirm" in result &&
       result.needsEmailConfirm
     ) {
-      setMessage("註冊成功。若有開信箱驗證，請到信箱點連結後再登入。");
-      show("請確認信箱後再登入", { variant: "info" });
+      setMessage(
+        "註冊還沒完成。帳號沒有信箱可收驗證信，請在 Supabase 關掉 Confirm email 後再註冊一次。",
+      );
+      show("請先關掉信箱驗證", { variant: "info" });
       return;
     }
 
@@ -129,28 +131,29 @@ export function LoginPage() {
             </div>
 
             <p className="text-sm text-[var(--muted)]">
-              用你自己的 Email 和密碼登入後，離線記下的資料會在上線時同步。與
-              Google 無關。
+              用帳號和密碼登入，不用 Email。登入後，離線記下的資料會在上線時同步。
             </p>
 
             <div>
               <label
-                htmlFor={emailId}
+                htmlFor={accountId}
                 className="mb-1 block text-xs text-[var(--muted)]"
               >
-                Email
+                帳號
               </label>
               <input
-                id={emailId}
-                type="email"
+                id={accountId}
+                type="text"
                 required
-                autoComplete="email"
-                inputMode="email"
+                autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 enterKeyHint="next"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                value={account}
+                onChange={(event) => setAccount(event.target.value)}
                 className="min-h-11 w-full rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 outline-none focus:border-[var(--accent)]"
-                placeholder="you@example.com"
+                placeholder="account"
               />
             </div>
 

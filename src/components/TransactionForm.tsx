@@ -3,11 +3,16 @@
 import { useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { AmountKeypad } from "@/components/AmountKeypad";
+import { BankHoldingField } from "@/components/BankHoldingField";
 import { useBook } from "@/components/BookProvider";
 import { CategoryPickerGrid } from "@/components/CategoryPickerGrid";
+import { TreatTagField } from "@/components/TreatTagField";
 import { createTransaction, updateTransaction } from "@/lib/db/crud";
 import { formatCalcNumber } from "@/lib/calculator";
 import { formatMoney, todayLocal } from "@/lib/format";
+import { isSpendableBankHolding } from "@/lib/holding-spend";
+import { TREAT_TAG } from "@/lib/transaction-tag";
+import { useHoldings } from "@/lib/hooks/useLedgerData";
 import { runSync } from "@/lib/sync/engine";
 import type { Account, Category, Transaction, TransactionType } from "@/lib/types";
 
@@ -27,6 +32,7 @@ export function TransactionForm({
   onSaved,
   bare = false,
   defaultDate,
+  defaultAccountId,
 }: {
   accounts: Account[];
   categories: Category[];
@@ -36,8 +42,11 @@ export function TransactionForm({
   bare?: boolean;
   /** Prefill date when creating (e.g. calendar day). */
   defaultDate?: string;
+  /** Prefill account when creating (e.g. from an account's day card). */
+  defaultAccountId?: string;
 }) {
   const { book, bookId } = useBook();
+  const holdings = useHoldings();
   const isEdit = Boolean(initial?.id);
 
   const [type, setType] = useState<FormType>(toFormType(initial?.type));
@@ -56,9 +65,11 @@ export function TransactionForm({
   );
   const [note, setNote] = useState(initial?.note ?? "");
   const [accountId, setAccountId] = useState(
-    initial?.account_id ?? accounts[0]?.id ?? "",
+    initial?.account_id ?? defaultAccountId ?? accounts[0]?.id ?? "",
   );
+  const [holdingId, setHoldingId] = useState(initial?.holding_id ?? "");
   const [categoryId, setCategoryId] = useState(initial?.category_id ?? "");
+  const [treat, setTreat] = useState(initial?.tag === TREAT_TAG);
   const [keypadTarget, setKeypadTarget] = useState<KeypadTarget | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +92,8 @@ export function TransactionForm({
       setNote(initial.note);
       setAccountId(initial.account_id);
       setCategoryId(initial.category_id ?? "");
+      setHoldingId(initial.holding_id ?? "");
+      setTreat(initial.tag === TREAT_TAG);
     }
   }
 
@@ -92,6 +105,20 @@ export function TransactionForm({
   }, [categories, type]);
 
   const effectiveAccountId = accountId || accounts[0]?.id || "";
+  const selectedAccount =
+    accounts.find((account) => account.id === effectiveAccountId) ?? null;
+  const bankMove =
+    (type === "expense" || type === "income") && selectedAccount?.type === "bank";
+  const cashMove =
+    (type === "expense" || type === "income") && selectedAccount?.type === "cash";
+  const spendableHoldings = holdings.filter((holding) =>
+    isSpendableBankHolding(holding.kind),
+  );
+  const effectiveHoldingId =
+    holdingId ||
+    (!isEdit && bankMove && spendableHoldings.length === 1
+      ? spendableHoldings[0].id
+      : "");
   const effectiveCategoryId =
     type === "hold"
       ? categoryId || null
@@ -138,6 +165,16 @@ export function TransactionForm({
       setError("待報銷金額不可大於實付");
       return;
     }
+    if (bankMove && !isEdit && !effectiveHoldingId) {
+      setError(
+        spendableHoldings.length === 0
+          ? "請先到存款新增活存或定存（例如台新、郵局）"
+          : type === "income"
+            ? "請選擇要入帳的銀行"
+            : "請選擇要扣款的銀行",
+      );
+      return;
+    }
     if (isEdit && initial) {
       // ok
     } else if (!bookId) {
@@ -166,6 +203,8 @@ export function TransactionForm({
                 ? ("received" as const)
                 : ("pending" as const))
             : null,
+        holding_id: bankMove && effectiveHoldingId ? effectiveHoldingId : null,
+        tag: type === "expense" && treat ? TREAT_TAG : null,
       };
 
       if (isEdit && initial) {
@@ -175,6 +214,7 @@ export function TransactionForm({
         setAmount(null);
         setReimbursable(null);
         setNote("");
+        if (spendableHoldings.length !== 1) setHoldingId("");
       }
       void runSync();
       onSaved?.();
@@ -238,7 +278,7 @@ export function TransactionForm({
 
         {type === "hold" ? (
           <p className="text-[11px] leading-relaxed text-[var(--muted)]">
-            錢被扣住、之後會退或結算（押金、電費預繳）。不計入「實際花掉」。
+            錢被扣住、之後會退或結算（押金、電費預繳）。不計入支出。
           </p>
         ) : null}
 
@@ -330,6 +370,11 @@ export function TransactionForm({
                 onChange={setCategoryId}
               />
             )}
+            {type === "expense" ? (
+              <div className="mt-2.5">
+                <TreatTagField checked={treat} onChange={setTreat} />
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -370,6 +415,22 @@ export function TransactionForm({
             )}
           </label>
         </div>
+
+        {bankMove ? (
+          <BankHoldingField
+            holdings={holdings}
+            value={effectiveHoldingId}
+            onChange={setHoldingId}
+            currency={book?.currency}
+            purpose={type === "income" ? "income" : "expense"}
+          />
+        ) : null}
+
+        {cashMove ? (
+          <p className="text-[11px] leading-relaxed text-[var(--muted)]">
+            現金不會自動改動存款，請自己到存款頁調整現金。
+          </p>
+        ) : null}
 
         {error ? <p className="text-sm text-rose-600">{error}</p> : null}
 

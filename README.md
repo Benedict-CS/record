@@ -23,7 +23,7 @@ Live site: https://record.benedicttiong.site
 - Year spend snapshot + reports
 - Calendar day view; search notes and amounts（更多 → 搜尋）
 - Monthly budgets; amount keypad (amount **0** allowed, e.g. 請客)
-- CSV export; Email + password login + cloud sync
+- CSV export; account name + password login + cloud sync
 - Installable PWA · light UI only (**no dark mode**)
 
 ## Local setup
@@ -40,7 +40,7 @@ npm install
 cp .env.example .env.local
 ```
 
-3. In the [Supabase SQL Editor](https://supabase.com/dashboard), run migrations **in order** `001` → `007` (see [SETUP.md](SETUP.md)).
+3. In the [Supabase SQL Editor](https://supabase.com/dashboard), run migrations **in order** `001` → `011` (see [SETUP.md](SETUP.md)).
 
 4. Enable **Email** auth in Supabase. Add redirect URL:
 

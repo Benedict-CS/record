@@ -86,8 +86,15 @@ export function CategoryPieChart({
                   style={{ backgroundColor: item.color }}
                   aria-hidden
                 />
-                <span className="truncate text-sm text-[var(--ink)]">
-                  {item.name}
+                <span className="min-w-0">
+                  <span className="block truncate text-sm text-[var(--ink)]">
+                    {item.name}
+                  </span>
+                  {item.treatAmount ? (
+                    <span className="block truncate text-[10px] font-medium text-amber-800">
+                      含請客 {formatMoney(item.treatAmount, currency)}
+                    </span>
+                  ) : null}
                 </span>
               </div>
               <div className="flex shrink-0 items-center gap-2 text-right">

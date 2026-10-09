@@ -13,8 +13,10 @@ import {
   undoReimbursementReceived,
 } from "@/lib/db/crud";
 import { compareSameDayTransactions } from "@/lib/day-order";
-import { formatMoney, todayLocal } from "@/lib/format";
+import { formatDayHeading, formatMoney, todayLocal } from "@/lib/format";
 import { expenseDisplayAmount } from "@/lib/reimbursement";
+import { useHoldings } from "@/lib/hooks/useLedgerData";
+import { TREAT_TAG } from "@/lib/transaction-tag";
 import { runSync } from "@/lib/sync/engine";
 import type { Account, Category, Transaction } from "@/lib/types";
 
@@ -23,14 +25,24 @@ const TYPE_LABEL: Record<Transaction["type"], string> = {
   expense: "支出",
   transfer: "轉帳",
   hold: "扣住",
+  invest: "定期定額",
 };
 
-function weekdayLabel(date: string) {
-  const [year, month, day] = date.split("-").map(Number);
-  if (!year || !month || !day) return date;
-  const names = ["日", "一", "二", "三", "四", "五", "六"];
-  const weekday = new Date(year, month - 1, day).getDay();
-  return `${month}/${day} 週${names[weekday]}`;
+function IconPlus({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+  );
 }
 
 function IconEdit({ className }: { className?: string }) {
@@ -98,6 +110,7 @@ export function TransactionList({
   accounts,
   categories,
   onEdit,
+  onAddForDate,
   emptyMessage = "這個月還沒有紀錄，離線也能先記一筆。",
   groupByDay = false,
   /** One shared card with dividers (use for a single-day panel). */
@@ -107,6 +120,8 @@ export function TransactionList({
   accounts: Account[];
   categories: Category[];
   onEdit?: (transaction: Transaction) => void;
+  /** Opens create-for-this-day. Shown on each day card when grouping by day. */
+  onAddForDate?: (date: string) => void;
   emptyMessage?: string;
   groupByDay?: boolean;
   framed?: boolean;
@@ -116,8 +131,12 @@ export function TransactionList({
   const confirm = useConfirm();
   const { show } = useToast();
 
+  const holdings = useHoldings();
   const accountMap = Object.fromEntries(
     accounts.map((account) => [account.id, account.name]),
+  );
+  const holdingName = Object.fromEntries(
+    holdings.map((holding) => [holding.id, holding.name]),
   );
   const categoryMap = Object.fromEntries(
     categories.map((category) => [category.id, category]),
@@ -126,10 +145,15 @@ export function TransactionList({
     categoryId ? categoryMap[categoryId]?.name : null;
 
   async function onDuplicate(tx: Transaction) {
-    const copy = await duplicateTransaction(tx.id, todayLocal());
-    if (!copy) return;
-    void runSync();
-    show("已複製到今天", { variant: "success" });
+    if (tx.type === "invest") return;
+    try {
+      const copy = await duplicateTransaction(tx.id, todayLocal());
+      if (!copy) return;
+      void runSync();
+      show("已複製到今天", { variant: "success" });
+    } catch (err) {
+      show(err instanceof Error ? err.message : "複製失敗", { variant: "error" });
+    }
   }
 
   async function onRelease(tx: Transaction) {
@@ -189,7 +213,13 @@ export function TransactionList({
       action: {
         label: "復原",
         onClick: () => {
-          void restoreTransaction(tx.id).then(() => runSync());
+          void restoreTransaction(tx.id)
+            .then(() => runSync())
+            .catch((err: unknown) => {
+              show(err instanceof Error ? err.message : "復原失敗", {
+                variant: "error",
+              });
+            });
         },
       },
     });
@@ -248,28 +278,41 @@ export function TransactionList({
             }
           >
             {groupByDay ? (
-              <div className="flex items-baseline justify-between gap-2 border-b border-[var(--line)] px-3 py-2">
-                <p className="text-xs font-medium text-[var(--ink)]">
-                  {weekdayLabel(group.date)}
+              <div className="flex items-center justify-between gap-2 border-b border-[var(--line)] py-1 pl-3 pr-1.5">
+                <p className="min-w-0 text-xs font-medium text-[var(--ink)]">
+                  {formatDayHeading(group.date)}
                   <span className="ml-1.5 font-normal text-[var(--muted)]">
                     {group.items.length} 筆
                   </span>
                 </p>
-                <p className="text-[11px] tabular-nums text-[var(--muted)]">
-                  {dayExpense > 0
-                    ? `花 ${formatMoney(dayExpense, currency)}`
-                    : null}
-                  {dayExpense > 0 && dayHeld > 0 ? " · " : null}
-                  {dayHeld > 0
-                    ? `扣 ${formatMoney(dayHeld, currency)}`
-                    : null}
-                  {(dayExpense > 0 || dayHeld > 0) && dayIncome > 0
-                    ? " · "
-                    : null}
-                  {dayIncome > 0
-                    ? `收 ${formatMoney(dayIncome, currency)}`
-                    : null}
-                </p>
+                <div className="flex shrink-0 items-center gap-1">
+                  <p className="text-[11px] tabular-nums text-[var(--muted)]">
+                    {dayExpense > 0
+                      ? `花 ${formatMoney(dayExpense, currency)}`
+                      : null}
+                    {dayExpense > 0 && dayHeld > 0 ? " · " : null}
+                    {dayHeld > 0
+                      ? `扣 ${formatMoney(dayHeld, currency)}`
+                      : null}
+                    {(dayExpense > 0 || dayHeld > 0) && dayIncome > 0
+                      ? " · "
+                      : null}
+                    {dayIncome > 0
+                      ? `收 ${formatMoney(dayIncome, currency)}`
+                      : null}
+                  </p>
+                  {onAddForDate ? (
+                    <button
+                      type="button"
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent)] active:bg-[color-mix(in_srgb,var(--accent)_24%,transparent)]"
+                      aria-label={`在 ${formatDayHeading(group.date)} 記一筆`}
+                      title="記這一天"
+                      onClick={() => onAddForDate(group.date)}
+                    >
+                      <IconPlus className="h-[18px] w-[18px]" />
+                    </button>
+                  ) : null}
+                </div>
               </div>
             ) : null}
 
@@ -321,13 +364,23 @@ export function TransactionList({
                       }`
                     : isHold
                       ? `扣住：${tx.note.trim() || "未命名"}`
-                      : category?.name ?? TYPE_LABEL[tx.type];
+                      : tx.type === "invest"
+                        ? tx.note.trim() || "定期定額"
+                        : category?.name ?? TYPE_LABEL[tx.type];
 
                 const note = isHold ? "" : tx.note.trim();
                 const accountName = accountMap[tx.account_id] ?? "帳戶";
+                const investMove =
+                  tx.type === "invest"
+                    ? [tx.holding_id, tx.target_holding_id]
+                        .map((id) => (id ? holdingName[id] : ""))
+                        .filter(Boolean)
+                        .join(" → ")
+                    : "";
                 const subtitleParts = [
                   !groupByDay && !framed ? tx.date : null,
-                  accountName,
+                  tx.type === "invest" ? "定期定額" : null,
+                  tx.type === "invest" ? investMove || null : accountName,
                   holdReleased ? "已退回" : isHold ? "暫時扣住" : null,
                   reimbPending && reimbAmount != null
                     ? `待報銷 ${formatMoney(reimbAmount, currency)}`
@@ -335,7 +388,7 @@ export function TransactionList({
                   reimbReceived && reimbAmount != null
                     ? `已報銷 ${formatMoney(reimbAmount, currency)}`
                     : null,
-                  note || null,
+                  tx.type === "invest" ? null : note || null,
                 ].filter(Boolean);
 
                 const row = (
@@ -368,8 +421,15 @@ export function TransactionList({
                       onClick={() => onEdit?.(tx)}
                       disabled={!onEdit}
                     >
-                      <span className="min-w-0 truncate text-sm text-[var(--ink)]">
-                        {title}
+                      <span className="flex min-w-0 items-center gap-1">
+                        <span className="min-w-0 truncate text-sm text-[var(--ink)]">
+                          {title}
+                        </span>
+                        {tx.tag === TREAT_TAG ? (
+                          <span className="shrink-0 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900">
+                            請客
+                          </span>
+                        ) : null}
                       </span>
                       <span
                         className={`flex w-full flex-col items-end text-right ${color}`}
@@ -435,6 +495,7 @@ export function TransactionList({
                           <IconEdit className="h-4 w-4" />
                         </button>
                       ) : null}
+                      {tx.type === "invest" ? null : (
                       <button
                         type="button"
                         className={`${actionBtn} hover:text-[var(--accent)]`}
@@ -444,6 +505,7 @@ export function TransactionList({
                       >
                         <IconCopyToday className="h-4 w-4" />
                       </button>
+                      )}
                       <button
                         type="button"
                         className={`${actionBtn} hover:text-rose-600`}

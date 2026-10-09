@@ -33,6 +33,16 @@ export function todayLocal() {
   return `${y}-${m}-${d}`;
 }
 
+const WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"] as const;
+
+/** `2026-08-27` → `8/27 週四`. Invalid input is returned unchanged. */
+export function formatDayHeading(date: string) {
+  const [year, month, day] = date.split("-").map(Number);
+  if (!year || !month || !day) return date;
+  const weekday = new Date(year, month - 1, day).getDay();
+  return `${month}/${day} 週${WEEKDAY_LABELS[weekday]}`;
+}
+
 export function shiftYearMonth(year: number, month: number, delta: number) {
   const date = new Date(year, month - 1 + delta, 1);
   return {

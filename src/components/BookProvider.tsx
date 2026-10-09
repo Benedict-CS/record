@@ -12,10 +12,11 @@ import {
 } from "react";
 import { liveQuery } from "dexie";
 import { listBooks } from "@/lib/db/crud";
+import { postDueRecurring } from "@/lib/db/recurring-post";
+import { runSync } from "@/lib/sync/engine";
+import { getOwnerId, readActiveBookId, writeActiveBookId } from "@/lib/db/owner";
 import { ensureSeedData } from "@/lib/db/seed";
 import type { Book } from "@/lib/types";
-
-const STORAGE_KEY = "ledger_active_book_id";
 
 type BookContextValue = {
   ready: boolean;
@@ -43,6 +44,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [books, setBooks] = useState<Book[]>([]);
   const [bookId, setBookIdState] = useState<string | null>(null);
+  const [ownerId, setOwnerIdState] = useState<string | null>(getOwnerId());
   const userPicked = useRef(false);
   const pickGen = useRef(0);
 
@@ -51,7 +53,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
     // One-shot: clear sticky MYR preference written by the old max-tx picker.
     if (typeof window !== "undefined") {
       if (localStorage.getItem("ledger_book_pref_v2") !== "1") {
-        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem("ledger_active_book_id");
         localStorage.setItem("ledger_book_pref_v2", "1");
       }
     }
@@ -64,6 +66,21 @@ export function BookProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!ready || ownerId) return;
+    // Logged out: make sure this device still has its own ledger to write into.
+    void ensureSeedData();
+  }, [ready, ownerId]);
+
+  useEffect(() => {
+    const onOwner = () => {
+      userPicked.current = false;
+      setOwnerIdState(getOwnerId());
+    };
+    window.addEventListener("ledger-owner-changed", onOwner);
+    return () => window.removeEventListener("ledger-owner-changed", onOwner);
+  }, []);
+
+  useEffect(() => {
     if (!ready) return;
     let cancelled = false;
     const observable = liveQuery(() => listBooks());
@@ -72,10 +89,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         setBooks(rows);
         const gen = ++pickGen.current;
-        const stored =
-          typeof window !== "undefined"
-            ? localStorage.getItem(STORAGE_KEY)
-            : null;
+        const stored = readActiveBookId(ownerId);
 
         // Prefer in-memory selection after the user explicitly switched.
         setBookIdState((current) => {
@@ -90,11 +104,11 @@ export function BookProvider({ children }: { children: ReactNode }) {
           if (!next || current === next) {
             // Still persist when preferred was invalid (soft-deleted twin).
             if (next && stored !== next) {
-              localStorage.setItem(STORAGE_KEY, next);
+              writeActiveBookId(next, ownerId);
             }
             return current ?? next;
           }
-          localStorage.setItem(STORAGE_KEY, next);
+          writeActiveBookId(next, ownerId);
           return next;
         });
       },
@@ -117,11 +131,22 @@ export function BookProvider({ children }: { children: ReactNode }) {
       sub.unsubscribe();
       window.removeEventListener("ledger-active-book", onAdopt);
     };
-  }, [ready]);
+  }, [ready, ownerId]);
+
+  useEffect(() => {
+    if (!ready || !bookId) return;
+    let cancelled = false;
+    void postDueRecurring(bookId).then((count) => {
+      if (!cancelled && count > 0) void runSync();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, bookId]);
 
   const setBookId = useCallback((id: string) => {
     userPicked.current = true;
-    localStorage.setItem(STORAGE_KEY, id);
+    writeActiveBookId(id, getOwnerId());
     setBookIdState(id);
   }, []);
 
