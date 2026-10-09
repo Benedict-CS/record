@@ -1,4 +1,4 @@
-import { monthSummary } from "./db/crud";
+import { monthSummary, yearlyTotals } from "./db/crud";
 import type { Transaction } from "./types";
 
 function assert(condition: unknown, label: string): asserts condition {
@@ -95,5 +95,43 @@ const crossMonth = monthSummary([
   tx({ type: "income", amount: 10, date: "2026-09-02", note: "兼職" }),
 ]);
 assert(crossMonth.income === 10, "cross-month release note excluded");
+
+const years = yearlyTotals(
+  [
+    tx({ type: "income", amount: 10, date: "2020-05-01" }),
+    tx({ type: "expense", amount: 4, date: "2026-01-02" }),
+  ],
+  2020,
+  2026,
+);
+assert(years.length === 7 && years[0].year === 2020, "history spans every bookkeeping year");
+assert(years[0].income === 10 && years[0].expense === 0, "2020 income is kept");
+assert(years[1].income === 0 && years[1].expense === 0, "an empty year stays in the list");
+assert(years[6].expense === 4 && years[6].year === 2026, "2026 expense is kept");
+
+const refundYear = crypto.randomUUID();
+const withRefund = yearlyTotals(
+  [
+    tx({ type: "income", amount: 100, date: "2024-03-01", note: "薪水" }),
+    tx({
+      id: refundYear,
+      type: "income",
+      amount: 40,
+      date: "2024-04-01",
+      note: "退回：押金",
+    }),
+    tx({
+      type: "expense",
+      amount: 80,
+      date: "2024-05-01",
+      reimbursable_amount: 30,
+      reimbursement_status: "received",
+    }),
+  ],
+  2024,
+  2024,
+);
+assert(withRefund[0].income === 100, "hold refund is not counted as income");
+assert(withRefund[0].expense === 50, "received reimbursement is taken out of spend");
 
 console.log("month-summary tests passed");

@@ -1477,6 +1477,37 @@ export function groupTransactionsByDay(
   return [...map.values()].sort((a, b) => b.date.localeCompare(a.date));
 }
 
+/** One row per year from `startYear` through `endYear`, including years with no rows. */
+export function yearlyTotals(
+  transactions: Transaction[],
+  startYear: number,
+  endYear: number,
+) {
+  const span = Math.max(0, endYear - startYear + 1);
+  const years = Array.from({ length: span }, (_, index) => ({
+    year: startYear + index,
+    income: 0,
+    expense: 0,
+  }));
+  // Match monthSummary: a hold refund is not earnings.
+  const releaseIncomeIds = new Set(
+    transactions
+      .filter((tx) => tx.type === "hold" && tx.release_transaction_id)
+      .map((tx) => tx.release_transaction_id as string),
+  );
+  for (const tx of transactions) {
+    const year = Number(tx.date.slice(0, 4));
+    const row = years[year - startYear];
+    if (!row) continue;
+    if (tx.type === "income") {
+      if (releaseIncomeIds.has(tx.id) || tx.note.startsWith("退回：")) continue;
+      row.income += tx.amount;
+    }
+    if (tx.type === "expense") row.expense += expenseDisplayAmount(tx);
+  }
+  return years;
+}
+
 export function monthlyTotalsForYear(transactions: Transaction[]) {
   const months = Array.from({ length: 12 }, (_, index) => ({
     month: index + 1,

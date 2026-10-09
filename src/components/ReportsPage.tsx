@@ -18,6 +18,7 @@ import {
   monthSummary,
   monthlyTotalsForYear,
   topCategories,
+  yearlyTotals,
 } from "@/lib/db/crud";
 import {
   formatMoney,
@@ -31,11 +32,12 @@ import {
   useLedgerEndYear,
   useMonthTransactions,
   useSeedReady,
+  useTransactionsBetween,
   useYearTransactions,
 } from "@/lib/hooks/useLedgerData";
 import type { CategoryBreakdownItem, CategoryKind } from "@/lib/types";
 
-type ReportScope = "month" | "year";
+type ReportScope = "month" | "year" | "all";
 
 function pad2(value: number) {
   return String(value).padStart(2, "0");
@@ -60,6 +62,11 @@ export function ReportsPage() {
   const endYear = useLedgerEndYear();
   const monthTransactions = useMonthTransactions(year, month);
   const yearTransactions = useYearTransactions(year, scope === "year");
+  const historyTransactions = useTransactionsBetween(
+    `${LEDGER_START_YEAR}-01-01`,
+    "2100-01-01",
+    scope === "all",
+  );
 
   const previousMonthRef = useMemo(
     () => shiftYearMonth(year, month, -1),
@@ -74,14 +81,20 @@ export function ReportsPage() {
     scope === "year",
   );
 
+  const periodTransactions =
+    scope === "month"
+      ? monthTransactions
+      : scope === "year"
+        ? yearTransactions
+        : historyTransactions;
   const activeTransactions =
-    scope === "month" ? monthTransactions : throughToday(yearTransactions);
+    scope === "month" ? monthTransactions : throughToday(periodTransactions);
   const previousTransactions =
     scope === "month"
       ? previousMonthTransactions
       : throughToday(previousYearTransactions);
   const laterCount =
-    scope === "year" ? yearTransactions.length - activeTransactions.length : 0;
+    scope === "month" ? 0 : periodTransactions.length - activeTransactions.length;
 
   const summary = useMemo(
     () => monthSummary(activeTransactions),
@@ -111,6 +124,15 @@ export function ReportsPage() {
     () => monthlyTotalsForYear(scope === "year" ? activeTransactions : yearTransactions),
     [scope, activeTransactions, yearTransactions],
   );
+  const historyYears = useMemo(
+    () =>
+      yearlyTotals(
+        scope === "all" ? activeTransactions : [],
+        LEDGER_START_YEAR,
+        now.getFullYear(),
+      ),
+    [scope, activeTransactions, now],
+  );
 
   const trendPoints = useMemo<TrendPoint[]>(() => {
     if (scope === "month") {
@@ -129,16 +151,25 @@ export function ReportsPage() {
         };
       });
     }
+    if (scope === "all") {
+      return historyYears.map((row) => ({
+        label: String(row.year),
+        fullLabel: `${row.year} 年`,
+        income: row.income,
+        expense: row.expense,
+      }));
+    }
     return monthlyTotals.map((row) => ({
       label: `${row.month}月`,
       fullLabel: `${year} 年 ${row.month} 月`,
       income: row.income,
       expense: row.expense,
     }));
-  }, [scope, monthTransactions, monthlyTotals, year, month]);
+  }, [scope, monthTransactions, monthlyTotals, historyYears, year, month]);
 
   const topExpense = expenseBreakdown[0];
-  const topExpenseTitle = scope === "month" ? "本月消費最多" : "本年消費最多";
+  const topExpenseTitle =
+    scope === "month" ? "本月消費最多" : scope === "year" ? "本年消費最多" : "全部消費最多";
   const rankingTitle = `${pieKind === "expense" ? "支出" : "收入"}排行 TOP 5`;
 
   function shiftPeriod(delta: number) {
@@ -153,12 +184,18 @@ export function ReportsPage() {
   }
 
   const hasPreviousPeriod =
-    scope === "month"
-      ? previousMonthRef.year >= LEDGER_START_YEAR
-      : year - 1 >= LEDGER_START_YEAR;
+    scope === "all"
+      ? false
+      : scope === "month"
+        ? previousMonthRef.year >= LEDGER_START_YEAR
+        : year - 1 >= LEDGER_START_YEAR;
 
   const periodLabel =
-    scope === "month" ? `${year} 年 ${month} 月` : `${year} 年`;
+    scope === "month"
+      ? `${year} 年 ${month} 月`
+      : scope === "year"
+        ? `${year} 年`
+        : `${LEDGER_START_YEAR} 年至今`;
   const previousLabel =
     scope === "month"
       ? `${previousMonthRef.year} 年 ${previousMonthRef.month} 月`
@@ -170,11 +207,12 @@ export function ReportsPage() {
         <p className="text-sm text-[var(--muted)]">載入本機資料…</p>
       ) : (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-1">
+          <div className="grid grid-cols-3 gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-1">
             {(
               [
                 { id: "month", label: "月報表" },
                 { id: "year", label: "年報表" },
+                { id: "all", label: "全部" },
               ] as const
             ).map((option) => (
               <button
@@ -194,6 +232,19 @@ export function ReportsPage() {
           </div>
 
           <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-4">
+            {scope === "all" ? (
+              <div className="mb-3 text-center">
+                <p className="text-sm font-semibold tracking-wide text-[var(--ink)]">
+                  {periodLabel}
+                </p>
+                <p className="text-[11px] text-[var(--muted)]">從開始記帳到今天</p>
+                {laterCount > 0 ? (
+                  <p className="text-[11px] text-[var(--muted)]">
+                    不含今天之後先入帳的 {laterCount} 筆
+                  </p>
+                ) : null}
+              </div>
+            ) : (
             <div className="mb-3 flex items-center justify-between gap-1">
               <HoldStepButton
                 ariaLabel={scope === "month" ? "上一期" : "上一年"}
@@ -231,6 +282,7 @@ export function ReportsPage() {
                 ›
               </HoldStepButton>
             </div>
+            )}
             <SimpleSummary summary={summary} currency={currency} />
           </section>
 
@@ -304,11 +356,47 @@ export function ReportsPage() {
                 emptyLabel={
                   scope === "month"
                     ? "此月份尚無收支資料"
-                    : "此年度尚無收支資料"
+                    : scope === "year"
+                      ? "此年度尚無收支資料"
+                      : "尚無收支資料"
                 }
               />
             </div>
           </section>
+
+          {scope === "all" ? (
+            <section className="space-y-2">
+              <h2 className="text-sm font-medium text-[var(--ink)]">各年收支</h2>
+              <ul className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">
+                {[...historyYears].reverse().map((row) => (
+                  <li key={row.year} className="border-t border-[var(--line)] first:border-t-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setYear(row.year);
+                        setScope("year");
+                      }}
+                      aria-label={`查看 ${row.year} 年報表`}
+                      className="flex min-h-12 w-full items-center gap-3 px-4 py-2 text-left active:bg-[var(--paper)]"
+                    >
+                      <span className="w-14 shrink-0 text-sm font-medium tabular-nums text-[var(--ink)]">
+                        {row.year}
+                      </span>
+                      <span className="min-w-0 flex-1 text-right text-sm tabular-nums text-rose-700">
+                        {formatMoney(row.expense, currency)}
+                      </span>
+                      <span className="min-w-0 flex-1 text-right text-sm tabular-nums text-emerald-800">
+                        {formatMoney(row.income, currency)}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <p className="px-1 text-[11px] text-[var(--muted)]">
+                左紅是支出，右綠是收入。點一年可看該年的年報表。
+              </p>
+            </section>
+          ) : null}
 
           {scope === "year" ? (
             <section className="space-y-2">
