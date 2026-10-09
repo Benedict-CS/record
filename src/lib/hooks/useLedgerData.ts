@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { useBook } from "@/components/BookProvider";
 import {
   accountBalances,
+  findLatestBookedYear,
   listAccounts,
   listBudgets,
   listCategories,
@@ -23,6 +24,7 @@ import {
   outstandingHeldTotal,
   searchTransactions,
 } from "@/lib/db/crud";
+import { ledgerEndYear } from "@/lib/period-jump";
 import type {
   Account,
   AccountBalance,
@@ -54,6 +56,31 @@ function useLiveList<T>(factory: () => Promise<T[]>, deps: unknown[]) {
 export function useSeedReady() {
   const { ready } = useBook();
   return ready;
+}
+
+/** Undefined until the first read. Null when this book has no transactions. */
+export function useLatestBookedYear(): number | null | undefined {
+  const { bookId } = useBook();
+  const [year, setYear] = useState<number | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!bookId) return;
+    const subscription = liveQuery(() => findLatestBookedYear(bookId)).subscribe({
+      next: (value) => setYear(value),
+      error: () => setYear(null),
+    });
+    return () => subscription.unsubscribe();
+  }, [bookId]);
+
+  if (!bookId) return null;
+  return year;
+}
+
+/** Current year, or a later year that already has a transaction. Undefined until read. */
+export function useLedgerEndYear(): number | undefined {
+  const latest = useLatestBookedYear();
+  if (latest === undefined) return undefined;
+  return ledgerEndYear(new Date().getFullYear(), latest);
 }
 
 export function useAccounts() {

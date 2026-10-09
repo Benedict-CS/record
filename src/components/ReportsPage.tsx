@@ -28,6 +28,7 @@ import {
 import { clampLedgerPeriod, LEDGER_START_YEAR } from "@/lib/period-jump";
 import {
   useCategories,
+  useLedgerEndYear,
   useMonthTransactions,
   useSeedReady,
   useYearTransactions,
@@ -56,6 +57,7 @@ export function ReportsPage() {
   const [detail, setDetail] = useState<CategoryBreakdownItem | null>(null);
 
   const categories = useCategories();
+  const endYear = useLedgerEndYear();
   const monthTransactions = useMonthTransactions(year, month);
   const yearTransactions = useYearTransactions(year, scope === "year");
 
@@ -142,12 +144,12 @@ export function ReportsPage() {
   function shiftPeriod(delta: number) {
     if (scope === "month") {
       const shifted = shiftYearMonth(year, month, delta);
-      const next = clampLedgerPeriod(shifted.year, shifted.month);
+      const next = clampLedgerPeriod(shifted.year, shifted.month, endYear);
       setYear(next.year);
       setMonth(next.month);
       return;
     }
-    setYear((value) => clampLedgerPeriod(value + delta, 1).year);
+    setYear((value) => clampLedgerPeriod(value + delta, 1, endYear).year);
   }
 
   const hasPreviousPeriod =
@@ -208,7 +210,7 @@ export function ReportsPage() {
                   month={month}
                   scope={scope}
                   onChange={(nextYear, nextMonth) => {
-                    const next = clampLedgerPeriod(nextYear, nextMonth);
+                    const next = clampLedgerPeriod(nextYear, nextMonth, endYear);
                     setYear(next.year);
                     if (scope === "month") setMonth(next.month);
                   }}

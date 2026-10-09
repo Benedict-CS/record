@@ -308,6 +308,21 @@ export async function listTransactionsForMonth(
   return rows.sort((a, b) => compareMonthTransactions(a, b, nameOf));
 }
 
+/** Newest year that already has a live transaction, or null when the book is empty. */
+export async function findLatestBookedYear(
+  bookId: string,
+): Promise<number | null> {
+  const row = await db.transactions
+    .where("[book_id+date]")
+    .between([bookId, ""], [bookId, "\uffff"])
+    .reverse()
+    .filter((item) => !item.deleted_at && Boolean(item.date))
+    .first();
+  if (!row?.date) return null;
+  const year = Number(row.date.slice(0, 4));
+  return Number.isFinite(year) && year > 0 ? year : null;
+}
+
 /** Latest calendar month that still has live transactions (for empty-home jump). */
 export async function findLatestTransactionMonth(
   bookId: string,

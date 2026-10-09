@@ -12,6 +12,7 @@ import { groupTransactionsByDay } from "@/lib/db/crud";
 import {
   useAccounts,
   useCategories,
+  useLedgerEndYear,
   useMonthTransactions,
   useSeedReady,
 } from "@/lib/hooks/useLedgerData";
@@ -64,16 +65,18 @@ export function CalendarPage() {
   const accounts = useAccounts();
   const categories = useCategories();
   const transactions = useMonthTransactions(year, month);
+  const endYear = useLedgerEndYear();
 
   // Report rows link here as /calendar?date=YYYY-MM-DD&tx=<id>.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const date = params.get("date");
     const txId = params.get("tx");
+    if (endYear == null) return;
     if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
       const [y, m] = date.split("-").map(Number);
       if (y && m) {
-        const next = clampLedgerPeriod(y, m);
+        const next = clampLedgerPeriod(y, m, endYear);
         // The query string exists only in the browser. Setting it during render
         // would disagree with the server HTML.
         // eslint-disable-next-line react-hooks/set-state-in-effect -- see above
@@ -87,7 +90,7 @@ export function CalendarPage() {
       }
     }
     if (txId) pendingEditId.current = txId;
-  }, []);
+  }, [endYear]);
 
   useEffect(() => {
     const id = pendingEditId.current;
@@ -135,7 +138,7 @@ export function CalendarPage() {
   }
 
   function jumpTo(nextYear: number, nextMonth: number) {
-    const next = clampLedgerPeriod(nextYear, nextMonth);
+    const next = clampLedgerPeriod(nextYear, nextMonth, endYear);
     setYear(next.year);
     setMonth(next.month);
     const prefix = `${next.year}-${String(next.month).padStart(2, "0")}`;

@@ -23,6 +23,7 @@ import { clampLedgerPeriod } from "@/lib/period-jump";
 import {
   useAccounts,
   useCategories,
+  useLedgerEndYear,
   useMonthTransactions,
   useSeedReady,
 } from "@/lib/hooks/useLedgerData";
@@ -49,14 +50,16 @@ export function HomePage() {
   const accounts = useAccounts();
   const categories = useCategories();
   const transactions = useMonthTransactions(year, month);
+  const endYear = useLedgerEndYear();
 
   // /?y=2025&m=12 opens that month (year report). Done before the empty-month jump.
   useEffect(() => {
+    if (endYear == null) return;
     const params = new URLSearchParams(window.location.search);
     const nextYear = Number(params.get("y"));
     const nextMonth = Number(params.get("m"));
     if (!nextYear || nextMonth < 1 || nextMonth > 12) return;
-    const period = clampLedgerPeriod(nextYear, nextMonth);
+    const period = clampLedgerPeriod(nextYear, nextMonth, endYear);
     pinnedPeriod.current = true;
     // The query string exists only in the browser, so the server render stays on this month.
     // eslint-disable-next-line react-hooks/set-state-in-effect -- see above
@@ -67,7 +70,7 @@ export function HomePage() {
     url.searchParams.delete("m");
     const next = `${url.pathname}${url.search}${url.hash}`;
     window.history.replaceState(null, "", next);
-  }, []);
+  }, [endYear]);
 
   // Deep link /#quick-add (reminder, other pages) opens the add sheet.
   useEffect(() => {
@@ -116,7 +119,7 @@ export function HomePage() {
         (latest.year !== now.getFullYear() ||
           latest.month !== now.getMonth() + 1)
       ) {
-        const next = clampLedgerPeriod(latest.year, latest.month);
+        const next = clampLedgerPeriod(latest.year, latest.month, endYear);
         setYear(next.year);
         setMonth(next.month);
       }
@@ -124,7 +127,7 @@ export function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [ready, bookId, now, transactions.length]);
+  }, [ready, bookId, now, transactions.length, endYear]);
 
   const visibleTransactions = useMemo(() => {
     if (typeFilter === "all") return transactions;
@@ -135,7 +138,7 @@ export function HomePage() {
     year === now.getFullYear() && month === now.getMonth() + 1;
 
   function jumpTo(nextYear: number, nextMonth: number) {
-    const next = clampLedgerPeriod(nextYear, nextMonth);
+    const next = clampLedgerPeriod(nextYear, nextMonth, endYear);
     setYear(next.year);
     setMonth(next.month);
   }

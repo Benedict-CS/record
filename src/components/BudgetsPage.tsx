@@ -19,6 +19,7 @@ import { clampLedgerPeriod } from "@/lib/period-jump";
 import {
   useBudgets,
   useCategories,
+  useLedgerEndYear,
   useMonthTransactions,
   useSeedReady,
 } from "@/lib/hooks/useLedgerData";
@@ -64,6 +65,7 @@ export function BudgetsPage() {
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
   const budgets = useBudgets(year, month);
+  const endYear = useLedgerEndYear();
   const categories = useCategories("expense");
   const transactions = useMonthTransactions(year, month);
 
@@ -174,7 +176,7 @@ export function BudgetsPage() {
   }
 
   function jumpTo(nextYear: number, nextMonth: number) {
-    const next = clampLedgerPeriod(nextYear, nextMonth);
+    const next = clampLedgerPeriod(nextYear, nextMonth, endYear);
     setYear(next.year);
     setMonth(next.month);
     setDrafts({});

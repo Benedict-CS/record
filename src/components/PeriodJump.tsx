@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { BottomSheet } from "@/components/BottomSheet";
+import { useLedgerEndYear } from "@/lib/hooks/useLedgerData";
 import { pickerYears } from "@/lib/period-jump";
 
 const MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
@@ -22,7 +23,8 @@ export function PeriodJump({
   const [open, setOpen] = useState(false);
   const [draftYear, setDraftYear] = useState(year);
   const nowYear = new Date().getFullYear();
-  const years = pickerYears(open ? draftYear : year, nowYear);
+  const endYear = useLedgerEndYear();
+  const years = pickerYears(open ? draftYear : year, nowYear, endYear ?? null);
   const label = scope === "year" ? `${year} 年` : `${year} 年 ${month} 月`;
 
   function openSheet() {
