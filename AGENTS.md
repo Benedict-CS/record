@@ -8,8 +8,10 @@ Useful paths:
 
 - App UI: `src/components/`
 - Local DB + CRUD: `src/lib/db/`
+- Recurring posts: `src/lib/db/recurring-post.ts`
+- Reports / year range: `src/components/ReportsPage.tsx`, `src/lib/period-jump.ts`
 - Sync: `src/lib/sync/engine.ts`
-- Migrations: `supabase/migrations/` (`001` … `007`)
+- Migrations: `supabase/migrations/` (`001` … `016`)
 
 Deploy with `npm run deploy`. Prefer reading Next.js docs under `node_modules/next/dist/docs/` when APIs differ from older Next.js.
 
