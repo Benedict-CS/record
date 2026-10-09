@@ -4,49 +4,46 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { useBook } from "@/components/BookProvider";
 import { monthSummary } from "@/lib/db/crud";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, throughToday } from "@/lib/format";
 import { useYearTransactions } from "@/lib/hooks/useLedgerData";
 import { periodBalance, periodSpend } from "@/lib/summary-display";
 
-/** Compact year spending snapshot above the month block. */
+/** One line of this year's totals, sitting under the month being viewed. */
 export function YearSpendCard({ year }: { year: number }) {
   const { book } = useBook();
   const currency = book?.currency;
   const transactions = useYearTransactions(year);
-  const summary = useMemo(
-    () => monthSummary(transactions),
-    [transactions],
-  );
+  const counted = useMemo(() => throughToday(transactions), [transactions]);
+  const later = transactions.length - counted.length;
+  const summary = useMemo(() => monthSummary(counted), [counted]);
 
   return (
-    <Link
-      href="/reports"
-      className="block rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 active:bg-[rgba(28,43,36,0.04)] sm:px-4"
-    >
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <p className="text-[11px] text-[var(--muted)]">{year} 年</p>
-        <span className="shrink-0 text-xs text-[var(--accent)]">報表 ›</span>
-      </div>
-      <div className="grid grid-cols-3 gap-1.5">
-        <div className="min-w-0">
-          <p className="text-[11px] text-[var(--muted)]">支出</p>
-          <p className="truncate text-sm font-semibold tabular-nums text-rose-700">
-            {formatMoney(periodSpend(summary), currency)}
-          </p>
-        </div>
-        <div className="min-w-0">
-          <p className="text-[11px] text-[var(--muted)]">收入</p>
-          <p className="truncate text-sm font-semibold tabular-nums text-emerald-800">
-            {formatMoney(summary.income, currency)}
-          </p>
-        </div>
-        <div className="min-w-0">
-          <p className="text-[11px] text-[var(--muted)]">結餘</p>
-          <p className="truncate text-sm font-semibold tabular-nums text-[var(--ink)]">
-            {formatMoney(periodBalance(summary), currency)}
-          </p>
-        </div>
-      </div>
-    </Link>
+    <div>
+      <Link
+        href="/reports"
+        className="flex min-h-10 items-center gap-2 text-xs"
+      >
+        <span className="shrink-0 font-medium text-[var(--ink)]">{year} 年</span>
+        <span className="min-w-0 flex-1 truncate tabular-nums text-[var(--muted)]">
+          <span className="text-rose-700">
+            支出 {formatMoney(periodSpend(summary), currency)}
+          </span>
+          <span aria-hidden> · </span>
+          <span className="text-emerald-800">
+            收入 {formatMoney(summary.income, currency)}
+          </span>
+          <span aria-hidden> · </span>
+          <span className="text-[var(--ink)]">
+            結餘 {formatMoney(periodBalance(summary), currency)}
+          </span>
+        </span>
+        <span className="shrink-0 text-[var(--accent)]">報表 ›</span>
+      </Link>
+      {later > 0 ? (
+        <p className="text-[11px] text-[var(--muted)]">
+          不含今天之後先入帳的 {later} 筆
+        </p>
+      ) : null}
+    </div>
   );
 }

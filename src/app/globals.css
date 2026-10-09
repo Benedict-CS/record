@@ -99,23 +99,22 @@ h3 {
   transform: translateX(-50%) scale(0.95);
 }
 
-/* Toast shelf: clears the bottom nav, the safe area and the quick-add FAB,
-   matching the shelf the PWA banners use. */
+/* Toasts sit under the status bar so they don't cover the last row's actions. */
 .toast-viewport {
-  bottom: calc(var(--bottom-nav-height) + var(--safe-bottom) + 4.5rem);
+  top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
 }
 
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(0.5rem) scale(0.98);
+    transform: translateY(-0.5rem) scale(0.98);
   }
 }
 
 @keyframes toast-out {
   to {
     opacity: 0;
-    transform: translateY(0.35rem) scale(0.98);
+    transform: translateY(-0.35rem) scale(0.98);
   }
 }
 

@@ -4,8 +4,6 @@ import { AuthProvider } from "@/components/AuthProvider";
 import { BookProvider } from "@/components/BookProvider";
 import { ConfirmProvider } from "@/components/ConfirmProvider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { InstallPrompt } from "@/components/InstallPrompt";
-import { PwaUpdatePrompt } from "@/components/PwaUpdatePrompt";
 import { ToastProvider } from "@/components/ToastProvider";
 import "./globals.css";
 
@@ -68,17 +66,6 @@ export default function RootLayout({
             <ToastProvider>
               <ConfirmProvider>
                 <ErrorBoundary>{children}</ErrorBoundary>
-                {/* PWA banners stack clear of the bottom nav and the quick-add FAB. */}
-                <div
-                  className="pointer-events-none fixed inset-x-0 z-50 mx-auto flex w-full max-w-lg flex-col gap-2 px-4"
-                  style={{
-                    bottom:
-                      "calc(var(--bottom-nav-height, 3.25rem) + env(safe-area-inset-bottom, 0px) + 4.5rem)",
-                  }}
-                >
-                  <PwaUpdatePrompt />
-                  <InstallPrompt />
-                </div>
               </ConfirmProvider>
             </ToastProvider>
           </BookProvider>

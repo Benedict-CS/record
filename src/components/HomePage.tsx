@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
+import { BackupNudge } from "@/components/BackupNudge";
 import { BottomSheet } from "@/components/BottomSheet";
+import { PendingHomeLink } from "@/components/PendingList";
 import { useBook } from "@/components/BookProvider";
 import { MonthSummary } from "@/components/MonthSummary";
 import { QuickTemplateBar } from "@/components/QuickTemplateBar";
@@ -11,16 +13,17 @@ import { RecurringPage } from "@/components/RecurringPage";
 import { TransactionEditor } from "@/components/TransactionEditor";
 import { TransactionForm } from "@/components/TransactionForm";
 import { TransactionList } from "@/components/TransactionList";
-import { YearSpendCard } from "@/components/YearSpendCard";
 import { useToast } from "@/components/ToastProvider";
 import {
   findLatestTransactionMonth,
   listTransactionsForMonth,
 } from "@/lib/db/crud";
-import { formatDayHeading } from "@/lib/format";
+import { formatDayHeading, todayLocal } from "@/lib/format";
+import { clampLedgerPeriod } from "@/lib/period-jump";
 import {
   useAccounts,
   useCategories,
+  useLedgerEndYear,
   useMonthTransactions,
   useSeedReady,
 } from "@/lib/hooks/useLedgerData";
@@ -29,9 +32,11 @@ import type { Transaction } from "@/lib/types";
 export function HomePage() {
   const ready = useSeedReady();
   const { bookId } = useBook();
-  const now = useMemo(() => new Date(), []);
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
+  const today = todayLocal();
+  const currentYear = Number(today.slice(0, 4));
+  const currentMonth = Number(today.slice(5, 7));
+  const [year, setYear] = useState(currentYear);
+  const [month, setMonth] = useState(currentMonth);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   /** When set, the add sheet is for this day. Null means today (the FAB). */
@@ -42,10 +47,32 @@ export function HomePage() {
   >("all");
   const { show } = useToast();
   const openedForBook = useRef<string | null>(null);
+  const pinnedPeriod = useRef(false);
 
   const accounts = useAccounts();
   const categories = useCategories();
   const transactions = useMonthTransactions(year, month);
+  const endYear = useLedgerEndYear();
+
+  // /?y=2025&m=12 opens that month (year report). Done before the empty-month jump.
+  useEffect(() => {
+    if (endYear == null) return;
+    const params = new URLSearchParams(window.location.search);
+    const nextYear = Number(params.get("y"));
+    const nextMonth = Number(params.get("m"));
+    if (!nextYear || nextMonth < 1 || nextMonth > 12) return;
+    const period = clampLedgerPeriod(nextYear, nextMonth, endYear);
+    pinnedPeriod.current = true;
+    // The query string exists only in the browser, so the server render stays on this month.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- see above
+    setYear(period.year);
+    setMonth(period.month);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("y");
+    url.searchParams.delete("m");
+    const next = `${url.pathname}${url.search}${url.hash}`;
+    window.history.replaceState(null, "", next);
+  }, [endYear]);
 
   // Deep link /#quick-add (reminder, other pages) opens the add sheet.
   useEffect(() => {
@@ -65,6 +92,10 @@ export function HomePage() {
   // (once per book). Stay on the real current month when the book is empty.
   useEffect(() => {
     if (!ready || !bookId) return;
+    if (pinnedPeriod.current) {
+      openedForBook.current = bookId;
+      return;
+    }
     if (transactions.length > 0) {
       openedForBook.current = bookId;
       return;
@@ -74,8 +105,8 @@ export function HomePage() {
     void (async () => {
       const current = await listTransactionsForMonth(
         bookId,
-        now.getFullYear(),
-        now.getMonth() + 1,
+        currentYear,
+        currentMonth,
       );
       if (cancelled) return;
       if (current.length > 0) {
@@ -87,35 +118,38 @@ export function HomePage() {
       openedForBook.current = bookId;
       if (
         latest &&
-        (latest.year !== now.getFullYear() ||
-          latest.month !== now.getMonth() + 1)
+        (latest.year !== currentYear || latest.month !== currentMonth)
       ) {
-        setYear(latest.year);
-        setMonth(latest.month);
+        const next = clampLedgerPeriod(latest.year, latest.month, endYear);
+        setYear(next.year);
+        setMonth(next.month);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [ready, bookId, now, transactions.length]);
+  }, [ready, bookId, currentYear, currentMonth, transactions.length, endYear]);
 
   const visibleTransactions = useMemo(() => {
     if (typeFilter === "all") return transactions;
     return transactions.filter((tx) => tx.type === typeFilter);
   }, [transactions, typeFilter]);
 
-  const isCurrentMonth =
-    year === now.getFullYear() && month === now.getMonth() + 1;
+  const isCurrentMonth = year === currentYear && month === currentMonth;
+
+  function jumpTo(nextYear: number, nextMonth: number) {
+    const next = clampLedgerPeriod(nextYear, nextMonth, endYear);
+    setYear(next.year);
+    setMonth(next.month);
+  }
 
   function shiftMonth(delta: number) {
     const date = new Date(year, month - 1 + delta, 1);
-    setYear(date.getFullYear());
-    setMonth(date.getMonth() + 1);
+    jumpTo(date.getFullYear(), date.getMonth() + 1);
   }
 
   function goToCurrentMonth() {
-    setYear(now.getFullYear());
-    setMonth(now.getMonth() + 1);
+    jumpTo(currentYear, currentMonth);
   }
 
   function openAdd(date?: string) {
@@ -141,16 +175,20 @@ export function HomePage() {
       {!ready ? (
         <p className="text-sm text-[var(--muted)]">載入本機資料…</p>
       ) : (
-        <div className="space-y-3 pb-16">
-          <YearSpendCard year={year} />
+        <div className="space-y-3">
           <MonthSummary
             year={year}
             month={month}
             transactions={transactions}
             onPrev={() => shiftMonth(-1)}
             onNext={() => shiftMonth(1)}
+            onJump={jumpTo}
             onGoCurrent={!isCurrentMonth ? goToCurrentMonth : undefined}
           />
+          <div className="flex gap-2 empty:hidden">
+            <BackupNudge />
+            <PendingHomeLink />
+          </div>
           <QuickTemplateBar />
           <section className="space-y-2">
             <div className="flex items-center justify-between gap-2">
@@ -236,7 +274,7 @@ export function HomePage() {
         }
         description={
           addMode === "monthly"
-            ? "房貸、房租、訂閱，或 0050 這類定期定額"
+            ? "薪水、房貸、房租、訂閱，或 0050 這類定期定額"
             : "支出／收入／扣住（押金）。請客金額可填 0"
         }
       >

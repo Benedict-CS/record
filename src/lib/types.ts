@@ -83,12 +83,31 @@ export interface Transaction extends SyncMeta {
 export interface RecurringRule extends SyncMeta {
   book_id: string;
   name: string;
-  kind: "expense" | "invest";
+  kind: "expense" | "income" | "invest";
   amount: number;
   /** 1–31. Shorter months use the last day. */
   day_of_month: number;
   /** First month that may post, YYYY-MM. Earlier months are never backfilled. */
   start_month: string;
+  /**
+   * Last month that may post, YYYY-MM. Null means open-ended: post when each
+   * due day arrives. A value posts every month in the span as soon as the
+   * rule is saved.
+   */
+  end_month: string | null;
+  /**
+   * Expense rules only. Each posted month is pending reimbursement for this
+   * amount. Null means the charge is not reimbursable.
+   */
+  reimbursable_amount: number | null;
+  /**
+   * Expense rules only. This much of `amount` is posted as 扣住 (not an
+   * expense) each month. Null means the whole amount is an expense.
+   * Equal to `amount` means the whole charge is held, the way rent can be.
+   */
+  held_amount: number | null;
+  /** Name shown on the held row, such as 電費預繳. Null uses the rule name. */
+  held_name: string | null;
   /** Latest YYYY-MM already posted, or null. */
   last_posted: string | null;
   last_error: string | null;
@@ -125,6 +144,8 @@ export interface SyncState {
   id: string;
   last_pulled_at: string | null;
   last_pushed_at: string | null;
+  /** Missing on devices that synced before paged pulls. Forces one full download. */
+  pull_version?: number;
 }
 
 export type CloudBook = Omit<Book, "sync_status">;
@@ -165,6 +186,8 @@ export interface PeriodSummary {
    * Outstanding-only totals use outstandingHeldTotal() for net worth.
    */
   held: number;
+  /** Holds in this period that are still 暫時扣住. */
+  heldOutstanding: number;
   /**
    * Display「花費」= selfPay + held (after 銷帳, reimbursed portion is excluded).
    */

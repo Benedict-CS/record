@@ -33,3 +33,29 @@ export function formatAuthError(message: string | undefined | null): string {
   }
   return raw;
 }
+
+/** Cloud account deletion failed. The account is still there. */
+export function formatDeleteAccountError(
+  message: string | undefined | null,
+): string {
+  const raw = (message ?? "").trim();
+  const lower = raw.toLowerCase();
+  if (!raw) return "刪除失敗，請再試一次";
+  if (
+    lower.includes("pgrst202") ||
+    lower.includes("could not find the function") ||
+    lower.includes("delete_own_account")
+  ) {
+    return "雲端還沒開刪帳號。請先在 Supabase 執行 016 的 SQL，再試一次。";
+  }
+  if (lower.includes("not authenticated") || lower.includes("session")) {
+    return "尚未登入，請先登入再刪除帳號";
+  }
+  if (lower.includes("network") || lower.includes("failed to fetch")) {
+    return "網路不通，帳號還沒刪。請檢查連線後再試";
+  }
+  if (lower.includes("permission denied")) {
+    return "雲端不允許刪除這個帳號";
+  }
+  return "刪除失敗，請再試一次";
+}

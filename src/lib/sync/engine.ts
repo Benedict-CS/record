@@ -7,8 +7,16 @@ import {
 } from "@/lib/db/owner";
 import { db } from "@/lib/db/schema";
 import {
+  FULL_PULL_VERSION,
+  PULL_PAGE_SIZE,
+  needsFullCloudPull,
+  takePullPage,
+} from "@/lib/sync/pull-page";
+import {
   missingColumnName,
+  plainSyncFailure,
   preserveUnsyncedField,
+  remoteWins,
   withoutColumn,
 } from "@/lib/sync/schema-compat";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
@@ -31,6 +39,21 @@ const listeners = new Set<Listener>();
 let currentStatus: SyncUiStatus = "local";
 let currentMessage: string | undefined;
 let syncing = false;
+let syncBlocked = false;
+let syncIdle: Promise<void> = Promise.resolve();
+
+/** Stop new syncs until unblockSync. In-flight work is left to finish. */
+export function blockSync() {
+  syncBlocked = true;
+}
+
+export function unblockSync() {
+  syncBlocked = false;
+}
+
+export function waitForSyncIdle() {
+  return syncIdle;
+}
 
 export function getSyncStatus() {
   return { status: currentStatus, message: currentMessage };
@@ -61,6 +84,8 @@ function formatSyncError(error: unknown, context?: string): string {
     hint?: string;
     code?: string;
   };
+  const plain = plainSyncFailure(row);
+  if (plain) return plain;
   const parts = [row.message, row.details, row.hint, row.code ? `(${row.code})` : ""]
     .map((part) => (typeof part === "string" ? part.trim() : ""))
     .filter(Boolean);
@@ -274,42 +299,6 @@ async function retireTransfersLocally() {
   }
 }
 
-/** Remap live txs that still point at soft-deleted accounts onto a live twin. */
-async function repairDeadAccountRefs() {
-  const stamp = new Date().toISOString();
-  const liveAccounts = (await db.accounts.toArray()).filter(
-    (row) => !row.deleted_at,
-  );
-  const liveByBookType = new Map<string, string>();
-  for (const account of liveAccounts) {
-    const key = `${account.book_id}\0${account.type}`;
-    if (!liveByBookType.has(key)) liveByBookType.set(key, account.id);
-  }
-
-  const deadIds = new Set(
-    (await db.accounts.toArray())
-      .filter((row) => row.deleted_at)
-      .map((row) => row.id),
-  );
-  if (deadIds.size === 0) return;
-
-  const txs = await db.transactions
-    .filter((row) => !row.deleted_at && deadIds.has(row.account_id))
-    .toArray();
-
-  for (const tx of txs) {
-    const dead = await db.accounts.get(tx.account_id);
-    if (!dead) continue;
-    const next = liveByBookType.get(`${tx.book_id}\0${dead.type}`);
-    if (!next || next === tx.account_id) continue;
-    await db.transactions.update(tx.id, {
-      account_id: next,
-      updated_at: stamp,
-      sync_status: "pending",
-    });
-  }
-}
-
 /** Soft-delete empty placeholder holdings left by old seed defaults. */
 async function purgeEmptyHoldings() {
   if (
@@ -372,7 +361,7 @@ async function mergeRemoteBooks(remoteRows: CloudBook[]) {
   for (let i = 0; i < remoteRows.length; i += 1) {
     const remote = remoteRows[i];
     const local = locals[i];
-    if (!local || remote.updated_at >= local.updated_at) {
+    if (!local || remoteWins(remote.updated_at, local.updated_at)) {
       toPut.push(remote);
     }
   }
@@ -398,11 +387,11 @@ async function mergeRemoteAccounts(remoteRows: CloudAccount[]) {
       local?.sync_status === "pending" &&
       local.deleted_at &&
       !remote.deleted_at &&
-      local.updated_at >= remote.updated_at
+      remoteWins(local.updated_at, remote.updated_at)
     ) {
       continue;
     }
-    if (!local || remote.updated_at >= local.updated_at) {
+    if (!local || remoteWins(remote.updated_at, local.updated_at)) {
       toPut.push(normalised);
     }
   }
@@ -428,11 +417,11 @@ async function mergeRemoteCategories(remoteRows: CloudCategory[]) {
       local?.sync_status === "pending" &&
       local.deleted_at &&
       !remote.deleted_at &&
-      local.updated_at >= remote.updated_at
+      remoteWins(local.updated_at, remote.updated_at)
     ) {
       continue;
     }
-    if (!local || remote.updated_at >= local.updated_at) {
+    if (!local || remoteWins(remote.updated_at, local.updated_at)) {
       toPut.push(withColor);
     }
   }
@@ -504,7 +493,7 @@ async function mergeRemoteTransactions(remoteRows: CloudTransaction[]) {
       target_holding_id: target.value,
       sync_status: needsUpload ? "pending" : "synced",
     };
-    if (!local || remote.updated_at >= local.updated_at) {
+    if (!local || remoteWins(remote.updated_at, local.updated_at)) {
       toPut.push(normalised);
     }
   }
@@ -521,7 +510,7 @@ async function mergeRemoteBudgets(remoteRows: CloudBudget[]) {
     const remote = remoteRows[i];
     const local = locals[i];
     if (local?.sync_status === "pending") continue;
-    if (!local || remote.updated_at >= local.updated_at) {
+    if (!local || remoteWins(remote.updated_at, local.updated_at)) {
       toPut.push({ ...remote, amount: Number(remote.amount) });
     }
   }
@@ -541,7 +530,7 @@ async function mergeRemoteTemplates(remoteRows: CloudTemplate[]) {
     const normalised = { ...remote, amount: Number(remote.amount) };
     const local = locals[i];
     if (local?.sync_status === "pending") continue;
-    if (!local || remote.updated_at >= local.updated_at) {
+    if (!local || remoteWins(remote.updated_at, local.updated_at)) {
       toPut.push(normalised);
     }
   }
@@ -561,28 +550,66 @@ function isMissingRelation(error: unknown) {
 async function mergeRemoteRecurring(remoteRows: CloudRecurringRule[]) {
   if (!remoteRows.length) return;
   const locals = await db.recurring_rules.bulkGet(remoteRows.map((row) => row.id));
-  const toPut: CloudRecurringRule[] = [];
+  const toPut: Array<CloudRecurringRule & { sync_status: "pending" | "synced" }> = [];
   for (let i = 0; i < remoteRows.length; i += 1) {
     const remote = remoteRows[i];
     const local = locals[i];
     if (local?.sync_status === "pending") continue;
-    if (!local || remote.updated_at >= local.updated_at) {
+    if (!local || remoteWins(remote.updated_at, local.updated_at)) {
+      const remoteRecord = remote as unknown as Record<string, unknown>;
+      const hasEnd = Object.prototype.hasOwnProperty.call(remoteRecord, "end_month");
+      const hasReimbursable = Object.prototype.hasOwnProperty.call(
+        remoteRecord,
+        "reimbursable_amount",
+      );
+      const hasHeld = Object.prototype.hasOwnProperty.call(remoteRecord, "held_amount");
+      const hasHeldName = Object.prototype.hasOwnProperty.call(remoteRecord, "held_name");
+      const endMonth = hasEnd
+        ? typeof remoteRecord.end_month === "string" && remoteRecord.end_month
+          ? remoteRecord.end_month
+          : null
+        : (local?.end_month ?? null);
+      const remoteReimbursable = Number(remoteRecord.reimbursable_amount);
+      const reimbursableAmount = hasReimbursable
+        ? Number.isFinite(remoteReimbursable) && remoteReimbursable > 0
+          ? remoteReimbursable
+          : null
+        : (local?.reimbursable_amount ?? null);
+      const remoteHeld = Number(remoteRecord.held_amount);
+      const heldAmount = hasHeld
+        ? Number.isFinite(remoteHeld) && remoteHeld > 0
+          ? remoteHeld
+          : null
+        : (local?.held_amount ?? null);
+      const heldName = hasHeldName
+        ? typeof remoteRecord.held_name === "string" && remoteRecord.held_name
+          ? remoteRecord.held_name
+          : null
+        : (local?.held_name ?? null);
+      const needsUpload =
+        (!hasEnd && Boolean(local?.end_month)) ||
+        (!hasReimbursable && (local?.reimbursable_amount ?? 0) > 0) ||
+        (!hasHeld && (local?.held_amount ?? 0) > 0) ||
+        (!hasHeldName && Boolean(local?.held_name));
       toPut.push({
         ...remote,
         amount: Number(remote.amount),
         day_of_month: Number(remote.day_of_month),
+        end_month: endMonth,
+        reimbursable_amount: reimbursableAmount,
+        held_amount: heldAmount,
+        held_name: heldName,
         last_posted: remote.last_posted ?? null,
         last_error: remote.last_error ?? null,
         category_id: remote.category_id ?? null,
         holding_id: remote.holding_id ?? null,
         target_holding_id: remote.target_holding_id ?? null,
+        sync_status: needsUpload ? "pending" : "synced",
       });
     }
   }
   if (toPut.length) {
-    await db.recurring_rules.bulkPut(
-      toPut.map((row) => ({ ...row, sync_status: "synced" as const })),
-    );
+    await db.recurring_rules.bulkPut(toPut);
   }
 }
 
@@ -601,7 +628,7 @@ async function mergeRemoteHoldings(remoteRows: CloudHolding[]) {
     };
     const local = locals[i];
     if (local?.sync_status === "pending") continue;
-    if (!local || remote.updated_at >= local.updated_at) {
+    if (!local || remoteWins(remote.updated_at, local.updated_at)) {
       toPut.push(normalised);
     }
   }
@@ -620,17 +647,24 @@ function syncStateKey(userId: string) {
 
 async function pullAll(userId: string, options: PullOptions = {}) {
   const supabase = createClient();
+  // Stamp before the fetch: rows written on the server while pages download
+  // must fall inside the next incremental window, not before it.
+  const pullStartedAt = new Date().toISOString();
   const state = await db.sync_state.get(syncStateKey(userId));
   const since = state?.last_pulled_at;
   const localTxCount = await db.transactions.count();
   // First sync / empty DB / explicit full: download everything.
   // Later syncs only fetch rows newer than last_pulled_at (much faster).
-  const full =
-    options.forceFull ||
-    !since ||
-    localTxCount === 0 ||
-    (typeof localStorage !== "undefined" &&
-      localStorage.getItem("ledger_force_full_pull") === "1");
+  const storageFlag =
+    typeof localStorage !== "undefined" &&
+    localStorage.getItem("ledger_force_full_pull") === "1";
+  const full = needsFullCloudPull({
+    forceFull: options.forceFull,
+    since,
+    localCount: localTxCount,
+    pullVersion: state?.pull_version,
+    storageFlag,
+  });
 
   if (
     full &&
@@ -647,15 +681,30 @@ async function pullAll(userId: string, options: PullOptions = {}) {
       : null;
 
   async function fetchTable(table: string) {
-    let query = supabase
-      .from(table)
-      .select("*")
-      .eq("user_id", userId)
-      .order("updated_at", { ascending: true });
-    if (sinceWithOverlap) query = query.gt("updated_at", sinceWithOverlap);
-    const { data, error } = await query;
-    if (error) throw error;
-    return data ?? [];
+    const seenFirstIds = new Set<string>();
+    const rows: Record<string, unknown>[] = [];
+    // 200 pages is 200k rows. Past that, fail the sync so last_pulled_at
+    // does not jump forward and hide the rest.
+    for (let page = 0; page < 200; page += 1) {
+      const from = page * PULL_PAGE_SIZE;
+      let query = supabase
+        .from(table)
+        .select("*")
+        .eq("user_id", userId)
+        .order("updated_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, from + PULL_PAGE_SIZE - 1);
+      if (sinceWithOverlap) query = query.gt("updated_at", sinceWithOverlap);
+      const { data, error } = await query;
+      if (error) throw error;
+      const taken = takePullPage(
+        (data ?? []) as Array<{ id?: string | null }>,
+        seenFirstIds,
+      );
+      rows.push(...(taken.rows as Record<string, unknown>[]));
+      if (taken.done) return rows;
+    }
+    throw new Error(`${table} 的雲端資料超過一次同步能拉完的筆數`);
   }
 
   // Parallel network pulls; merge stays sequential by table dependency order.
@@ -692,10 +741,10 @@ async function pullAll(userId: string, options: PullOptions = {}) {
   }
 
   // Defer last_pulled_at until push succeeds so a failed push can re-pull.
-  return new Date().toISOString();
+  return pullStartedAt;
 }
 
-async function pushPending(userId: string) {
+async function pushPending(userId: string): Promise<"column" | "table" | null> {
   const supabase = createClient();
 
   const [books, accounts, categories, transactions, budgets, templates, holdings, recurringRules] =
@@ -801,15 +850,19 @@ async function pushPending(userId: string) {
     }));
 
   const UPSERT_CHUNK = 150;
+  let schemaGap: "column" | "table" | null = null;
+
+  type PushedRow = { id: string; updated_at: string };
 
   async function upsertTable(
     table: string,
     rows: Record<string, unknown>[],
-    markSynced: (ids: string[]) => Promise<void>,
+    markSynced: (pushed: PushedRow[]) => Promise<void>,
   ) {
     if (!rows.length) return;
     for (let i = 0; i < rows.length; i += UPSERT_CHUNK) {
       let payload = rows.slice(i, i + UPSERT_CHUNK);
+      let strippedValue = false;
       for (let attempt = 0; attempt < 6; attempt += 1) {
         const { error } = await supabase.from(table).upsert(payload);
         if (!error) {
@@ -820,6 +873,14 @@ async function pushPending(userId: string) {
         if (!column || !payload.some((row) => column in row)) {
           throw Object.assign(error, { __table: table });
         }
+        if (
+          payload.some((row) => {
+            const value = row[column];
+            return value != null && value !== "";
+          })
+        ) {
+          strippedValue = true;
+        }
         payload = withoutColumn(payload, column);
       }
       if (payload.length) {
@@ -827,53 +888,68 @@ async function pushPending(userId: string) {
           __table: table,
         });
       }
-      await markSynced(rows.slice(i, i + UPSERT_CHUNK).map((row) => String(row.id)));
+      if (strippedValue) {
+        schemaGap = "column";
+        continue;
+      }
+      await markSynced(
+        rows.slice(i, i + UPSERT_CHUNK).map((row) => ({
+          id: String(row.id),
+          updated_at: String(row.updated_at),
+        })),
+      );
     }
   }
 
-  async function markLocalSynced<T extends { id: string; sync_status: SyncStatus }>(
+  async function markLocalSynced<
+    T extends { id: string; updated_at: string; sync_status: SyncStatus },
+  >(
     table: {
       bulkGet: (keys: string[]) => Promise<Array<T | undefined>>;
       bulkPut: (items: T[]) => Promise<unknown>;
     },
-    ids: string[],
+    pushed: PushedRow[],
   ) {
-    const locals = await table.bulkGet(ids);
-    const stamped = locals
-      .filter((row): row is T => Boolean(row))
-      .map((row) => ({ ...row, sync_status: "synced" as const }));
+    const locals = await table.bulkGet(pushed.map((row) => row.id));
+    const stamped: T[] = [];
+    locals.forEach((row, index) => {
+      // An edit saved while the upload was in flight has a newer updated_at.
+      // Leave it pending so the next push carries that change.
+      if (!row || row.updated_at !== pushed[index].updated_at) return;
+      stamped.push({ ...row, sync_status: "synced" as const });
+    });
     if (stamped.length) await table.bulkPut(stamped);
   }
 
   await upsertTable(
     "books",
     ownedBooks as Record<string, unknown>[],
-    (ids) => markLocalSynced(db.books, ids),
+    (pushed) => markLocalSynced(db.books, pushed),
   );
   await upsertTable(
     "accounts",
     ownedAccounts as Record<string, unknown>[],
-    (ids) => markLocalSynced(db.accounts, ids),
+    (pushed) => markLocalSynced(db.accounts, pushed),
   );
   await upsertTable(
     "categories",
     ownedCategories as Record<string, unknown>[],
-    (ids) => markLocalSynced(db.categories, ids),
+    (pushed) => markLocalSynced(db.categories, pushed),
   );
   await upsertTable(
     "transactions",
     ownedTransactions as Record<string, unknown>[],
-    (ids) => markLocalSynced(db.transactions, ids),
+    (pushed) => markLocalSynced(db.transactions, pushed),
   );
   await upsertTable(
     "budgets",
     ownedBudgets as Record<string, unknown>[],
-    (ids) => markLocalSynced(db.budgets, ids),
+    (pushed) => markLocalSynced(db.budgets, pushed),
   );
   await upsertTable(
     "templates",
     ownedTemplates as Record<string, unknown>[],
-    (ids) => markLocalSynced(db.templates, ids),
+    (pushed) => markLocalSynced(db.templates, pushed),
   );
 
   const holdingsPayload = ownedHoldings.map((row) => ({
@@ -890,7 +966,7 @@ async function pushPending(userId: string) {
   await upsertTable(
     "holdings",
     holdingsPayload as Record<string, unknown>[],
-    (ids) => markLocalSynced(db.holdings, ids),
+    (pushed) => markLocalSynced(db.holdings, pushed),
   );
   const ownedRules = recurringRules
     .filter((row) => row.user_id === userId)
@@ -898,6 +974,11 @@ async function pushPending(userId: string) {
       ...stripSyncStatus(row),
       amount: Number(row.amount),
       day_of_month: Number(row.day_of_month),
+      end_month: row.end_month ?? null,
+      reimbursable_amount:
+        row.reimbursable_amount == null ? null : Number(row.reimbursable_amount),
+      held_amount: row.held_amount == null ? null : Number(row.held_amount),
+      held_name: row.held_name ?? null,
       last_posted: row.last_posted ?? null,
       last_error: row.last_error ?? null,
       category_id: row.category_id ?? null,
@@ -908,10 +989,11 @@ async function pushPending(userId: string) {
     await upsertTable(
       "recurring_rules",
       ownedRules as Record<string, unknown>[],
-      (ids) => markLocalSynced(db.recurring_rules, ids),
+      (pushed) => markLocalSynced(db.recurring_rules, pushed),
     );
   } catch (error) {
     if (!isMissingRelation(error)) throw error;
+    schemaGap = schemaGap ?? "table";
   }
 
   const state = await db.sync_state.get(syncStateKey(userId));
@@ -919,7 +1001,9 @@ async function pushPending(userId: string) {
     id: syncStateKey(userId),
     last_pulled_at: state?.last_pulled_at ?? null,
     last_pushed_at: new Date().toISOString(),
+    pull_version: state?.pull_version,
   });
+  return schemaGap;
 }
 
 export type RunSyncOptions = {
@@ -942,6 +1026,7 @@ function needsMaintenance(forceFull: boolean): boolean {
 
 export async function runSync(options: RunSyncOptions = {}): Promise<void> {
   if (typeof window === "undefined") return;
+  if (syncBlocked) return;
   if (!navigator.onLine) {
     setStatus("offline");
     return;
@@ -954,21 +1039,16 @@ export async function runSync(options: RunSyncOptions = {}): Promise<void> {
 
   const forceFull = Boolean(options.forceFull);
   syncing = true;
+  let releaseIdle: () => void = () => undefined;
+  syncIdle = new Promise<void>((resolve) => {
+    releaseIdle = resolve;
+  });
   setStatus(
     "syncing",
     forceFull ? "正在完整同步…" : "正在同步…",
   );
 
   try {
-    const state = await db.sync_state.get("default");
-    const isFirstPull = !state?.last_pulled_at || forceFull;
-    // Seed only when local is empty / first cloud pull — BookProvider already
-    // seeds on boot; re-running pin/dedupe on every sync was a major cost.
-    if (isFirstPull) {
-      const { ensureSeedData } = await import("@/lib/db/seed");
-      await ensureSeedData();
-    }
-
     const supabase = createClient();
     const {
       data: { user },
@@ -994,6 +1074,8 @@ export async function runSync(options: RunSyncOptions = {}): Promise<void> {
     // Do not adopt this device's logged-out ledger, or another account's rows.
     // Each account only pulls and pushes rows stamped with its own user id.
     const pulledAt = await pullAll(user.id, { forceFull });
+    // Cheap no-op once the account has any book; only a brand-new account
+    // (nothing came down in the pull) gets the default books here.
     await ensureOwnerLedger(user.id);
     // Cheap when clean; clears empty seed twins that landed next to real holdings.
     await collapseDuplicateHoldings();
@@ -1001,7 +1083,6 @@ export async function runSync(options: RunSyncOptions = {}): Promise<void> {
 
     if (needsMaintenance(forceFull)) {
       await collapseDuplicateBooks();
-      await repairDeadAccountRefs();
       await preferCanonicalActiveBook();
       await retireTransfersLocally();
       await purgeInventedLocalData();
@@ -1011,14 +1092,21 @@ export async function runSync(options: RunSyncOptions = {}): Promise<void> {
       }
     }
 
-    await pushPending(user.id);
+    const schemaGap = await pushPending(user.id);
     const syncState = await db.sync_state.get(syncStateKey(user.id));
     await db.sync_state.put({
       id: syncStateKey(user.id),
       last_pulled_at: pulledAt,
       last_pushed_at: syncState?.last_pushed_at ?? new Date().toISOString(),
+      pull_version: FULL_PULL_VERSION,
     });
-    setStatus("synced");
+    if (schemaGap === "column") {
+      setStatus("error", "這台已存好，雲端還沒這欄，所以上不去。");
+    } else if (schemaGap === "table") {
+      setStatus("error", "這台已存好，雲端還沒這張表，所以上不去。");
+    } else {
+      setStatus("synced");
+    }
   } catch (error) {
     const table =
       error && typeof error === "object" && "__table" in error
@@ -1027,6 +1115,8 @@ export async function runSync(options: RunSyncOptions = {}): Promise<void> {
     setStatus("error", formatSyncError(error, table));
   } finally {
     syncing = false;
+    releaseIdle();
+    syncIdle = Promise.resolve();
   }
 }
 
@@ -1038,33 +1128,49 @@ function scheduleAutoSync() {
   void runSync();
 }
 
+let listenerStop: (() => void) | null = null;
+let listenerRefs = 0;
+
 export function startSyncListeners() {
   if (typeof window === "undefined") return () => undefined;
 
-  const onOnline = () => {
-    scheduleAutoSync();
-  };
-  const onOffline = () => setStatus("offline");
-  const onVisible = () => {
-    if (document.visibilityState === "visible") {
+  listenerRefs += 1;
+  if (!listenerStop) {
+    const onOnline = () => {
+      scheduleAutoSync();
+    };
+    const onOffline = () => setStatus("offline");
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        scheduleAutoSync();
+      }
+    };
+
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    document.addEventListener("visibilitychange", onVisible);
+
+    listenerStop = () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+      document.removeEventListener("visibilitychange", onVisible);
+      listenerStop = null;
+    };
+
+    if (!navigator.onLine) {
+      setStatus("offline");
+    } else {
+      // AppShell remounts the badge on every route; throttle so tab switches
+      // do not each pull every table.
       scheduleAutoSync();
     }
-  };
-
-  window.addEventListener("online", onOnline);
-  window.addEventListener("offline", onOffline);
-  document.addEventListener("visibilitychange", onVisible);
-
-  if (!navigator.onLine) {
-    setStatus("offline");
-  } else {
-    lastAutoSyncAt = Date.now();
-    void runSync();
   }
 
   return () => {
-    window.removeEventListener("online", onOnline);
-    window.removeEventListener("offline", onOffline);
-    document.removeEventListener("visibilitychange", onVisible);
+    listenerRefs -= 1;
+    if (listenerRefs <= 0) {
+      listenerRefs = 0;
+      listenerStop?.();
+    }
   };
 }

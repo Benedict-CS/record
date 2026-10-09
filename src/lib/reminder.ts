@@ -221,11 +221,22 @@ export function notifyIfDue(
   const today = dateKey(now);
   if (readKey(NOTIFIED_KEY) === today) return false;
 
+  const title = "記帳提醒";
+  const options: NotificationOptions = {
+    body: "今天還沒記帳，花十秒補上吧。",
+    tag: "ledger-daily-reminder",
+  };
   try {
-    new Notification("記帳提醒", {
-      body: "今天還沒記帳，花十秒補上吧。",
-      tag: "ledger-daily-reminder",
-    });
+    const worker = navigator.serviceWorker;
+    if (worker) {
+      void worker.ready
+        .then((registration) => registration.showNotification(title, options))
+        .catch(() => {
+          new Notification(title, options);
+        });
+    } else {
+      new Notification(title, options);
+    }
   } catch {
     // Some browsers require a service worker registration to construct one.
     return false;

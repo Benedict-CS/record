@@ -10,12 +10,19 @@ import { useBook } from "@/components/BookProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { ExportCsvButton } from "@/components/ExportCsvButton";
 import { useToast } from "@/components/ToastProvider";
+import { useOpenItems } from "@/lib/hooks/useLedgerData";
+import { groupOpenItems } from "@/lib/open-items";
 
 const LINKS: {
   href: string;
   title: string;
   description: string;
 }[] = [
+  {
+    href: "/pending",
+    title: "待處理",
+    description: "還沒銷帳的核銷，和還沒退回的扣住",
+  },
   {
     href: "/search",
     title: "搜尋",
@@ -53,8 +60,8 @@ const LINKS: {
   },
   {
     href: "/recurring",
-    title: "固定扣款",
-    description: "房貸、房租、訂閱，以及 0050 這類定期定額",
+    title: "每月固定",
+    description: "薪水、房貸、房租、訂閱，以及 0050 這類定期定額",
   },
   {
     href: "/login",
@@ -68,6 +75,7 @@ export function MorePage() {
   const confirm = useConfirm();
   const { show } = useToast();
   const { book } = useBook();
+  const openCount = groupOpenItems(useOpenItems()).length;
   const now = useMemo(() => new Date(), []);
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
@@ -142,6 +150,11 @@ export function MorePage() {
                           已登入
                         </span>
                       ) : null}
+                      {item.href === "/pending" && openCount > 0 ? (
+                        <span className="ml-2 text-xs font-normal tabular-nums text-[var(--accent)]">
+                          {openCount} 件
+                        </span>
+                      ) : null}
                       {item.href === "/books" && book ? (
                         <span className="ml-2 text-xs font-normal text-[var(--accent)]">
                           {book.name}
@@ -152,7 +165,7 @@ export function MorePage() {
                       {item.href === "/login" && !configured
                         ? "尚未設定雲端，可先本機使用"
                         : item.href === "/login" && user
-                          ? "改密碼、登出"
+                          ? "改密碼、登出、刪除帳號"
                           : item.description}
                     </p>
                   </div>
@@ -175,10 +188,6 @@ export function MorePage() {
           <p className="font-medium text-[var(--ink)]">帳本切換</p>
           <p className="mt-1 text-xs leading-relaxed">
             頁面上方隨時可以切換帳本，每本帳本的帳戶、分類、交易與預算完全分開。
-          </p>
-          <p className="mt-2 text-xs leading-relaxed">
-            雲端與 Vercel 設定請看專案根目錄的{" "}
-            <code className="text-[var(--ink)]">SETUP.md</code>。
           </p>
         </section>
       </div>

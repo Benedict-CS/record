@@ -204,13 +204,16 @@ export function applyKey(expression: string, key: CalcKey): string {
   }
 }
 
+/** Round to cents so 0.1+0.2 and 10/3 do not drift across sums and 存款. */
+export function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 /** Non-negative amount suitable for a transaction (or null if invalid). Zero is allowed (e.g. treated meals). */
 export function toAmountValue(expression: string): number | null {
   const src = expression.replace(/\s/g, "");
   if (!src || endsWithOperator(src)) return null;
   const result = evaluateExpression(src);
-  if (result === null) return null;
-  const abs = Math.abs(result);
-  if (!Number.isFinite(abs) || abs < 0) return null;
-  return abs;
+  if (result === null || !Number.isFinite(result) || result < 0) return null;
+  return roundMoney(result);
 }

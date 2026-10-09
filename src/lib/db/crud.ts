@@ -9,8 +9,10 @@ import {
   compareMonthTransactions,
   compareSameDayTransactions,
 } from "@/lib/day-order";
+import { roundMoney } from "@/lib/calculator";
 import { db } from "@/lib/db/schema";
-import { formatMoney } from "@/lib/format";
+import { seedBookContents } from "@/lib/db/seed";
+import { formatMoney, isIsoDate } from "@/lib/format";
 import {
   NO_HOLDING_LINK,
   holdingBalanceDeltas,
@@ -27,7 +29,13 @@ import {
   TREAT_TAG,
 } from "@/lib/transaction-tag";
 import { applyInvestMove, reverseInvestMove } from "@/lib/db/invest-move";
-import { expenseDisplayAmount } from "@/lib/reimbursement";
+import { isOpenItem } from "@/lib/open-items";
+import {
+  expenseDisplayAmount,
+  HOLD_REFUND_NOTE_PREFIX,
+  holdRefundIncomeIds,
+  isHoldRefundIncome,
+} from "@/lib/reimbursement";
 import type {
   Account,
   AccountBalance,
@@ -258,7 +266,10 @@ export async function createBook(input: {
     currency: input.currency,
     sort_order: maxSort,
   };
-  await db.books.add(book);
+  await db.transaction("rw", db.books, db.accounts, db.categories, async () => {
+    await db.books.add(book);
+    await seedBookContents(book);
+  });
   return book;
 }
 
@@ -307,21 +318,34 @@ export async function listTransactionsForMonth(
   return rows.sort((a, b) => compareMonthTransactions(a, b, nameOf));
 }
 
+/** Newest year that already has a live transaction, or null when the book is empty. */
+export async function findLatestBookedYear(
+  bookId: string,
+): Promise<number | null> {
+  const row = await db.transactions
+    .where("[book_id+date]")
+    .between([bookId, ""], [bookId, "\uffff"])
+    .reverse()
+    .filter((item) => !item.deleted_at && Boolean(item.date))
+    .first();
+  if (!row?.date) return null;
+  const year = Number(row.date.slice(0, 4));
+  return Number.isFinite(year) && year > 0 ? year : null;
+}
+
 /** Latest calendar month that still has live transactions (for empty-home jump). */
 export async function findLatestTransactionMonth(
   bookId: string,
 ): Promise<{ year: number; month: number } | null> {
-  const rows = await db.transactions
-    .where("book_id")
-    .equals(bookId)
-    .filter((row) => !row.deleted_at && row.type !== "transfer" && Boolean(row.date))
-    .toArray();
-  if (!rows.length) return null;
-  let maxDate = rows[0].date;
-  for (const row of rows) {
-    if (row.date > maxDate) maxDate = row.date;
-  }
-  const [yearText, monthText] = maxDate.split("-");
+  // Walk the [book_id+date] index from the newest date instead of loading the book.
+  const row = await db.transactions
+    .where("[book_id+date]")
+    .between([bookId, ""], [bookId, "\uffff"])
+    .reverse()
+    .filter((item) => !item.deleted_at && item.type !== "transfer" && Boolean(item.date))
+    .first();
+  if (!row) return null;
+  const [yearText, monthText] = row.date.split("-");
   const year = Number(yearText);
   const month = Number(monthText);
   if (!year || !month) return null;
@@ -334,9 +358,17 @@ export async function listTransactionsForYear(
 ): Promise<Transaction[]> {
   const start = `${year}-01-01`;
   const end = `${year + 1}-01-01`;
+  return listTransactionsBetween(bookId, start, end);
+}
+
+export async function listTransactionsBetween(
+  bookId: string,
+  start: string,
+  endExclusive: string,
+): Promise<Transaction[]> {
   const rows = await db.transactions
     .where("[book_id+date]")
-    .between([bookId, start], [bookId, end], true, false)
+    .between([bookId, start], [bookId, endExclusive], true, false)
     .filter((row) => !row.deleted_at && row.type !== "transfer")
     .reverse()
     .toArray();
@@ -361,6 +393,9 @@ export async function listTransactionsForDate(
   return rows.sort((a, b) => compareSameDayTransactions(a, b, nameOf));
 }
 
+/** Keyword search stops after this many hits so a common word does not build a huge list. */
+export const SEARCH_MATCH_CAP = 1000;
+
 export async function searchTransactions(
   bookId: string,
   query: string,
@@ -372,8 +407,7 @@ export async function searchTransactions(
     categories.map((category) => [category.id, category.name.toLowerCase()]),
   );
 
-  // Walking the index in reverse yields newest-first, so `limit` can stop early
-  // instead of loading and sorting the whole book.
+  // Newest first, then stop. A common word like 午餐 would otherwise return every year.
   return db.transactions
     .where("[book_id+date]")
     .between([bookId, Dexie.minKey], [bookId, Dexie.maxKey])
@@ -394,7 +428,7 @@ export async function searchTransactions(
         row.date.includes(q)
       );
     })
-    .limit(200)
+    .limit(SEARCH_MATCH_CAP)
     .toArray();
 }
 
@@ -540,20 +574,23 @@ export async function createTransaction(
     const existing = await db.transactions.get(input.id);
     if (existing) return existing;
   }
+  if (!isIsoDate(input.date)) {
+    throw new Error("請選擇日期");
+  }
   const isHold = input.type === "hold";
   const isExpense = input.type === "expense";
   const reimbursable =
     isExpense &&
     input.reimbursable_amount != null &&
     input.reimbursable_amount > 0
-      ? input.reimbursable_amount
+      ? roundMoney(input.reimbursable_amount)
       : null;
   const tx: Transaction = {
     ...baseMeta(),
     ...(input.id ? { id: input.id } : {}),
     book_id: bookId,
     type: input.type,
-    amount: Math.abs(input.amount),
+    amount: roundMoney(Math.abs(input.amount)),
     date: input.date,
     note: input.note?.trim() ?? "",
     account_id: input.account_id,
@@ -623,11 +660,16 @@ export async function updateTransaction(
     async () => {
       const existing = await db.transactions.get(id);
       if (!existing || existing.deleted_at) return;
+      if (patch.date !== undefined && !isIsoDate(patch.date)) {
+        throw new Error("請選擇日期");
+      }
       const nextType = patch.type ?? existing.type;
       const isHold = nextType === "hold";
       const isExpense = nextType === "expense";
       const nextAmount =
-        patch.amount !== undefined ? Math.abs(patch.amount) : existing.amount;
+        patch.amount !== undefined
+          ? roundMoney(Math.abs(patch.amount))
+          : existing.amount;
 
       let reimbursable_amount: number | null = null;
       let reimbursement_status: Transaction["reimbursement_status"] = null;
@@ -637,7 +679,7 @@ export async function updateTransaction(
             ? patch.reimbursable_amount
             : existing.reimbursable_amount;
         if (raw != null && raw > 0) {
-          reimbursable_amount = raw;
+          reimbursable_amount = roundMoney(raw);
           reimbursement_status =
             patch.reimbursement_status !== undefined
               ? patch.reimbursement_status
@@ -686,9 +728,17 @@ export async function updateTransaction(
   );
 }
 
-export async function softDeleteTransaction(id: string): Promise<void> {
+export type SoftDeleteResult = {
+  deletedIds: string[];
+  /** Hold that was reopened because its refund income was deleted. */
+  reopenedHoldId?: string;
+};
+
+export async function softDeleteTransaction(
+  id: string,
+): Promise<SoftDeleteResult> {
   const existing = await db.transactions.get(id);
-  if (!existing || existing.deleted_at) return;
+  if (!existing || existing.deleted_at) return { deletedIds: [] };
 
   const stamp = nowIso();
   const tombstone = {
@@ -697,6 +747,7 @@ export async function softDeleteTransaction(id: string): Promise<void> {
     client_id: getClientId(),
     sync_status: "pending" as const,
   };
+  const result: SoftDeleteResult = { deletedIds: [] };
 
   await db.transaction(
     "rw",
@@ -728,6 +779,7 @@ export async function softDeleteTransaction(id: string): Promise<void> {
         sourceId: row.holding_id,
         targetId: row.target_holding_id,
         amount: row.amount,
+        lenient: true,
       });
     }
 
@@ -736,11 +788,15 @@ export async function softDeleteTransaction(id: string): Promise<void> {
       const income = await db.transactions.get(row.release_transaction_id);
       if (income && !income.deleted_at) {
         await db.transactions.update(income.id, tombstone);
+        result.deletedIds.push(income.id);
       }
-    } else if (row.type === "income") {
-      const hold = await db.transactions
-        .where("book_id")
-        .equals(row.book_id)
+    } else if (
+      row.type === "income" &&
+      row.note.startsWith(HOLD_REFUND_NOTE_PREFIX)
+    ) {
+      // Removing the refund reopens the hold instead of erasing the deposit.
+      // release_transaction_id is not indexed; the note prefix keeps this scan rare.
+      const hold = await bookTransactions(row.book_id)
         .filter(
           (tx) =>
             !tx.deleted_at &&
@@ -749,13 +805,22 @@ export async function softDeleteTransaction(id: string): Promise<void> {
         )
         .first();
       if (hold) {
-        await db.transactions.update(hold.id, tombstone);
+        await db.transactions.update(hold.id, {
+          hold_status: "held",
+          release_transaction_id: null,
+          updated_at: stamp,
+          client_id: getClientId(),
+          sync_status: "pending",
+        });
+        result.reopenedHoldId = hold.id;
       }
     }
 
     await db.transactions.update(row.id, tombstone);
+    result.deletedIds.push(row.id);
   },
   );
+  return result;
 }
 
 export async function getTransaction(
@@ -794,12 +859,16 @@ export async function restoreTransaction(id: string): Promise<void> {
           existing.holding_id &&
           existing.target_holding_id
         ) {
-          await applyInvestMove({
-            bookId: existing.book_id,
-            sourceId: existing.holding_id,
-            targetId: existing.target_holding_id,
-            amount: existing.amount,
-          });
+          try {
+            await applyInvestMove({
+              bookId: existing.book_id,
+              sourceId: existing.holding_id,
+              targetId: existing.target_holding_id,
+              amount: existing.amount,
+            });
+          } catch {
+            // Holding was removed after the purchase; still restore the row.
+          }
         }
       }
       await db.transactions.update(id, {
@@ -808,6 +877,26 @@ export async function restoreTransaction(id: string): Promise<void> {
       });
     },
   );
+}
+
+/** Undo a delete, including the paired hold / refund income if that was tombstoned too. */
+export async function restoreDeletedPair(
+  result: SoftDeleteResult,
+): Promise<void> {
+  for (const id of result.deletedIds) {
+    await restoreTransaction(id);
+  }
+  if (!result.reopenedHoldId) return;
+  const incomeId = result.deletedIds[0];
+  if (!incomeId) return;
+  const hold = await db.transactions.get(result.reopenedHoldId);
+  const income = await db.transactions.get(incomeId);
+  if (!hold || hold.deleted_at || !income || income.deleted_at) return;
+  await db.transactions.update(hold.id, {
+    hold_status: "released",
+    release_transaction_id: income.id,
+    ...touchMeta(),
+  });
 }
 
 export async function duplicateTransaction(
@@ -892,8 +981,8 @@ export async function releaseHold(
     }
 
     const note = existing.note.trim()
-      ? `退回：${existing.note.trim()}`
-      : "退回：扣住款項";
+      ? `${HOLD_REFUND_NOTE_PREFIX}${existing.note.trim()}`
+      : `${HOLD_REFUND_NOTE_PREFIX}扣住款項`;
 
     income = {
       ...baseMeta(),
@@ -949,6 +1038,50 @@ export async function listTransactionsForAccount(
   return rows
     .sort((a, b) => compareMonthTransactions(a, b, nameOf))
     .slice(0, 300);
+}
+
+/** Untruncated 流入／實際花掉／扣住 for an account, independent of the 300-row list. */
+export async function accountFlowTotals(
+  bookId: string,
+  accountId: string,
+): Promise<{
+  income: number;
+  expense: number;
+  expenseCash: number;
+  held: number;
+}> {
+  const rows = await bookTransactions(bookId)
+    .filter(
+      (row) =>
+        !row.deleted_at &&
+        row.type !== "invest" &&
+        (row.account_id === accountId || row.transfer_account_id === accountId),
+    )
+    .toArray();
+  let income = 0;
+  let expense = 0;
+  let expenseCash = 0;
+  let held = 0;
+  for (const tx of rows) {
+    if (tx.type === "income" && tx.account_id === accountId) {
+      income += tx.amount;
+    }
+    if (tx.type === "expense" && tx.account_id === accountId) {
+      expense += expenseDisplayAmount(tx);
+      expenseCash += tx.amount;
+    }
+    if (tx.type === "hold" && tx.account_id === accountId) {
+      held += tx.amount;
+    }
+    if (tx.type === "transfer") {
+      if (tx.account_id === accountId) {
+        expense += tx.amount;
+        expenseCash += tx.amount;
+      }
+      if (tx.transfer_account_id === accountId) income += tx.amount;
+    }
+  }
+  return { income, expense, expenseCash, held };
 }
 
 export async function listBudgets(
@@ -1093,6 +1226,16 @@ export async function applyTemplate(
   if (!template || template.deleted_at) {
     throw new Error("找不到這個範本");
   }
+  const account = await db.accounts.get(template.account_id);
+  if (!account || account.deleted_at) {
+    throw new Error("這個範本的帳戶已刪除，請先改範本");
+  }
+  if (template.category_id) {
+    const category = await db.categories.get(template.category_id);
+    if (!category || category.deleted_at) {
+      throw new Error("這個範本的分類已刪除，請先改範本");
+    }
+  }
   return createTransaction(template.book_id, {
     type: template.type,
     amount: template.amount,
@@ -1154,6 +1297,18 @@ export async function accountBalances(
     account,
     balance: (account.opening_balance ?? 0) + (deltas.get(account.id) ?? 0),
   }));
+}
+
+/** Pending 核銷 and unreleased 扣住, oldest first. Not limited to one month. */
+export async function listOpenItems(bookId: string): Promise<Transaction[]> {
+  const rows = await bookTransactions(bookId)
+    .filter((row) => !row.deleted_at && isOpenItem(row))
+    .toArray();
+  return rows.sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      a.note.localeCompare(b.note, "zh-Hant"),
+  );
 }
 
 /** Sum of live 扣住 rows that have not been refunded yet. */
@@ -1332,26 +1487,17 @@ export async function recordHoldingInterest(
 }
 
 export function monthSummary(transactions: Transaction[]): PeriodSummary {
-  // Same-period holds point at their refund income; cross-month refunds use the note prefix.
-  const releaseIncomeIds = new Set(
-    transactions
-      .filter((tx) => tx.type === "hold" && tx.release_transaction_id)
-      .map((tx) => tx.release_transaction_id as string),
-  );
+  const refundIds = holdRefundIncomeIds(transactions);
 
   let income = 0;
   let expense = 0;
   let held = 0;
+  let heldOutstanding = 0;
   let reimbursablePending = 0;
   let reimbursableReceived = 0;
   for (const tx of transactions) {
     if (tx.type === "income") {
-      if (
-        releaseIncomeIds.has(tx.id) ||
-        tx.note.startsWith("退回：")
-      ) {
-        continue;
-      }
+      if (isHoldRefundIncome(tx, refundIds)) continue;
       income += tx.amount;
     }
     if (tx.type === "expense") {
@@ -1365,13 +1511,17 @@ export function monthSummary(transactions: Transaction[]): PeriodSummary {
       }
     }
     // Count every hold in-period so later「已退回」does not erase that month's 花費.
-    if (tx.type === "hold") held += tx.amount;
+    if (tx.type === "hold") {
+      held += tx.amount;
+      if ((tx.hold_status ?? "held") === "held") heldOutstanding += tx.amount;
+    }
   }
   const selfPay = Math.max(0, expense - reimbursableReceived);
   return {
     income,
     expense,
     held,
+    heldOutstanding,
     outflow: selfPay + held,
     // Net uses full cash expense so salary/補助 income is not double-counted.
     net: income - expense,
@@ -1386,8 +1536,11 @@ export function categoryBreakdown(
   type: "income" | "expense" = "expense",
 ): CategoryBreakdownItem[] {
   const map = new Map<string | null, { amount: number; treatAmount: number }>();
+  const refundIds =
+    type === "income" ? holdRefundIncomeIds(transactions) : new Set<string>();
   for (const tx of transactions) {
     if (tx.type !== type) continue;
+    if (type === "income" && isHoldRefundIncome(tx, refundIds)) continue;
     const key = tx.category_id;
     const amount =
       type === "expense" ? expenseDisplayAmount(tx) : tx.amount;
@@ -1422,6 +1575,7 @@ export function groupTransactionsByDay(
   transactions: Transaction[],
 ): DayBucket[] {
   const map = new Map<string, DayBucket>();
+  const refundIds = holdRefundIncomeIds(transactions);
   for (const tx of transactions) {
     const bucket = map.get(tx.date) ?? {
       date: tx.date,
@@ -1430,7 +1584,9 @@ export function groupTransactionsByDay(
       held: 0,
       transactions: [],
     };
-    if (tx.type === "income") bucket.income += tx.amount;
+    if (tx.type === "income" && !isHoldRefundIncome(tx, refundIds)) {
+      bucket.income += tx.amount;
+    }
     if (tx.type === "expense") bucket.expense += expenseDisplayAmount(tx);
     if (tx.type === "hold") bucket.held += tx.amount;
     bucket.transactions.push(tx);
@@ -1439,16 +1595,46 @@ export function groupTransactionsByDay(
   return [...map.values()].sort((a, b) => b.date.localeCompare(a.date));
 }
 
+/** One row per year from `startYear` through `endYear`, including years with no rows. */
+export function yearlyTotals(
+  transactions: Transaction[],
+  startYear: number,
+  endYear: number,
+) {
+  const span = Math.max(0, endYear - startYear + 1);
+  const years = Array.from({ length: span }, (_, index) => ({
+    year: startYear + index,
+    income: 0,
+    expense: 0,
+  }));
+  const refundIds = holdRefundIncomeIds(transactions);
+  for (const tx of transactions) {
+    const year = Number(tx.date.slice(0, 4));
+    const row = years[year - startYear];
+    if (!row) continue;
+    if (tx.type === "income") {
+      if (isHoldRefundIncome(tx, refundIds)) continue;
+      row.income += tx.amount;
+    }
+    if (tx.type === "expense") row.expense += expenseDisplayAmount(tx);
+  }
+  return years;
+}
+
 export function monthlyTotalsForYear(transactions: Transaction[]) {
   const months = Array.from({ length: 12 }, (_, index) => ({
     month: index + 1,
     income: 0,
     expense: 0,
   }));
+  // Match monthSummary: a hold refund is not earnings.
+  const refundIds = holdRefundIncomeIds(transactions);
   for (const tx of transactions) {
     const month = Number(tx.date.slice(5, 7));
     if (!month || month < 1 || month > 12) continue;
-    if (tx.type === "income") months[month - 1].income += tx.amount;
+    if (tx.type === "income" && !isHoldRefundIncome(tx, refundIds)) {
+      months[month - 1].income += tx.amount;
+    }
     if (tx.type === "expense") {
       months[month - 1].expense += expenseDisplayAmount(tx);
     }
@@ -1486,13 +1672,16 @@ export function compareSummaries(
 
 export function dailyTrend(transactions: Transaction[]): DailyTrendPoint[] {
   const map = new Map<string, DailyTrendPoint>();
+  const refundIds = holdRefundIncomeIds(transactions);
   for (const tx of transactions) {
     const point = map.get(tx.date) ?? {
       date: tx.date,
       income: 0,
       expense: 0,
     };
-    if (tx.type === "income") point.income += tx.amount;
+    if (tx.type === "income" && !isHoldRefundIncome(tx, refundIds)) {
+      point.income += tx.amount;
+    }
     if (tx.type === "expense") point.expense += expenseDisplayAmount(tx);
     map.set(tx.date, point);
   }
@@ -1509,6 +1698,11 @@ export function topCategories(
   return categoryBreakdown(transactions, categories, type).slice(0, limit);
 }
 
+export function csvCell(value: string | number | null | undefined): string {
+  const text = value == null ? "" : String(value);
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
 export function transactionsToCsv(
   transactions: Transaction[],
   accounts: Account[],
@@ -1520,16 +1714,35 @@ export function transactionsToCsv(
   const categoryMap = Object.fromEntries(
     categories.map((category) => [category.id, category.name]),
   );
-  const header = ["date", "type", "amount", "category", "account", "note"];
+  const header = [
+    "date",
+    "type",
+    "amount",
+    "display_amount",
+    "category",
+    "account",
+    "note",
+    "hold_status",
+    "reimbursable_amount",
+    "reimbursement_status",
+    "tag",
+  ];
   const lines = transactions.map((tx) =>
     [
-      tx.date,
-      tx.type,
-      String(tx.amount),
-      tx.category_id ? (categoryMap[tx.category_id] ?? "") : "",
-      accountMap[tx.account_id] ?? "",
-      `"${tx.note.replaceAll('"', '""')}"`,
+      csvCell(tx.date),
+      csvCell(tx.type),
+      csvCell(tx.amount),
+      csvCell(
+        tx.type === "expense" ? expenseDisplayAmount(tx) : tx.amount,
+      ),
+      csvCell(tx.category_id ? (categoryMap[tx.category_id] ?? "") : ""),
+      csvCell(accountMap[tx.account_id] ?? ""),
+      csvCell(tx.note),
+      csvCell(tx.hold_status),
+      csvCell(tx.reimbursable_amount),
+      csvCell(tx.reimbursement_status),
+      csvCell(tx.tag),
     ].join(","),
   );
-  return [header.join(","), ...lines].join("\n");
+  return [header.map(csvCell).join(","), ...lines].join("\n");
 }

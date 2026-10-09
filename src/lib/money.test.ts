@@ -84,5 +84,8 @@ assert(applyKey("0", "5") === "5", "replace leading zero");
 assert(toAmountValue("12.5") === 12.5, "amount parse");
 assert(toAmountValue("0") === 0, "zero is a valid amount");
 assert(toAmountValue("10+") === null, "incomplete expression");
+assert(toAmountValue("50-80") === null, "a negative result cannot be saved");
+assert(toAmountValue("0.1+0.2") === 0.3, "binary cents round to 0.30");
+assert(toAmountValue("10/3") === 3.33, "division rounds to cents");
 
 console.log("money tests passed");

@@ -1,8 +1,12 @@
 "use client";
 
 import { useRef, useState, type ChangeEvent } from "react";
+import { useBook } from "@/components/BookProvider";
+import { markBackupDone } from "@/lib/backup-nudge";
 import { exportBackup, importBackup } from "@/lib/db/backup";
+import { importPiggyHistory } from "@/lib/db/piggy-import";
 import { todayLocal } from "@/lib/format";
+import { isPiggyBackup } from "@/lib/piggy";
 import { runSync } from "@/lib/sync/engine";
 
 type ImportMode = "merge" | "replace";
@@ -31,8 +35,10 @@ function downloadJson(filename: string, json: string) {
 }
 
 export function BackupPanel() {
+  const { books } = useBook();
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [piggy, setPiggy] = useState(false);
   const [mode, setMode] = useState<ImportMode>("merge");
   const [confirmingReplace, setConfirmingReplace] = useState(false);
   const [busy, setBusy] = useState<"export" | "import" | null>(null);
@@ -41,6 +47,7 @@ export function BackupPanel() {
 
   function reset() {
     setFile(null);
+    setPiggy(false);
     setConfirmingReplace(false);
     if (fileRef.current) fileRef.current.value = "";
   }
@@ -52,6 +59,7 @@ export function BackupPanel() {
     try {
       const json = await exportBackup();
       downloadJson(`記帳備份-${todayLocal()}.json`, json);
+      markBackupDone();
       setMessage("備份檔已下載。");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "匯出失敗，請再試一次。");
@@ -61,10 +69,16 @@ export function BackupPanel() {
   }
 
   function onPickFile(event: ChangeEvent<HTMLInputElement>) {
-    setFile(event.target.files?.[0] ?? null);
+    const next = event.target.files?.[0] ?? null;
+    setFile(next);
+    setPiggy(false);
     setConfirmingReplace(false);
     setMessage(null);
     setError(null);
+    if (!next) return;
+    void next.slice(0, 32).text().then((head) => {
+      setPiggy(isPiggyBackup(head));
+    });
   }
 
   function onModeChange(next: ImportMode) {
@@ -79,10 +93,27 @@ export function BackupPanel() {
     setError(null);
     try {
       const text = await file.text();
-      const { imported } = await importBackup(text, mode);
-      setMessage(
-        `已匯入 ${imported} 筆資料（${mode === "merge" ? "合併" : "覆蓋"}）。`,
-      );
+      if (isPiggyBackup(text)) {
+        const book =
+          books.find((row) => row.currency === "TWD" && !row.deleted_at) ?? null;
+        if (!book) throw new Error("找不到台灣帳本，所以舊帳還沒寫入");
+        const result = await importPiggyHistory(book.id, text);
+        const span =
+          result.firstMonth && result.lastMonth
+            ? `，從 ${result.firstMonth} 到 ${result.lastMonth}`
+            : "";
+        const kept = result.skippedMonths.length
+          ? `已有紀錄的月份沒有覆寫：${result.skippedMonths.join("、")}。`
+          : "";
+        setMessage(
+          `已寫入 ${result.imported} 筆 2025 年（含）以前的紀錄${span}。2026 的 ${result.skipped2026} 筆沒有匯入。${kept}`,
+        );
+      } else {
+        const { imported } = await importBackup(text, mode);
+        setMessage(
+          `已匯入 ${imported} 筆資料（${mode === "merge" ? "合併" : "覆蓋"}）。`,
+        );
+      }
       reset();
       void runSync();
     } catch (cause) {
@@ -94,7 +125,7 @@ export function BackupPanel() {
 
   function onImportClick() {
     if (!file) return;
-    if (mode === "replace" && !confirmingReplace) {
+    if (!piggy && mode === "replace" && !confirmingReplace) {
       setConfirmingReplace(true);
       return;
     }
@@ -124,18 +155,24 @@ export function BackupPanel() {
 
         <label className="block">
           <span className="mb-1 block text-xs text-[var(--muted)]">
-            選擇備份檔（.json）
+            選擇備份檔（.json，或豬豬記帳的備份）
           </span>
           <input
             ref={fileRef}
             type="file"
-            accept=".json,application/json"
+            accept=".json,.txt,application/json,text/plain"
             onChange={onPickFile}
             className="block w-full text-xs text-[var(--muted)] file:mr-3 file:min-h-11 file:rounded-md file:border file:border-[var(--line)] file:bg-[var(--paper)] file:px-3 file:text-sm file:text-[var(--ink)]"
           />
         </label>
 
-        <fieldset className="space-y-1.5">
+        {piggy ? (
+          <p className="rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-xs leading-relaxed text-[var(--muted)]">
+            這是豬豬記帳的備份。只寫進台灣帳本的現金帳戶，2026 整年不匯入。某一個月已經有紀錄時，那一個月整月跳過。
+          </p>
+        ) : null}
+
+        <fieldset className="space-y-1.5" hidden={piggy}>
           <legend className="mb-1 text-xs text-[var(--muted)]">匯入方式</legend>
           {MODE_OPTIONS.map((option) => (
             <label
@@ -162,7 +199,7 @@ export function BackupPanel() {
           ))}
         </fieldset>
 
-        {mode === "replace" ? (
+        {!piggy && mode === "replace" ? (
           <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-relaxed text-rose-700">
             注意：覆蓋會刪掉這台裝置上現有的帳本、帳戶、分類、交易、預算與範本，且無法復原。建議先匯出一份備份。
           </p>
@@ -195,9 +232,11 @@ export function BackupPanel() {
           >
             {busy === "import"
               ? "正在匯入…"
-              : file
-                ? `匯入（${mode === "merge" ? "合併" : "覆蓋"}）`
-                : "請先選擇備份檔"}
+              : !file
+                ? "請先選擇備份檔"
+                : piggy
+                  ? "匯入 2025 以前的紀錄"
+                  : `匯入（${mode === "merge" ? "合併" : "覆蓋"}）`}
           </button>
         )}
       </div>

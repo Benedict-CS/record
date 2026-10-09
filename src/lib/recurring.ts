@@ -1,4 +1,6 @@
 const MAX_CATCH_UP = 12;
+/** A filled end month posts the whole span at once, including months not yet due. */
+export const MAX_SCHEDULED_MONTHS = 24;
 
 export function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
@@ -10,43 +12,71 @@ export function dueDate(year: number, month: number, dayOfMonth: number): string
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+function monthIndex(value: string): number | null {
+  const [year, month] = value.split("-").map(Number);
+  if (!year || !month || month < 1 || month > 12) return null;
+  return year * 12 + month;
+}
+
+/** Inclusive month count, or null when either side is not YYYY-MM. */
+export function scheduledMonthCount(startMonth: string, endMonth: string): number | null {
+  const start = monthIndex(startMonth);
+  const end = monthIndex(endMonth);
+  if (start == null || end == null) return null;
+  return end - start + 1;
+}
+
 /**
- * Months that should already have a row, oldest first.
- * The current month is included only after its due day.
+ * Months that should get a row, oldest first.
+ * With no end month, the current month is included only after its due day,
+ * and at most 12 missed months are filled.
+ * With an end month, every month from the start through the end is included
+ * now, even if that due day has not arrived yet.
  * Months before startMonth, and months already in lastPosted, are skipped.
  */
 export function periodsDue(input: {
   startMonth: string;
+  endMonth?: string | null;
   dayOfMonth: number;
   lastPosted: string | null;
   today: string;
+  /** Override the default 12-month catch-up / 24-month scheduled cap. */
+  cap?: number;
 }): string[] {
-  const [ty, tm, td] = input.today.split("-").map(Number);
-  if (!ty || !tm || !td) return [];
-  let endYear = ty;
-  let endMonth = tm;
-  if (td < Math.min(input.dayOfMonth, daysInMonth(ty, tm))) {
-    endMonth -= 1;
-    if (endMonth < 1) {
-      endMonth = 12;
-      endYear -= 1;
+  const start = monthIndex(input.startMonth);
+  if (start == null) return [];
+
+  let end = start;
+  if (input.endMonth) {
+    const scheduledEnd = monthIndex(input.endMonth);
+    if (scheduledEnd == null || scheduledEnd < start) return [];
+    end = scheduledEnd;
+  } else {
+    const [ty, tm, td] = input.today.split("-").map(Number);
+    if (!ty || !tm || !td) return [];
+    let endYear = ty;
+    let endMonth = tm;
+    if (td < Math.min(input.dayOfMonth, daysInMonth(ty, tm))) {
+      endMonth -= 1;
+      if (endMonth < 1) {
+        endMonth = 12;
+        endYear -= 1;
+      }
     }
+    end = endYear * 12 + endMonth;
   }
 
-  const [sy, sm] = input.startMonth.split("-").map(Number);
-  if (!sy || !sm) return [];
+  const cap =
+    input.cap ?? (input.endMonth ? MAX_SCHEDULED_MONTHS : MAX_CATCH_UP);
+
   const periods: string[] = [];
-  let year = sy;
-  let month = sm;
-  const endKey = endYear * 12 + endMonth;
-  while (year * 12 + month <= endKey && periods.length < MAX_CATCH_UP) {
+  let cursor = start;
+  while (cursor <= end && periods.length < cap) {
+    const year = Math.floor((cursor - 1) / 12);
+    const month = cursor - year * 12;
     const key = `${year}-${String(month).padStart(2, "0")}`;
     if (!input.lastPosted || key > input.lastPosted) periods.push(key);
-    month += 1;
-    if (month > 12) {
-      month = 1;
-      year += 1;
-    }
+    cursor += 1;
   }
   return periods;
 }

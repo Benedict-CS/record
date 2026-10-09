@@ -57,7 +57,11 @@ export function BookProvider({ children }: { children: ReactNode }) {
         localStorage.setItem("ledger_book_pref_v2", "1");
       }
     }
-    void ensureSeedData().then(() => {
+    // Logged in: the account's books arrive with the first cloud pull and the
+    // sync engine seeds defaults only if the account has none. Seeding the
+    // device ledger here too would create a second, unused set of rows.
+    const boot = getOwnerId() ? Promise.resolve() : ensureSeedData();
+    void boot.then(() => {
       if (!cancelled) setReady(true);
     });
     return () => {

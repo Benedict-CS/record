@@ -74,14 +74,24 @@ export async function reverseInvestMove(input: {
   sourceId: string;
   targetId: string;
   amount: number;
+  /** Skip missing / deleted holdings instead of throwing (used on delete). */
+  lenient?: boolean;
 }): Promise<void> {
-  const { source, target } = await loadPair(
-    input.bookId,
-    input.sourceId,
-    input.targetId,
-  );
+  let source;
+  let target;
+  try {
+    ({ source, target } = await loadPair(
+      input.bookId,
+      input.sourceId,
+      input.targetId,
+    ));
+  } catch (error) {
+    if (input.lenient) return;
+    throw error;
+  }
   const nextTarget = centsOf(target.amount) - centsOf(input.amount);
   if (nextTarget < 0) {
+    if (input.lenient) return;
     throw new Error(
       `「${target.name}」餘額不足，目前 ${formatMoney(target.amount)}`,
     );

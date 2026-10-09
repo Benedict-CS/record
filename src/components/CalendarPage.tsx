@@ -4,16 +4,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useBook } from "@/components/BookProvider";
 import { DayTransactionPanel } from "@/components/DayTransactionPanel";
+import { HoldStepButton } from "@/components/HoldStepButton";
+import { PeriodJump } from "@/components/PeriodJump";
 import { CalendarSkeleton, ListSkeleton } from "@/components/Skeleton";
 import { TransactionEditor } from "@/components/TransactionEditor";
 import { groupTransactionsByDay } from "@/lib/db/crud";
 import {
   useAccounts,
   useCategories,
-  useMonthTransactions,
+  useLedgerEndYear,
+  useMonthTransactionsQuery,
   useSeedReady,
 } from "@/lib/hooks/useLedgerData";
 import { formatMoney, shiftYearMonth, todayLocal } from "@/lib/format";
+import { clampLedgerPeriod } from "@/lib/period-jump";
 import type { Transaction } from "@/lib/types";
 
 const WEEKDAYS = ["一", "二", "三", "四", "五", "六", "日"] as const;
@@ -50,45 +54,54 @@ export function CalendarPage() {
   const { book } = useBook();
   const currency = book?.currency;
   const ready = useSeedReady();
-  const now = useMemo(() => new Date(), []);
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
   const today = todayLocal();
+  const [year, setYear] = useState(() => Number(today.slice(0, 4)));
+  const [month, setMonth] = useState(() => Number(today.slice(5, 7)));
   const [selectedDate, setSelectedDate] = useState(today);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const pendingEditId = useRef<string | null>(null);
 
   const accounts = useAccounts();
   const categories = useCategories();
-  const transactions = useMonthTransactions(year, month);
+  const { items: transactions, loading: monthLoading } =
+    useMonthTransactionsQuery(year, month);
+  const endYear = useLedgerEndYear();
 
   // Report rows link here as /calendar?date=YYYY-MM-DD&tx=<id>.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const date = params.get("date");
     const txId = params.get("tx");
+    if (endYear == null) return;
     if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
       const [y, m] = date.split("-").map(Number);
       if (y && m) {
-        setYear(y);
-        setMonth(m);
-        setSelectedDate(date);
+        const next = clampLedgerPeriod(y, m, endYear);
+        // The query string exists only in the browser. Setting it during render
+        // would disagree with the server HTML.
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- see above
+        setYear(next.year);
+        setMonth(next.month);
+        setSelectedDate(
+          next.year === y && next.month === m
+            ? date
+            : toDateKey(next.year, next.month, 1),
+        );
       }
     }
     if (txId) pendingEditId.current = txId;
-  }, []);
+  }, [endYear]);
 
   useEffect(() => {
     const id = pendingEditId.current;
-    if (!id || !ready) return;
+    if (!id || !ready || monthLoading) return;
     const tx = transactions.find((item) => item.id === id);
-    if (!tx) return;
     pendingEditId.current = null;
-    setEditing(tx);
+    if (tx) setEditing(tx);
     if (window.location.search) {
       window.history.replaceState(null, "", "/calendar");
     }
-  }, [ready, transactions]);
+  }, [ready, monthLoading, transactions]);
 
   const dayMap = useMemo(() => {
     const map = new Map<
@@ -120,6 +133,11 @@ export function CalendarPage() {
 
   function shiftMonth(delta: number) {
     const next = shiftYearMonth(year, month, delta);
+    jumpTo(next.year, next.month);
+  }
+
+  function jumpTo(nextYear: number, nextMonth: number) {
+    const next = clampLedgerPeriod(nextYear, nextMonth, endYear);
     setYear(next.year);
     setMonth(next.month);
     const prefix = `${next.year}-${String(next.month).padStart(2, "0")}`;
@@ -141,28 +159,25 @@ export function CalendarPage() {
         <div className="space-y-4">
           <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-3">
             <div className="mb-3 flex items-center justify-between gap-1">
-              <button
-                type="button"
-                onClick={() => shiftMonth(-1)}
-                aria-label="上一個月"
+              <HoldStepButton
+                ariaLabel="上一個月"
+                title="上一個月，長按跳一年"
                 className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-[var(--line)] bg-[var(--paper)] text-lg text-[var(--ink)] active:scale-[0.98]"
+                onStep={() => shiftMonth(-1)}
+                onHold={() => shiftMonth(-12)}
               >
                 ‹
-              </button>
-              <p
-                className="text-sm font-semibold tracking-wide tabular-nums text-[var(--ink)]"
-                aria-live="polite"
-              >
-                {year} 年 {month} 月
-              </p>
-              <button
-                type="button"
-                onClick={() => shiftMonth(1)}
-                aria-label="下一個月"
+              </HoldStepButton>
+              <PeriodJump year={year} month={month} onChange={jumpTo} />
+              <HoldStepButton
+                ariaLabel="下一個月"
+                title="下一個月，長按跳一年"
                 className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-[var(--line)] bg-[var(--paper)] text-lg text-[var(--ink)] active:scale-[0.98]"
+                onStep={() => shiftMonth(1)}
+                onHold={() => shiftMonth(12)}
               >
                 ›
-              </button>
+              </HoldStepButton>
             </div>
 
             <div className="mb-1 grid grid-cols-7 gap-1">

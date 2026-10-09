@@ -6,6 +6,7 @@ import { BankHoldingField } from "@/components/BankHoldingField";
 import { useBook } from "@/components/BookProvider";
 import { CategoryPickerGrid } from "@/components/CategoryPickerGrid";
 import { TreatTagField } from "@/components/TreatTagField";
+import { useConfirm } from "@/components/ConfirmProvider";
 import { useToast } from "@/components/ToastProvider";
 import { formatCalcNumber } from "@/lib/calculator";
 import {
@@ -14,7 +15,8 @@ import {
   undoReimbursementReceived,
   updateTransaction,
 } from "@/lib/db/crud";
-import { formatMoney, todayLocal } from "@/lib/format";
+import { formatMoney, isIsoDate, todayLocal } from "@/lib/format";
+import { preferredCategoryId } from "@/lib/last-category";
 import { TREAT_TAG } from "@/lib/transaction-tag";
 import { useHoldings } from "@/lib/hooks/useLedgerData";
 import { runSync } from "@/lib/sync/engine";
@@ -43,6 +45,7 @@ export function TransactionEditor({
   const { book } = useBook();
   const holdings = useHoldings();
   const { show } = useToast();
+  const confirm = useConfirm();
   const [type, setType] = useState<FormType>(toFormType(transaction.type));
   const [amount, setAmount] = useState<number | null>(
     Number.isFinite(transaction.amount) ? transaction.amount : null,
@@ -122,10 +125,13 @@ export function TransactionEditor({
     (type === "expense" || type === "income") && selectedAccount?.type === "bank";
   const cashMove =
     (type === "expense" || type === "income") && selectedAccount?.type === "cash";
+  const availableCategoryIds = filteredCategories.map((row) => row.id);
   const effectiveCategoryId =
     type === "hold"
-      ? categoryId || null
-      : categoryId || filteredCategories[0]?.id || "";
+      ? categoryId && availableCategoryIds.includes(categoryId)
+        ? categoryId
+        : null
+      : preferredCategoryId(categoryId, "", availableCategoryIds);
 
   const estimatedSelfPay =
     type === "expense" &&
@@ -136,6 +142,12 @@ export function TransactionEditor({
       : null;
 
   async function onRelease() {
+    const ok = await confirm({
+      title: "標記已退回？",
+      message: "會在今天記入一筆同額收入，帳戶餘額加回，且不再算「暫時扣住」。",
+      confirmLabel: "已退回",
+    });
+    if (!ok) return;
     setError(null);
     setReleasing(true);
     try {
@@ -193,6 +205,10 @@ export function TransactionEditor({
       return;
     }
 
+    if (!isIsoDate(date)) {
+      setError("請選擇日期");
+      return;
+    }
     if (amount === null || !Number.isFinite(amount) || amount < 0) {
       setError("請輸入金額（請客可填 0）");
       return;
@@ -279,7 +295,7 @@ export function TransactionEditor({
           <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
             {transaction.note || "這筆"}{" "}
             {formatMoney(transaction.amount, book?.currency)}{" "}
-            已從銀行換成持股，沒有算進支出。之後每個月請到固定扣款調整。
+            已從銀行換成持股，沒有算進支出。之後每個月請到每月固定調整。
           </p>
           <button
             type="button"

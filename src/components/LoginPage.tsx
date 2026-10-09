@@ -3,6 +3,7 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { peekAfterLogin } from "@/lib/after-login";
 import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/components/ToastProvider";
@@ -28,10 +29,10 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Already signed in → go straight to this month's ledger.
+  // Already signed in → the ledger, or the delete page if login started there.
   useEffect(() => {
     if (!loading && user) {
-      router.replace("/");
+      router.replace(peekAfterLogin());
     }
   }, [loading, user, router]);
 
@@ -69,7 +70,6 @@ export function LoginPage() {
     show(mode === "signin" ? "登入成功" : "註冊並登入成功", {
       variant: "success",
     });
-    router.replace("/");
   }
 
   return (
@@ -206,6 +206,18 @@ export function LoginPage() {
           </form>
         )}
       </div>
+      <p className="text-center text-xs text-[var(--muted)]">
+        <Link href="/privacy" className="underline-offset-2 hover:underline">
+          隱私權說明
+        </Link>
+        <span aria-hidden> · </span>
+        <Link
+          href="/delete-account"
+          className="underline-offset-2 hover:underline"
+        >
+          刪除帳號
+        </Link>
+      </p>
     </AppShell>
   );
 }

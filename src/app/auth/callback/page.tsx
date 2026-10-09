@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { formatAuthError } from "@/lib/auth-errors";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 export default function AuthCallbackPage() {
@@ -25,14 +27,14 @@ export default function AuthCallbackPage() {
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         if (error) {
-          setAsyncMessage(error.message);
+          setAsyncMessage(formatAuthError(error.message));
           return;
         }
       }
 
       const { data, error } = await supabase.auth.getSession();
       if (error) {
-        setAsyncMessage(error.message);
+        setAsyncMessage(formatAuthError(error.message));
         return;
       }
       if (data.session) {
@@ -44,8 +46,13 @@ export default function AuthCallbackPage() {
   }, [configured, router]);
 
   return (
-    <div className="mx-auto flex min-h-full max-w-lg items-center justify-center px-4">
+    <div className="mx-auto flex min-h-full max-w-lg flex-col items-center justify-center gap-3 px-4">
       <p className="text-sm text-[var(--muted)]">{message}</p>
+      {asyncMessage ? (
+        <Link href="/login" className="text-sm text-[var(--accent)]">
+          返回登入
+        </Link>
+      ) : null}
     </div>
   );
 }

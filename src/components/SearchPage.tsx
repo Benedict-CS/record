@@ -6,6 +6,8 @@ import { useBook } from "@/components/BookProvider";
 import { TransactionEditor } from "@/components/TransactionEditor";
 import { TransactionList } from "@/components/TransactionList";
 import { formatMoney } from "@/lib/format";
+import { searchBounds } from "@/lib/period-jump";
+import { SEARCH_MATCH_CAP } from "@/lib/db/crud";
 import { expenseDisplayAmount } from "@/lib/reimbursement";
 import {
   compareMonthTransactions,
@@ -16,7 +18,7 @@ import {
   useCategories,
   useSearchTransactions,
   useSeedReady,
-  useYearTransactions,
+  useTransactionsBetween,
 } from "@/lib/hooks/useLedgerData";
 import type { Transaction, TransactionType } from "@/lib/types";
 
@@ -36,15 +38,6 @@ const SORT_OPTIONS: { id: SortKey; label: string }[] = [
   { id: "amount-desc", label: "金額大→小" },
   { id: "amount-asc", label: "金額小→大" },
 ];
-
-/**
- * `searchTransactions("")` intentionally returns nothing, so filter-only
- * searches fall back to whole-year fetches. We load at most this many years,
- * anchored on the end of the selected date range (or the current year), which
- * keeps the number of live queries bounded on a phone.
- */
-const FALLBACK_YEAR_SPAN = 3;
-const SKIP_YEAR = 0;
 
 function toggleId(list: string[], id: string) {
   return list.includes(id)
@@ -87,43 +80,22 @@ export function SearchPage() {
     (amountMin.trim() || amountMax.trim() ? 1 : 0);
   const hasFilters = activeFilterCount > 0;
   const usingFallback = !query && hasFilters;
-
-  const fallback = useMemo(() => {
-    if (!usingFallback) {
-      return { years: [SKIP_YEAR, SKIP_YEAR, SKIP_YEAR], from: 0, to: 0 };
-    }
-    const currentYear = new Date().getFullYear();
-    const fromYear = dateFrom ? Number(dateFrom.slice(0, 4)) : NaN;
-    const toYear = dateTo ? Number(dateTo.slice(0, 4)) : NaN;
-    const end = Number.isFinite(toYear) ? toYear : currentYear;
-    const wanted = Number.isFinite(fromYear)
-      ? fromYear
-      : end - (FALLBACK_YEAR_SPAN - 1);
-    const start = Math.max(
-      Math.min(wanted, end),
-      end - (FALLBACK_YEAR_SPAN - 1),
-    );
-    const years = Array.from({ length: FALLBACK_YEAR_SPAN }, (_, index) => {
-      const year = start + index;
-      return year <= end ? year : SKIP_YEAR;
-    });
-    return { years, from: start, to: end };
-  }, [usingFallback, dateFrom, dateTo]);
+  const bounds = useMemo(
+    () => searchBounds(dateFrom, dateTo),
+    [dateFrom, dateTo],
+  );
 
   const keywordResults = useSearchTransactions(query);
-  const fallbackA = useYearTransactions(fallback.years[0]);
-  const fallbackB = useYearTransactions(fallback.years[1]);
-  const fallbackC = useYearTransactions(fallback.years[2]);
+  const rangedResults = useTransactionsBetween(
+    bounds.start,
+    bounds.endExclusive,
+    usingFallback,
+  );
 
-  const base = useMemo(() => {
-    if (query) return keywordResults;
-    if (!hasFilters) return [] as Transaction[];
-    const merged = new Map<string, Transaction>();
-    for (const list of [fallbackA, fallbackB, fallbackC]) {
-      for (const tx of list) merged.set(tx.id, tx);
-    }
-    return [...merged.values()];
-  }, [query, keywordResults, hasFilters, fallbackA, fallbackB, fallbackC]);
+  const base = useMemo(
+    () => (query ? keywordResults : hasFilters ? rangedResults : []),
+    [query, keywordResults, hasFilters, rangedResults],
+  );
 
   const results = useMemo(() => {
     const min = amountMin.trim() ? Number(amountMin) : null;
@@ -151,10 +123,9 @@ export function SearchPage() {
       return true;
     });
 
-    const nameOf = (categoryId: string | null) => {
-      const hit = categories.find((row) => row.id === categoryId);
-      return hit?.name;
-    };
+    const names = new Map(categories.map((row) => [row.id, row.name]));
+    const nameOf = (categoryId: string | null) =>
+      categoryId ? names.get(categoryId) : undefined;
 
     return rows.sort((a, b) => {
       switch (sort) {
@@ -205,12 +176,6 @@ export function SearchPage() {
   }
 
   const searching = Boolean(query) || hasFilters;
-  const fallbackNotice =
-    usingFallback && fallback.to >= fallback.from
-      ? fallback.from === fallback.to
-        ? `未輸入關鍵字，僅載入 ${fallback.from} 年的紀錄`
-        : `未輸入關鍵字，僅載入 ${fallback.from}–${fallback.to} 年的紀錄`
-      : null;
 
   return (
     <AppShell title="搜尋">
@@ -471,14 +436,9 @@ export function SearchPage() {
               </div>
             ) : null}
 
-            {fallbackNotice ? (
+            {query && keywordResults.length >= SEARCH_MATCH_CAP ? (
               <p className="text-[11px] text-[var(--muted)]">
-                {fallbackNotice}
-              </p>
-            ) : null}
-            {query && keywordResults.length >= 200 ? (
-              <p className="text-[11px] text-[var(--muted)]">
-                關鍵字結果最多顯示 200 筆，可加上篩選縮小範圍
+                關鍵字結果最多顯示 {SEARCH_MATCH_CAP} 筆，可加上日期縮小範圍
               </p>
             ) : null}
 

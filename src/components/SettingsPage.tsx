@@ -44,8 +44,8 @@ const LINKS: { href: string; title: string; description: string }[] = [
   { href: "/templates", title: "範本", description: "常用記帳一鍵套用" },
   {
     href: "/recurring",
-    title: "固定扣款",
-    description: "每月固定支出與定期定額",
+    title: "每月固定",
+    description: "薪水、固定支出與定期定額",
   },
   { href: "/budgets", title: "預算", description: "設定每月預算上限" },
 ];
@@ -234,6 +234,12 @@ export function SettingsPage() {
                   >
                     登出 {accountLabel(user)}
                   </button>
+                  <Link
+                    href="/delete-account"
+                    className="mt-2 inline-flex min-h-11 items-center text-sm text-rose-800 underline-offset-2 hover:underline"
+                  >
+                    刪除帳號
+                  </Link>
                 </div>
               </div>
             ) : (
@@ -365,7 +371,7 @@ export function SettingsPage() {
           <ul className="mt-1.5 space-y-1.5 text-xs leading-relaxed text-[var(--muted)]">
             <li>Chrome / Edge：網址列右側「安裝」或頁面上的「加入主畫面」。</li>
             <li>iPhone Safari：分享 → 加入主畫面。從主畫面開啟才是完整 PWA。</li>
-            <li>安裝後可離線記帳；更新時會出現「有新版本」提示。</li>
+            <li>安裝後可離線記帳；新版本會自動套用，下次開啟即可看到。</li>
           </ul>
         </section>
 
@@ -374,6 +380,14 @@ export function SettingsPage() {
           <ul className="mt-1.5 space-y-1.5 text-xs leading-relaxed text-[var(--muted)]">
             <li>資料存在本機（IndexedDB），離線也能記帳。</li>
             <li>登入後才會同步到雲端，未登入時只留在這台裝置。</li>
+            <li>
+              <Link
+                href="/privacy"
+                className="text-[var(--accent)] underline-offset-2 hover:underline"
+              >
+                隱私權說明
+              </Link>
+            </li>
             <li>深色模式已停用，介面固定使用淺色。</li>
           </ul>
         </section>

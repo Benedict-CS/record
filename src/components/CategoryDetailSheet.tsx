@@ -2,10 +2,15 @@
 
 import { useEffect, useId, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { compareSameDayTransactions } from "@/lib/day-order";
 import { formatMoney, type MoneyCurrency } from "@/lib/format";
-import { expenseDisplayAmount } from "@/lib/reimbursement";
+import {
+  expenseDisplayAmount,
+  holdRefundIncomeIds,
+  isHoldRefundIncome,
+} from "@/lib/reimbursement";
 import { TREAT_TAG } from "@/lib/transaction-tag";
-import type { Transaction } from "@/lib/types";
+import type { CategoryKind, Transaction } from "@/lib/types";
 
 function rowAmount(tx: Transaction) {
   return tx.type === "expense" ? expenseDisplayAmount(tx) : tx.amount;
@@ -15,6 +20,7 @@ type Props = {
   categoryId: string | null;
   categoryName: string;
   color: string;
+  kind: CategoryKind;
   /** Transactions for the selected period; rows are filtered locally. */
   transactions: Transaction[];
   currency?: MoneyCurrency;
@@ -27,6 +33,7 @@ export function CategoryDetailSheet({
   categoryId,
   categoryName,
   color,
+  kind,
   transactions,
   currency,
   periodLabel,
@@ -52,17 +59,21 @@ export function CategoryDetailSheet({
   }, [onClose]);
 
   const rows = useMemo(() => {
+    const refundIds =
+      kind === "income" ? holdRefundIncomeIds(transactions) : new Set<string>();
+    const nameOf = () => categoryName;
     return transactions
-      .filter(
-        (tx) => tx.type !== "transfer" && (tx.category_id ?? null) === categoryId,
-      )
+      .filter((tx) => {
+        if (tx.type !== kind) return false;
+        if ((tx.category_id ?? null) !== categoryId) return false;
+        if (kind === "income" && isHoldRefundIncome(tx, refundIds)) return false;
+        return true;
+      })
       .sort((a, b) => {
-        if (a.date === b.date) {
-          return b.updated_at.localeCompare(a.updated_at);
-        }
-        return b.date.localeCompare(a.date);
+        if (a.date !== b.date) return b.date.localeCompare(a.date);
+        return compareSameDayTransactions(a, b, nameOf);
       });
-  }, [transactions, categoryId]);
+  }, [transactions, categoryId, categoryName, kind]);
 
   const total = rows.reduce((sum, tx) => sum + rowAmount(tx), 0);
   const average = rows.length > 0 ? total / rows.length : 0;
@@ -70,7 +81,7 @@ export function CategoryDetailSheet({
   const treatTotal = treatRows.reduce((sum, tx) => sum + rowAmount(tx), 0);
   const restCount = rows.length - treatRows.length;
   const restAverage = restCount > 0 ? (total - treatTotal) / restCount : 0;
-  const isIncome = rows[0]?.type === "income";
+  const isIncome = kind === "income";
   const amountColor = isIncome ? "text-emerald-700" : "text-rose-700";
 
   return (

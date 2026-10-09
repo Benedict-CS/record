@@ -36,6 +36,7 @@ export function SyncBadge() {
   const { show } = useToast();
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressed = useRef(false);
+  const fromPointer = useRef(false);
 
   useEffect(() => {
     const stop = startSyncListeners();
@@ -82,6 +83,7 @@ export function SyncBadge() {
   }
 
   function onPointerDown() {
+    fromPointer.current = true;
     longPressed.current = false;
     clearPress();
     pressTimer.current = setTimeout(() => {
@@ -105,12 +107,7 @@ export function SyncBadge() {
 
   const label = busy || status === "syncing" ? "同步中" : LABELS[status];
   const detail = message ? `，${message}` : "";
-  const shortError =
-    status === "error" && message
-      ? message.length > 28
-        ? `${message.slice(0, 28)}…`
-        : message
-      : null;
+  const shortError = status === "error" && message ? message : null;
 
   return (
     <button
@@ -118,6 +115,13 @@ export function SyncBadge() {
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel}
+      onClick={(event) => {
+        if (fromPointer.current) {
+          fromPointer.current = false;
+          return;
+        }
+        void onSync(event.shiftKey);
+      }}
       aria-label={`同步狀態：${label}${detail}。點擊立即同步，長按完整同步`}
       aria-busy={status === "syncing" || busy}
       className={[
@@ -146,7 +150,7 @@ export function SyncBadge() {
         <span aria-hidden>{label}</span>
       </span>
       {shortError ? (
-        <span className="mt-0.5 max-w-full truncate text-[10px] leading-tight opacity-90">
+        <span className="mt-0.5 line-clamp-3 max-w-full text-[10px] leading-tight opacity-90">
           {shortError}
         </span>
       ) : null}

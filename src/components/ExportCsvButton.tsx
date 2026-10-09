@@ -36,7 +36,7 @@ export function ExportCsvButton({
   const accounts = useAccounts();
   const categories = useCategories();
   const monthTx = useMonthTransactions(year, month);
-  const yearTx = useYearTransactions(year);
+  const yearTx = useYearTransactions(year, scope === "year");
 
   const transactions = scope === "month" ? monthTx : yearTx;
   const label = useMemo(
@@ -70,8 +70,8 @@ export function ExportCsvButton({
       <div className="grid grid-cols-2 gap-2">
         {(
           [
-            ["month", "本月"],
-            ["year", "本年"],
+            ["month", "該月"],
+            ["year", "該年"],
           ] as const
         ).map(([value, text]) => (
           <button

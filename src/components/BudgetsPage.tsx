@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useBook } from "@/components/BookProvider";
 import { ExportCsvButton } from "@/components/ExportCsvButton";
+import { HoldStepButton } from "@/components/HoldStepButton";
+import { PeriodJump } from "@/components/PeriodJump";
 import { CardSkeleton, ListSkeleton } from "@/components/Skeleton";
 import { useToast } from "@/components/ToastProvider";
 import {
@@ -12,10 +14,12 @@ import {
   softDeleteBudget,
   upsertBudget,
 } from "@/lib/db/crud";
-import { formatMoney, shiftYearMonth } from "@/lib/format";
+import { formatMoney, shiftYearMonth, todayLocal } from "@/lib/format";
+import { clampLedgerPeriod } from "@/lib/period-jump";
 import {
   useBudgets,
   useCategories,
+  useLedgerEndYear,
   useMonthTransactions,
   useSeedReady,
 } from "@/lib/hooks/useLedgerData";
@@ -54,23 +58,38 @@ export function BudgetsPage() {
   const currency = book?.currency;
   const ready = useSeedReady();
   const { show } = useToast();
-  const now = useMemo(() => new Date(), []);
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
+  const today = todayLocal();
+  const [year, setYear] = useState(() => Number(today.slice(0, 4)));
+  const [month, setMonth] = useState(() => Number(today.slice(5, 7)));
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
   const budgets = useBudgets(year, month);
+  const endYear = useLedgerEndYear();
   const categories = useCategories("expense");
   const transactions = useMonthTransactions(year, month);
 
-  const summary = monthSummary(transactions);
-  const breakdown = categoryBreakdown(transactions, categories, "expense");
+  const summary = useMemo(() => monthSummary(transactions), [transactions]);
+  const breakdown = useMemo(
+    () => categoryBreakdown(transactions, categories, "expense"),
+    [transactions, categories],
+  );
   const spentByCategory = useMemo(
     () =>
       Object.fromEntries(
         breakdown.map((item) => [item.categoryId ?? "", item.amount]),
       ),
+    [breakdown],
+  );
+  const treatByCategory = useMemo(
+    () =>
+      Object.fromEntries(
+        breakdown.map((item) => [item.categoryId ?? "", item.treatAmount ?? 0]),
+      ),
+    [breakdown],
+  );
+  const treatTotal = useMemo(
+    () => breakdown.reduce((sum, item) => sum + (item.treatAmount ?? 0), 0),
     [breakdown],
   );
 
@@ -159,11 +178,16 @@ export function BudgetsPage() {
     }
   }
 
-  function shiftMonth(delta: number) {
-    const next = shiftYearMonth(year, month, delta);
+  function jumpTo(nextYear: number, nextMonth: number) {
+    const next = clampLedgerPeriod(nextYear, nextMonth, endYear);
     setYear(next.year);
     setMonth(next.month);
     setDrafts({});
+  }
+
+  function shiftMonth(delta: number) {
+    const next = shiftYearMonth(year, month, delta);
+    jumpTo(next.year, next.month);
   }
 
   return (
@@ -177,30 +201,32 @@ export function BudgetsPage() {
         <div className="space-y-4">
           <section className="rounded-2xl bg-[var(--ink)] px-4 py-4 text-[var(--paper)]">
             <div className="mb-3 flex items-center justify-between gap-1">
-              <button
-                type="button"
-                onClick={() => shiftMonth(-1)}
-                aria-label="上一個月"
+              <HoldStepButton
+                ariaLabel="上一個月"
+                title="上一個月，長按跳一年"
                 className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-lg text-[var(--paper)] opacity-80 hover:opacity-100"
+                onStep={() => shiftMonth(-1)}
+                onHold={() => shiftMonth(-12)}
               >
                 ‹
-              </button>
-              <p
-                className="text-sm font-semibold tracking-wide tabular-nums"
-                aria-live="polite"
-              >
-                {year} 年 {month} 月
-              </p>
-              <button
-                type="button"
-                onClick={() => shiftMonth(1)}
-                aria-label="下一個月"
+              </HoldStepButton>
+              <PeriodJump
+                year={year}
+                month={month}
+                onChange={jumpTo}
+                className="text-sm font-semibold tracking-wide tabular-nums text-[var(--paper)]"
+              />
+              <HoldStepButton
+                ariaLabel="下一個月"
+                title="下一個月，長按跳一年"
                 className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-lg text-[var(--paper)] opacity-80 hover:opacity-100"
+                onStep={() => shiftMonth(1)}
+                onHold={() => shiftMonth(12)}
               >
                 ›
-              </button>
+              </HoldStepButton>
             </div>
-            <p className="text-[11px] opacity-70">本月實際花掉（不含扣住）</p>
+            <p className="text-[11px] opacity-70">{month} 月實際花掉（不含扣住）</p>
             <p className="mt-1 text-xl font-semibold tabular-nums">
               {formatMoney(summary.selfPay, currency)}
               {overallBudget ? (
@@ -209,6 +235,11 @@ export function BudgetsPage() {
                 </span>
               ) : null}
             </p>
+            {treatTotal > 0 ? (
+              <p className="mt-1 text-[11px] font-medium text-amber-200">
+                含請客 {formatMoney(treatTotal, currency)}
+              </p>
+            ) : null}
             {summary.held > 0 ? (
               <p className="mt-1 text-[11px] opacity-80">
                 另有暫時扣住{" "}
@@ -260,13 +291,14 @@ export function BudgetsPage() {
                 分類預算
               </h2>
               <p className="mt-0.5 text-xs text-[var(--muted)]">
-                依支出分類設定上限，並對照本月已花金額。
+                依支出分類設定上限，並對照該月已花金額。
               </p>
             </div>
             <ul className="space-y-2">
               {categories.map((category) => {
                 const budget = budgetByCategory[category.id];
                 const spent = spentByCategory[category.id] ?? 0;
+                const treat = treatByCategory[category.id] ?? 0;
                 const key = draftKey(category.id);
                 return (
                   <li
@@ -284,6 +316,11 @@ export function BudgetsPage() {
                             ? ` · 預算 ${formatMoney(budget.amount, currency)}`
                             : " · 尚未設定"}
                         </p>
+                        {treat > 0 ? (
+                          <p className="mt-0.5 text-xs font-medium text-amber-800">
+                            含請客 {formatMoney(treat, currency)}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                     {budget ? (
