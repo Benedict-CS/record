@@ -12,7 +12,19 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated service worker bundles.
+    "public/sw.js",
+    "public/workbox-*.js",
+    "public/fallback-*.js",
   ]),
+  {
+    // One-off Node maintenance scripts run with plain `node`, so CommonJS
+    // require() is the right import style there.
+    files: ["scripts/**/*.js"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

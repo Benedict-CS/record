@@ -494,6 +494,9 @@ async function alignCashRow(
       await dropGenerated(rule.id, input.date.slice(0, 7));
     }
     if (existing.deleted_at) {
+      // Revive without a holding link first; the updateTransaction below is
+      // what actually moves the 存款 balance. Writing the link here would make
+      // that call see "same card, same amount" and skip the deduction.
       await db.transactions.update(input.id, {
         deleted_at: null,
         type: input.type,
@@ -502,10 +505,7 @@ async function alignCashRow(
         note: input.note,
         account_id: rule.account_id,
         category_id: rule.category_id,
-        holding_id:
-          input.type === "expense" || input.type === "income"
-            ? rule.holding_id
-            : null,
+        holding_id: null,
         hold_status: input.type === "hold" ? "held" : null,
         reimbursable_amount: reimbursable,
         reimbursement_status: reimbursable ? "pending" : null,

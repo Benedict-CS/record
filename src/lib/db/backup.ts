@@ -1,6 +1,7 @@
 import type { EntityTable, IDType } from "dexie";
 import { getClientId } from "@/lib/client-id";
 import { db } from "@/lib/db/schema";
+import { remoteWins } from "@/lib/sync/schema-compat";
 import type {
   CloudAccount,
   CloudBook,
@@ -192,7 +193,7 @@ async function writeRows<T extends SyncMeta>(
     rows.forEach((row, index) => {
       const local = existing[index];
       // Last write wins; ties go to the backup so a re-import is idempotent.
-      if (local && local.updated_at > row.updated_at) return;
+      if (local && !remoteWins(row.updated_at, local.updated_at)) return;
       prepared.push(normalise(row, clientId) as unknown as T);
     });
   } else {
