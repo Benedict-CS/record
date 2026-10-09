@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { CategoryIcon } from "@/components/CategoryIcon";
 import { useBook } from "@/components/BookProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
@@ -14,7 +15,10 @@ import {
 } from "@/lib/db/crud";
 import { compareSameDayTransactions } from "@/lib/day-order";
 import { formatDayHeading, formatMoney, todayLocal } from "@/lib/format";
-import { expenseDisplayAmount } from "@/lib/reimbursement";
+import {
+  expenseDisplayAmount,
+  HOLD_REFUND_NOTE_PREFIX,
+} from "@/lib/reimbursement";
 import { useHoldings } from "@/lib/hooks/useLedgerData";
 import { TREAT_TAG } from "@/lib/transaction-tag";
 import { runSync } from "@/lib/sync/engine";
@@ -132,17 +136,51 @@ export function TransactionList({
   const { show } = useToast();
 
   const holdings = useHoldings();
-  const accountMap = Object.fromEntries(
-    accounts.map((account) => [account.id, account.name]),
+  const accountMap = useMemo(
+    () =>
+      Object.fromEntries(
+        accounts.map((account) => [account.id, account.name]),
+      ),
+    [accounts],
   );
-  const holdingName = Object.fromEntries(
-    holdings.map((holding) => [holding.id, holding.name]),
+  const holdingName = useMemo(
+    () =>
+      Object.fromEntries(
+        holdings.map((holding) => [holding.id, holding.name]),
+      ),
+    [holdings],
   );
-  const categoryMap = Object.fromEntries(
-    categories.map((category) => [category.id, category]),
+  const categoryMap = useMemo(
+    () =>
+      Object.fromEntries(
+        categories.map((category) => [category.id, category]),
+      ),
+    [categories],
   );
-  const categoryNameOf = (categoryId: string | null) =>
-    categoryId ? categoryMap[categoryId]?.name : null;
+
+  // Grouping and the per-day sort touch every row; only redo it when the rows change.
+  const groups = useMemo(() => {
+    const categoryNameOf = (categoryId: string | null) =>
+      categoryId ? categoryMap[categoryId]?.name : null;
+    const result = groupByDay
+      ? transactions.reduce<Array<{ date: string; items: Transaction[] }>>(
+          (acc, tx) => {
+            const last = acc[acc.length - 1];
+            if (last && last.date === tx.date) {
+              last.items.push(tx);
+            } else {
+              acc.push({ date: tx.date, items: [tx] });
+            }
+            return acc;
+          },
+          [],
+        )
+      : [{ date: "", items: [...transactions] }];
+    for (const group of result) {
+      group.items.sort((a, b) => compareSameDayTransactions(a, b, categoryNameOf));
+    }
+    return result;
+  }, [transactions, groupByDay, categoryMap]);
 
   async function onDuplicate(tx: Transaction) {
     if (tx.type === "invest") return;
@@ -163,13 +201,17 @@ export function TransactionList({
       confirmLabel: "已退回",
     });
     if (!ok) return;
-    const income = await releaseHold(tx.id, todayLocal());
-    if (!income) {
-      show("無法退回", { variant: "error" });
-      return;
+    try {
+      const income = await releaseHold(tx.id, todayLocal());
+      if (!income) {
+        show("這筆已退回或無法退回", { variant: "error" });
+        return;
+      }
+      void runSync();
+      show("已退回", { variant: "success" });
+    } catch (err) {
+      show(err instanceof Error ? err.message : "退回失敗", { variant: "error" });
     }
-    void runSync();
-    show("已退回", { variant: "success" });
   }
 
   async function onMarkReimbursed(tx: Transaction) {
@@ -180,9 +222,13 @@ export function TransactionList({
       confirmLabel: "銷帳",
     });
     if (!ok) return;
-    await markReimbursementReceived(tx.id);
-    void runSync();
-    show("已銷帳", { variant: "success" });
+    try {
+      await markReimbursementReceived(tx.id);
+      void runSync();
+      show("已銷帳", { variant: "success" });
+    } catch (err) {
+      show(err instanceof Error ? err.message : "銷帳失敗", { variant: "error" });
+    }
   }
 
   async function onUndoReimbursed(tx: Transaction) {
@@ -192,20 +238,36 @@ export function TransactionList({
       confirmLabel: "取消銷帳",
     });
     if (!ok) return;
-    await undoReimbursementReceived(tx.id);
-    void runSync();
-    show("已改回待報銷", { variant: "info" });
+    try {
+      await undoReimbursementReceived(tx.id);
+      void runSync();
+      show("已改回待報銷", { variant: "info" });
+    } catch (err) {
+      show(err instanceof Error ? err.message : "取消失敗", { variant: "error" });
+    }
   }
 
   async function onDelete(tx: Transaction) {
+    const isRefund =
+      tx.type === "income" && tx.note.startsWith(HOLD_REFUND_NOTE_PREFIX);
     const ok = await confirm({
       title: "刪除這筆紀錄？",
-      message: "刪除後可立刻按「復原」。之後仍可從雲端同步回來。",
+      message:
+        tx.type === "hold" && tx.release_transaction_id
+          ? "這筆扣住的退回收入會一起刪除。刪除後幾秒內可按「復原」。"
+          : isRefund
+            ? "刪除退回後，原本的扣住會回到「暫時扣住」。刪除後幾秒內可按「復原」。"
+            : "刪除後幾秒內可按「復原」，之後會同步到其他裝置。",
       confirmLabel: "刪除",
       destructive: true,
     });
     if (!ok) return;
-    await softDeleteTransaction(tx.id);
+    try {
+      await softDeleteTransaction(tx.id);
+    } catch (err) {
+      show(err instanceof Error ? err.message : "刪除失敗", { variant: "error" });
+      return;
+    }
     void runSync();
     show("已刪除", {
       variant: "info",
@@ -230,27 +292,6 @@ export function TransactionList({
       <p className="rounded-2xl border border-dashed border-[var(--line)] px-4 py-8 text-center text-sm text-[var(--muted)]">
         {emptyMessage}
       </p>
-    );
-  }
-
-  const groups = groupByDay
-    ? transactions.reduce<Array<{ date: string; items: Transaction[] }>>(
-        (acc, tx) => {
-          const last = acc[acc.length - 1];
-          if (last && last.date === tx.date) {
-            last.items.push(tx);
-          } else {
-            acc.push({ date: tx.date, items: [tx] });
-          }
-          return acc;
-        },
-        [],
-      )
-    : [{ date: "", items: [...transactions] }];
-
-  for (const group of groups) {
-    group.items.sort((a, b) =>
-      compareSameDayTransactions(a, b, categoryNameOf),
     );
   }
 
