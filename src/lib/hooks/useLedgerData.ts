@@ -5,7 +5,7 @@
  * File name still says LedgerData for older imports; product name is Record.
  */
 import { liveQuery } from "dexie";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useBook } from "@/components/BookProvider";
 import {
   accountBalances,
@@ -19,6 +19,7 @@ import {
   listTransactionsForYear,
   listTransactionsBetween,
   listTransactionsForAccount,
+  accountFlowTotals,
   listHoldings,
   listOpenItems,
   outstandingHeldTotal,
@@ -37,20 +38,45 @@ import type {
   Transaction,
 } from "@/lib/types";
 
-function useLiveList<T>(factory: () => Promise<T[]>, deps: unknown[]) {
-  const [items, setItems] = useState<T[]>([]);
+function useLiveQueryList<T>(
+  factory: () => Promise<T[]>,
+  deps: unknown[],
+): { items: T[]; loading: boolean } {
+  const key = JSON.stringify(deps);
+  const [state, setState] = useState<{
+    items: T[];
+    loading: boolean;
+    key: string;
+  }>({ items: [], loading: true, key });
+  if (state.key !== key) {
+    setState({ items: [], loading: true, key });
+  }
 
   useEffect(() => {
+    let cancelled = false;
     const observable = liveQuery(() => factory());
     const subscription = observable.subscribe({
-      next: (value) => setItems(value),
-      error: () => setItems([]),
+      next: (value) => {
+        if (cancelled) return;
+        setState({ items: value, loading: false, key });
+      },
+      error: () => {
+        if (cancelled) return;
+        setState({ items: [], loading: false, key });
+      },
     });
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
-  return items;
+  return { items: state.items, loading: state.loading };
+}
+
+function useLiveList<T>(factory: () => Promise<T[]>, deps: unknown[]) {
+  return useLiveQueryList<T>(factory, deps).items;
 }
 
 export function useSeedReady() {
@@ -99,9 +125,24 @@ export function useCategories(kind?: CategoryKind) {
   );
 }
 
-export function useMonthTransactions(year: number, month: number) {
+export function useMonthTransactions(
+  year: number,
+  month: number,
+  enabled = true,
+) {
   const { bookId } = useBook();
   return useLiveList(
+    () =>
+      enabled && bookId
+        ? listTransactionsForMonth(bookId, year, month)
+        : Promise.resolve([]),
+    [bookId, year, month, enabled],
+  );
+}
+
+export function useMonthTransactionsQuery(year: number, month: number) {
+  const { bookId } = useBook();
+  return useLiveQueryList<Transaction>(
     () =>
       bookId
         ? listTransactionsForMonth(bookId, year, month)
@@ -223,6 +264,18 @@ export function useAccountTransactions(accountId: string | null) {
   );
 }
 
+export function useAccountFlowTotals(accountId: string | null) {
+  const { bookId } = useBook();
+  return useLiveValue(
+    () =>
+      bookId && accountId
+        ? accountFlowTotals(bookId, accountId)
+        : Promise.resolve({ income: 0, expense: 0, expenseCash: 0, held: 0 }),
+    { income: 0, expense: 0, expenseCash: 0, held: 0 },
+    [bookId, accountId],
+  );
+}
+
 export function useDateTransactions(date: string) {
   const { bookId } = useBook();
   return useLiveList<Transaction>(
@@ -241,12 +294,17 @@ export function useBooks() {
 }
 
 export function useAccountsMap(accounts: Account[]) {
-  return Object.fromEntries(accounts.map((account) => [account.id, account]));
+  return useMemo(
+    () => Object.fromEntries(accounts.map((account) => [account.id, account])),
+    [accounts],
+  );
 }
 
 export function useCategoriesMap(categories: Category[]) {
-  return Object.fromEntries(
-    categories.map((category) => [category.id, category]),
+  return useMemo(
+    () =>
+      Object.fromEntries(categories.map((category) => [category.id, category])),
+    [categories],
   );
 }
 

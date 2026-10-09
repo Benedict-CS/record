@@ -17,13 +17,14 @@ import {
   dailyTrend,
   monthSummary,
   monthlyTotalsForYear,
-  topCategories,
   yearlyTotals,
 } from "@/lib/db/crud";
 import {
+  calendarDateInYear,
   formatMoney,
   shiftYearMonth,
   throughToday,
+  todayLocal,
   type MoneyCurrency,
 } from "@/lib/format";
 import { clampLedgerPeriod, LEDGER_START_YEAR } from "@/lib/period-jump";
@@ -51,16 +52,24 @@ export function ReportsPage() {
   const { book } = useBook();
   const currency = book?.currency;
   const ready = useSeedReady();
-  const now = useMemo(() => new Date(), []);
+  const today = todayLocal();
+  const nowYear = Number(today.slice(0, 4));
+  const nowMonth = Number(today.slice(5, 7));
   const [scope, setScope] = useState<ReportScope>("month");
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year, setYear] = useState(nowYear);
+  const [month, setMonth] = useState(nowMonth);
   const [pieKind, setPieKind] = useState<CategoryKind>("expense");
-  const [detail, setDetail] = useState<CategoryBreakdownItem | null>(null);
+  const [detail, setDetail] = useState<
+    (CategoryBreakdownItem & { kind: CategoryKind }) | null
+  >(null);
 
   const categories = useCategories();
   const endYear = useLedgerEndYear();
-  const monthTransactions = useMonthTransactions(year, month);
+  const monthTransactions = useMonthTransactions(
+    year,
+    month,
+    scope === "month",
+  );
   const yearTransactions = useYearTransactions(year, scope === "year");
   const historyTransactions = useTransactionsBetween(
     `${LEDGER_START_YEAR}-01-01`,
@@ -75,26 +84,53 @@ export function ReportsPage() {
   const previousMonthTransactions = useMonthTransactions(
     previousMonthRef.year,
     previousMonthRef.month,
+    scope === "month",
   );
   const previousYearTransactions = useYearTransactions(
     year - 1,
     scope === "year",
   );
 
+  const isCurrentMonth = year === nowYear && month === nowMonth;
+  const isCurrentYear = year === nowYear;
   const periodTransactions =
     scope === "month"
       ? monthTransactions
       : scope === "year"
         ? yearTransactions
         : historyTransactions;
+  const monthCounted = useMemo(
+    () =>
+      isCurrentMonth
+        ? throughToday(monthTransactions, today)
+        : monthTransactions,
+    [isCurrentMonth, monthTransactions, today],
+  );
+  const scopedCounted = useMemo(
+    () => throughToday(periodTransactions, today),
+    [periodTransactions, today],
+  );
   const activeTransactions =
-    scope === "month" ? monthTransactions : throughToday(periodTransactions);
-  const previousTransactions =
-    scope === "month"
-      ? previousMonthTransactions
-      : throughToday(previousYearTransactions);
-  const laterCount =
-    scope === "month" ? 0 : periodTransactions.length - activeTransactions.length;
+    scope === "month" ? monthCounted : scopedCounted;
+  const previousYearCutoff = calendarDateInYear(year - 1, today);
+  const previousTransactions = useMemo(
+    () =>
+      scope === "month"
+        ? previousMonthTransactions
+        : isCurrentYear
+          ? previousYearTransactions.filter(
+              (tx) => tx.date <= previousYearCutoff,
+            )
+          : previousYearTransactions,
+    [
+      scope,
+      previousMonthTransactions,
+      isCurrentYear,
+      previousYearTransactions,
+      previousYearCutoff,
+    ],
+  );
+  const laterCount = periodTransactions.length - activeTransactions.length;
 
   const summary = useMemo(
     () => monthSummary(activeTransactions),
@@ -116,10 +152,7 @@ export function ReportsPage() {
     () => categoryBreakdown(activeTransactions, categories, pieKind),
     [activeTransactions, categories, pieKind],
   );
-  const ranking = useMemo(
-    () => topCategories(activeTransactions, categories, pieKind, 5),
-    [activeTransactions, categories, pieKind],
-  );
+  const ranking = useMemo(() => breakdown.slice(0, 5), [breakdown]);
   const monthlyTotals = useMemo(
     () => monthlyTotalsForYear(scope === "year" ? activeTransactions : yearTransactions),
     [scope, activeTransactions, yearTransactions],
@@ -129,17 +162,19 @@ export function ReportsPage() {
       yearlyTotals(
         scope === "all" ? activeTransactions : [],
         LEDGER_START_YEAR,
-        now.getFullYear(),
+        nowYear,
       ),
-    [scope, activeTransactions, now],
+    [scope, activeTransactions, nowYear],
   );
 
   const trendPoints = useMemo<TrendPoint[]>(() => {
     if (scope === "month") {
       const byDate = new Map(
-        dailyTrend(monthTransactions).map((point) => [point.date, point]),
+        dailyTrend(activeTransactions).map((point) => [point.date, point]),
       );
-      return Array.from({ length: daysInMonth(year, month) }, (_, index) => {
+      const lastDay =
+        isCurrentMonth ? Number(today.slice(8, 10)) : daysInMonth(year, month);
+      return Array.from({ length: lastDay }, (_, index) => {
         const day = index + 1;
         const date = `${year}-${pad2(month)}-${pad2(day)}`;
         const point = byDate.get(date);
@@ -165,11 +200,24 @@ export function ReportsPage() {
       income: row.income,
       expense: row.expense,
     }));
-  }, [scope, monthTransactions, monthlyTotals, historyYears, year, month]);
+  }, [
+    scope,
+    activeTransactions,
+    isCurrentMonth,
+    today,
+    monthlyTotals,
+    historyYears,
+    year,
+    month,
+  ]);
 
   const topExpense = expenseBreakdown[0];
   const topExpenseTitle =
-    scope === "month" ? "本月消費最多" : scope === "year" ? "本年消費最多" : "全部消費最多";
+    scope === "month"
+      ? `${month} 月消費最多`
+      : scope === "year"
+        ? `${year} 年消費最多`
+        : "全部消費最多";
   const rankingTitle = `${pieKind === "expense" ? "支出" : "收入"}排行 TOP 5`;
 
   function shiftPeriod(delta: number) {
@@ -199,7 +247,9 @@ export function ReportsPage() {
   const previousLabel =
     scope === "month"
       ? `${previousMonthRef.year} 年 ${previousMonthRef.month} 月`
-      : `${year - 1} 年`;
+      : isCurrentYear
+        ? `${year - 1} 年 1 月 1 日–${Number(previousYearCutoff.slice(5, 7))} 月 ${Number(previousYearCutoff.slice(8, 10))} 日`
+        : `${year - 1} 年`;
 
   return (
     <AppShell title="報表">
@@ -283,7 +333,11 @@ export function ReportsPage() {
               </HoldStepButton>
             </div>
             )}
-            <SimpleSummary summary={summary} currency={currency} />
+            <SimpleSummary
+              summary={summary}
+              currency={currency}
+              heldMode={scope === "month" ? "period" : "outstanding"}
+            />
           </section>
 
           {hasPreviousPeriod ? (
@@ -320,7 +374,7 @@ export function ReportsPage() {
           {topExpense ? (
             <button
               type="button"
-              onClick={() => setDetail(topExpense)}
+              onClick={() => setDetail({ ...topExpense, kind: "expense" })}
               className="w-full rounded-2xl border-2 border-[var(--accent)] bg-[var(--surface)] px-4 py-4 text-left transition active:bg-[var(--paper)]"
             >
               <p className="text-xs font-medium tracking-wide text-[var(--accent)]">
@@ -447,7 +501,7 @@ export function ReportsPage() {
             <CategoryPieChart
               items={breakdown}
               currency={currency}
-              onSelect={setDetail}
+              onSelect={(item) => setDetail({ ...item, kind: pieKind })}
               emptyLabel={
                 pieKind === "expense"
                   ? "此期間尚無支出分類資料"
@@ -473,7 +527,7 @@ export function ReportsPage() {
                   <li key={item.categoryId ?? item.name}>
                     <button
                       type="button"
-                      onClick={() => setDetail(item)}
+                      onClick={() => setDetail({ ...item, kind: pieKind })}
                       className="flex min-h-[56px] w-full items-center gap-3 rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-left transition active:bg-[var(--paper)]"
                     >
                       <span className="w-4 shrink-0 text-sm font-semibold tabular-nums text-[var(--muted)]">
@@ -529,6 +583,7 @@ export function ReportsPage() {
           categoryId={detail.categoryId}
           categoryName={detail.name}
           color={detail.color}
+          kind={detail.kind}
           transactions={activeTransactions}
           currency={currency}
           periodLabel={periodLabel}
@@ -554,16 +609,19 @@ function DeltaCard({
   positiveIsGood: boolean;
   currency?: MoneyCurrency;
 }) {
+  const current = previous + delta;
   const flat = Math.abs(delta) < 0.005;
   const up = delta > 0;
+  const noCurrent = Math.abs(current) < 0.005;
+  const noPrevious = previous <= 0;
   const good = positiveIsGood ? up : !up;
-  const tone = flat
-    ? "text-[var(--muted)]"
-    : good
-      ? "text-emerald-700"
-      : "text-rose-700";
-  const arrow = flat ? "－" : up ? "▲" : "▼";
-  const hasBaseline = previous > 0;
+  const tone =
+    noPrevious || noCurrent || flat
+      ? "text-[var(--muted)]"
+      : good
+        ? "text-emerald-700"
+        : "text-rose-700";
+  const arrow = noPrevious || noCurrent || flat ? "－" : up ? "▲" : "▼";
 
   return (
     <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 py-3">
@@ -575,12 +633,14 @@ function DeltaCard({
         </span>
       </p>
       <p className="mt-1 text-[11px] text-[var(--muted)]">
-        {hasBaseline ? (
+        {noCurrent ? (
+          "尚無本期資料"
+        ) : noPrevious ? (
+          "上期無資料"
+        ) : (
           <span className="tabular-nums">
             {flat ? "持平" : `${up ? "+" : "-"}${Math.abs(percent).toFixed(1)}%`}
           </span>
-        ) : (
-          "上期無資料"
         )}
       </p>
     </div>

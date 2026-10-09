@@ -299,42 +299,6 @@ async function retireTransfersLocally() {
   }
 }
 
-/** Remap live txs that still point at soft-deleted accounts onto a live twin. */
-async function repairDeadAccountRefs() {
-  const stamp = new Date().toISOString();
-  const liveAccounts = (await db.accounts.toArray()).filter(
-    (row) => !row.deleted_at,
-  );
-  const liveByBookType = new Map<string, string>();
-  for (const account of liveAccounts) {
-    const key = `${account.book_id}\0${account.type}`;
-    if (!liveByBookType.has(key)) liveByBookType.set(key, account.id);
-  }
-
-  const deadIds = new Set(
-    (await db.accounts.toArray())
-      .filter((row) => row.deleted_at)
-      .map((row) => row.id),
-  );
-  if (deadIds.size === 0) return;
-
-  const txs = await db.transactions
-    .filter((row) => !row.deleted_at && deadIds.has(row.account_id))
-    .toArray();
-
-  for (const tx of txs) {
-    const dead = await db.accounts.get(tx.account_id);
-    if (!dead) continue;
-    const next = liveByBookType.get(`${tx.book_id}\0${dead.type}`);
-    if (!next || next === tx.account_id) continue;
-    await db.transactions.update(tx.id, {
-      account_id: next,
-      updated_at: stamp,
-      sync_status: "pending",
-    });
-  }
-}
-
 /** Soft-delete empty placeholder holdings left by old seed defaults. */
 async function purgeEmptyHoldings() {
   if (
@@ -1107,18 +1071,11 @@ export async function runSync(options: RunSyncOptions = {}): Promise<void> {
       return;
     }
 
-    // Seed only on this account's first cloud pull. BookProvider already seeds
-    // on boot; re-running pin/dedupe on every sync was a major cost. The state
-    // row is keyed per user, so look it up by that key.
-    const state = await db.sync_state.get(syncStateKey(user.id));
-    if (!state?.last_pulled_at || forceFull) {
-      const { ensureSeedData } = await import("@/lib/db/seed");
-      await ensureSeedData();
-    }
-
     // Do not adopt this device's logged-out ledger, or another account's rows.
     // Each account only pulls and pushes rows stamped with its own user id.
     const pulledAt = await pullAll(user.id, { forceFull });
+    // Cheap no-op once the account has any book; only a brand-new account
+    // (nothing came down in the pull) gets the default books here.
     await ensureOwnerLedger(user.id);
     // Cheap when clean; clears empty seed twins that landed next to real holdings.
     await collapseDuplicateHoldings();
@@ -1126,7 +1083,6 @@ export async function runSync(options: RunSyncOptions = {}): Promise<void> {
 
     if (needsMaintenance(forceFull)) {
       await collapseDuplicateBooks();
-      await repairDeadAccountRefs();
       await preferCanonicalActiveBook();
       await retireTransfersLocally();
       await purgeInventedLocalData();
@@ -1172,33 +1128,49 @@ function scheduleAutoSync() {
   void runSync();
 }
 
+let listenerStop: (() => void) | null = null;
+let listenerRefs = 0;
+
 export function startSyncListeners() {
   if (typeof window === "undefined") return () => undefined;
 
-  const onOnline = () => {
-    scheduleAutoSync();
-  };
-  const onOffline = () => setStatus("offline");
-  const onVisible = () => {
-    if (document.visibilityState === "visible") {
+  listenerRefs += 1;
+  if (!listenerStop) {
+    const onOnline = () => {
+      scheduleAutoSync();
+    };
+    const onOffline = () => setStatus("offline");
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        scheduleAutoSync();
+      }
+    };
+
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    document.addEventListener("visibilitychange", onVisible);
+
+    listenerStop = () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+      document.removeEventListener("visibilitychange", onVisible);
+      listenerStop = null;
+    };
+
+    if (!navigator.onLine) {
+      setStatus("offline");
+    } else {
+      // AppShell remounts the badge on every route; throttle so tab switches
+      // do not each pull every table.
       scheduleAutoSync();
     }
-  };
-
-  window.addEventListener("online", onOnline);
-  window.addEventListener("offline", onOffline);
-  document.addEventListener("visibilitychange", onVisible);
-
-  if (!navigator.onLine) {
-    setStatus("offline");
-  } else {
-    lastAutoSyncAt = Date.now();
-    void runSync();
   }
 
   return () => {
-    window.removeEventListener("online", onOnline);
-    window.removeEventListener("offline", onOffline);
-    document.removeEventListener("visibilitychange", onVisible);
+    listenerRefs -= 1;
+    if (listenerRefs <= 0) {
+      listenerRefs = 0;
+      listenerStop?.();
+    }
   };
 }

@@ -18,7 +18,7 @@ import {
   findLatestTransactionMonth,
   listTransactionsForMonth,
 } from "@/lib/db/crud";
-import { formatDayHeading } from "@/lib/format";
+import { formatDayHeading, todayLocal } from "@/lib/format";
 import { clampLedgerPeriod } from "@/lib/period-jump";
 import {
   useAccounts,
@@ -32,9 +32,11 @@ import type { Transaction } from "@/lib/types";
 export function HomePage() {
   const ready = useSeedReady();
   const { bookId } = useBook();
-  const now = useMemo(() => new Date(), []);
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
+  const today = todayLocal();
+  const currentYear = Number(today.slice(0, 4));
+  const currentMonth = Number(today.slice(5, 7));
+  const [year, setYear] = useState(currentYear);
+  const [month, setMonth] = useState(currentMonth);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   /** When set, the add sheet is for this day. Null means today (the FAB). */
@@ -103,8 +105,8 @@ export function HomePage() {
     void (async () => {
       const current = await listTransactionsForMonth(
         bookId,
-        now.getFullYear(),
-        now.getMonth() + 1,
+        currentYear,
+        currentMonth,
       );
       if (cancelled) return;
       if (current.length > 0) {
@@ -116,8 +118,7 @@ export function HomePage() {
       openedForBook.current = bookId;
       if (
         latest &&
-        (latest.year !== now.getFullYear() ||
-          latest.month !== now.getMonth() + 1)
+        (latest.year !== currentYear || latest.month !== currentMonth)
       ) {
         const next = clampLedgerPeriod(latest.year, latest.month, endYear);
         setYear(next.year);
@@ -127,15 +128,14 @@ export function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [ready, bookId, now, transactions.length, endYear]);
+  }, [ready, bookId, currentYear, currentMonth, transactions.length, endYear]);
 
   const visibleTransactions = useMemo(() => {
     if (typeFilter === "all") return transactions;
     return transactions.filter((tx) => tx.type === typeFilter);
   }, [transactions, typeFilter]);
 
-  const isCurrentMonth =
-    year === now.getFullYear() && month === now.getMonth() + 1;
+  const isCurrentMonth = year === currentYear && month === currentMonth;
 
   function jumpTo(nextYear: number, nextMonth: number) {
     const next = clampLedgerPeriod(nextYear, nextMonth, endYear);
@@ -149,7 +149,7 @@ export function HomePage() {
   }
 
   function goToCurrentMonth() {
-    jumpTo(now.getFullYear(), now.getMonth() + 1);
+    jumpTo(currentYear, currentMonth);
   }
 
   function openAdd(date?: string) {

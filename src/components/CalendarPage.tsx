@@ -13,7 +13,7 @@ import {
   useAccounts,
   useCategories,
   useLedgerEndYear,
-  useMonthTransactions,
+  useMonthTransactionsQuery,
   useSeedReady,
 } from "@/lib/hooks/useLedgerData";
 import { formatMoney, shiftYearMonth, todayLocal } from "@/lib/format";
@@ -54,17 +54,17 @@ export function CalendarPage() {
   const { book } = useBook();
   const currency = book?.currency;
   const ready = useSeedReady();
-  const now = useMemo(() => new Date(), []);
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
   const today = todayLocal();
+  const [year, setYear] = useState(() => Number(today.slice(0, 4)));
+  const [month, setMonth] = useState(() => Number(today.slice(5, 7)));
   const [selectedDate, setSelectedDate] = useState(today);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const pendingEditId = useRef<string | null>(null);
 
   const accounts = useAccounts();
   const categories = useCategories();
-  const transactions = useMonthTransactions(year, month);
+  const { items: transactions, loading: monthLoading } =
+    useMonthTransactionsQuery(year, month);
   const endYear = useLedgerEndYear();
 
   // Report rows link here as /calendar?date=YYYY-MM-DD&tx=<id>.
@@ -94,15 +94,14 @@ export function CalendarPage() {
 
   useEffect(() => {
     const id = pendingEditId.current;
-    if (!id || !ready) return;
+    if (!id || !ready || monthLoading) return;
     const tx = transactions.find((item) => item.id === id);
-    if (!tx) return;
     pendingEditId.current = null;
-    setEditing(tx);
+    if (tx) setEditing(tx);
     if (window.location.search) {
       window.history.replaceState(null, "", "/calendar");
     }
-  }, [ready, transactions]);
+  }, [ready, monthLoading, transactions]);
 
   const dayMap = useMemo(() => {
     const map = new Map<

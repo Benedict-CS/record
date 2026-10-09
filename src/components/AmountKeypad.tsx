@@ -169,8 +169,7 @@ export function AmountKeypad({
   if (!open) return null;
 
   const live = evaluateExpression(expression);
-  const liveLabel =
-    live === null ? "—" : formatCalcNumber(Math.abs(live));
+  const liveLabel = live === null ? "—" : formatCalcNumber(live);
   const canConfirm = toAmountValue(expression) !== null;
 
   return (

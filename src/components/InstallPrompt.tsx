@@ -77,8 +77,6 @@ export function InstallPrompt() {
     const timer = window.setTimeout(() => {
       if (!deferredRef.current && isIosSafari()) {
         setMode("ios");
-        // One-time: showing it counts as seen.
-        writeDismissed();
       }
     }, IOS_HINT_DELAY);
 

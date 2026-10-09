@@ -64,6 +64,8 @@ function generatedPeriods(rule: Pick<RecurringRule, "start_month" | "end_month" 
     dayOfMonth: 1,
     lastPosted: null,
     today: "2000-01-01",
+    // Align every posted month, not just the first 24.
+    cap: Number.POSITIVE_INFINITY,
   });
 }
 

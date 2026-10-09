@@ -1,8 +1,11 @@
 import {
   categoryBreakdown,
+  csvCell,
   dailyTrend,
+  groupTransactionsByDay,
   monthSummary,
   monthlyTotalsForYear,
+  transactionsToCsv,
   yearlyTotals,
 } from "./db/crud";
 import type { Transaction } from "./types";
@@ -64,6 +67,7 @@ const summary = monthSummary([
 
 assert(summary.expense === 100, "expense excludes holds");
 assert(summary.held === 70, "held includes released holds in-period");
+assert(summary.heldOutstanding === 20, "heldOutstanding skips released holds");
 assert(summary.outflow === 170, "outflow = selfPay + held");
 assert(summary.income === 200, "release income excluded from income");
 assert(summary.net === 100, "net ignores release refund income");
@@ -177,5 +181,19 @@ assert(
   monthSummary(mixed).income === months.reduce((sum, row) => sum + row.income, 0),
   "monthly chart income sums to the summary income",
 );
+
+const dayBuckets = groupTransactionsByDay(mixed);
+const march20 = dayBuckets.find((bucket) => bucket.date === "2026-03-20");
+assert(march20?.income === 0, "calendar day income skips a linked refund");
+
+const quoted = csvCell('午餐, "特餐"');
+assert(quoted === '"午餐, ""特餐"""', "csv cells quote commas and inner quotes");
+const csv = transactionsToCsv(
+  [tx({ type: "expense", amount: 10, date: "2026-01-01", note: "a,b" })],
+  [],
+  [],
+);
+assert(csv.includes('"a,b"'), "notes with commas stay in one column");
+assert(csv.includes("hold_status"), "csv includes hold and reimbursement columns");
 
 console.log("month-summary tests passed");

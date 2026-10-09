@@ -123,10 +123,9 @@ export function SearchPage() {
       return true;
     });
 
-    const nameOf = (categoryId: string | null) => {
-      const hit = categories.find((row) => row.id === categoryId);
-      return hit?.name;
-    };
+    const names = new Map(categories.map((row) => [row.id, row.name]));
+    const nameOf = (categoryId: string | null) =>
+      categoryId ? names.get(categoryId) : undefined;
 
     return rows.sort((a, b) => {
       switch (sort) {

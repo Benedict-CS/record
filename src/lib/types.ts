@@ -186,6 +186,8 @@ export interface PeriodSummary {
    * Outstanding-only totals use outstandingHeldTotal() for net worth.
    */
   held: number;
+  /** Holds in this period that are still 暫時扣住. */
+  heldOutstanding: number;
   /**
    * Display「花費」= selfPay + held (after 銷帳, reimbursed portion is excluded).
    */

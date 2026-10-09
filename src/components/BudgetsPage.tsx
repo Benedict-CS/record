@@ -14,7 +14,7 @@ import {
   softDeleteBudget,
   upsertBudget,
 } from "@/lib/db/crud";
-import { formatMoney, shiftYearMonth } from "@/lib/format";
+import { formatMoney, shiftYearMonth, todayLocal } from "@/lib/format";
 import { clampLedgerPeriod } from "@/lib/period-jump";
 import {
   useBudgets,
@@ -58,9 +58,9 @@ export function BudgetsPage() {
   const currency = book?.currency;
   const ready = useSeedReady();
   const { show } = useToast();
-  const now = useMemo(() => new Date(), []);
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
+  const today = todayLocal();
+  const [year, setYear] = useState(() => Number(today.slice(0, 4)));
+  const [month, setMonth] = useState(() => Number(today.slice(5, 7)));
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
@@ -69,8 +69,11 @@ export function BudgetsPage() {
   const categories = useCategories("expense");
   const transactions = useMonthTransactions(year, month);
 
-  const summary = monthSummary(transactions);
-  const breakdown = categoryBreakdown(transactions, categories, "expense");
+  const summary = useMemo(() => monthSummary(transactions), [transactions]);
+  const breakdown = useMemo(
+    () => categoryBreakdown(transactions, categories, "expense"),
+    [transactions, categories],
+  );
   const spentByCategory = useMemo(
     () =>
       Object.fromEntries(
@@ -223,7 +226,7 @@ export function BudgetsPage() {
                 ›
               </HoldStepButton>
             </div>
-            <p className="text-[11px] opacity-70">本月實際花掉（不含扣住）</p>
+            <p className="text-[11px] opacity-70">{month} 月實際花掉（不含扣住）</p>
             <p className="mt-1 text-xl font-semibold tabular-nums">
               {formatMoney(summary.selfPay, currency)}
               {overallBudget ? (
@@ -288,7 +291,7 @@ export function BudgetsPage() {
                 分類預算
               </h2>
               <p className="mt-0.5 text-xs text-[var(--muted)]">
-                依支出分類設定上限，並對照本月已花金額。
+                依支出分類設定上限，並對照該月已花金額。
               </p>
             </div>
             <ul className="space-y-2">

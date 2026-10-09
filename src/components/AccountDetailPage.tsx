@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { BottomSheet } from "@/components/BottomSheet";
 import { useBook } from "@/components/BookProvider";
@@ -10,9 +10,9 @@ import { TransactionForm } from "@/components/TransactionForm";
 import { TransactionList } from "@/components/TransactionList";
 import { useToast } from "@/components/ToastProvider";
 import { formatDayHeading, formatMoney } from "@/lib/format";
-import { expenseDisplayAmount } from "@/lib/reimbursement";
 import {
   useAccountBalances,
+  useAccountFlowTotals,
   useAccountTransactions,
   useAccounts,
   useCategories,
@@ -27,6 +27,7 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
   const categories = useCategories();
   const balances = useAccountBalances();
   const transactions = useAccountTransactions(accountId);
+  const summary = useAccountFlowTotals(accountId);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [addDate, setAddDate] = useState<string | null>(null);
   const { show } = useToast();
@@ -34,36 +35,6 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
   const account = accounts.find((item) => item.id === accountId);
   const balance = balances.find((item) => item.account.id === accountId);
   const currency = account?.currency || book?.currency;
-
-  const summary = useMemo(() => {
-    let income = 0;
-    let expense = 0;
-    let expenseCash = 0;
-    let held = 0;
-    for (const tx of transactions) {
-      if (tx.type === "income" && tx.account_id === accountId) {
-        income += tx.amount;
-      }
-      if (tx.type === "expense" && tx.account_id === accountId) {
-        expense += expenseDisplayAmount(tx);
-        expenseCash += tx.amount;
-      }
-      if (
-        tx.type === "hold" &&
-        tx.account_id === accountId
-      ) {
-        held += tx.amount;
-      }
-      if (tx.type === "transfer") {
-        if (tx.account_id === accountId) {
-          expense += tx.amount;
-          expenseCash += tx.amount;
-        }
-        if (tx.transfer_account_id === accountId) income += tx.amount;
-      }
-    }
-    return { income, expense, expenseCash, held };
-  }, [transactions, accountId]);
 
   return (
     <AppShell title={account?.name ?? "帳戶明細"}>

@@ -9,7 +9,7 @@ import { CategoryPickerGrid } from "@/components/CategoryPickerGrid";
 import { TreatTagField } from "@/components/TreatTagField";
 import { createTransaction, updateTransaction } from "@/lib/db/crud";
 import { formatCalcNumber } from "@/lib/calculator";
-import { formatMoney, todayLocal } from "@/lib/format";
+import { formatMoney, isIsoDate, todayLocal } from "@/lib/format";
 import { isSpendableBankHolding } from "@/lib/holding-spend";
 import {
   preferredCategoryId,
@@ -146,6 +146,10 @@ export function TransactionForm({
     event.preventDefault();
     setError(null);
 
+    if (!isIsoDate(date)) {
+      setError("請選擇日期");
+      return;
+    }
     if (amount === null || !Number.isFinite(amount) || amount < 0) {
       setError("請輸入金額（請客可填 0）");
       return;
@@ -224,6 +228,7 @@ export function TransactionForm({
         setAmount(null);
         setReimbursable(null);
         setNote("");
+        setTreat(false);
         if (spendableHoldings.length !== 1) setHoldingId("");
       }
       if ((type === "expense" || type === "income") && effectiveCategoryId) {

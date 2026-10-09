@@ -31,16 +31,21 @@ function AmountBlock({
 export function SimpleSummary({
   summary,
   currency,
+  heldMode = "period",
 }: {
   summary: PeriodSummary;
   currency?: MoneyCurrency;
+  /** Year/all reports show money still locked; a month keeps every hold dated in it. */
+  heldMode?: "period" | "outstanding";
 }) {
   const spend = periodSpend(summary);
   const balance = periodBalance(summary);
   const reimbursed = reimbursedAmount(summary);
   const pending = summary.reimbursablePending;
   const kept = Math.max(0, summary.selfPay - pending);
-  const showSplit = pending > 0 || summary.held > 0;
+  const heldShown =
+    heldMode === "outstanding" ? summary.heldOutstanding : summary.held;
+  const showSplit = pending > 0 || heldShown > 0;
   const notes: Array<{ key: string; text: string; tone: string }> = [];
   if (reimbursed > 0) {
     notes.push({
@@ -87,9 +92,9 @@ export function SimpleSummary({
             </span>
           </p>
           <p className="text-[11px] text-amber-900/80">
-            扣住
+            {heldMode === "outstanding" ? "仍扣住" : "扣住"}
             <span className="mt-0.5 block font-medium tabular-nums">
-              {formatMoney(summary.held, currency)}
+              {formatMoney(heldShown, currency)}
             </span>
           </p>
         </div>

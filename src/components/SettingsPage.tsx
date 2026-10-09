@@ -371,7 +371,7 @@ export function SettingsPage() {
           <ul className="mt-1.5 space-y-1.5 text-xs leading-relaxed text-[var(--muted)]">
             <li>Chrome / Edge：網址列右側「安裝」或頁面上的「加入主畫面」。</li>
             <li>iPhone Safari：分享 → 加入主畫面。從主畫面開啟才是完整 PWA。</li>
-            <li>安裝後可離線記帳；更新時會出現「有新版本」提示。</li>
+            <li>安裝後可離線記帳；新版本會自動套用，下次開啟即可看到。</li>
           </ul>
         </section>
 

@@ -10,7 +10,7 @@ const withPWA = withPWAInit({
   },
   cacheOnFrontEndNav: true,
   aggressiveFrontEndNavCaching: true,
-  reloadOnOnline: true,
+  reloadOnOnline: false,
   workboxOptions: {
     disableDevLogs: true,
     // Activate new builds immediately so UI fixes are not stuck behind a

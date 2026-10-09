@@ -9,7 +9,7 @@ import {
   duplicateTransaction,
   markReimbursementReceived,
   releaseHold,
-  restoreTransaction,
+  restoreDeletedPair,
   softDeleteTransaction,
   undoReimbursementReceived,
 } from "@/lib/db/crud";
@@ -18,6 +18,8 @@ import { formatDayHeading, formatMoney, todayLocal } from "@/lib/format";
 import {
   expenseDisplayAmount,
   HOLD_REFUND_NOTE_PREFIX,
+  holdRefundIncomeIds,
+  isHoldRefundIncome,
 } from "@/lib/reimbursement";
 import { useHoldings } from "@/lib/hooks/useLedgerData";
 import { TREAT_TAG } from "@/lib/transaction-tag";
@@ -263,28 +265,27 @@ export function TransactionList({
     });
     if (!ok) return;
     try {
-      await softDeleteTransaction(tx.id);
+      const deleted = await softDeleteTransaction(tx.id);
+      void runSync();
+      show("已刪除", {
+        variant: "info",
+        duration: 5000,
+        action: {
+          label: "復原",
+          onClick: () => {
+            void restoreDeletedPair(deleted)
+              .then(() => runSync())
+              .catch((err: unknown) => {
+                show(err instanceof Error ? err.message : "復原失敗", {
+                  variant: "error",
+                });
+              });
+          },
+        },
+      });
     } catch (err) {
       show(err instanceof Error ? err.message : "刪除失敗", { variant: "error" });
-      return;
     }
-    void runSync();
-    show("已刪除", {
-      variant: "info",
-      duration: 5000,
-      action: {
-        label: "復原",
-        onClick: () => {
-          void restoreTransaction(tx.id)
-            .then(() => runSync())
-            .catch((err: unknown) => {
-              show(err instanceof Error ? err.message : "復原失敗", {
-                variant: "error",
-              });
-            });
-        },
-      },
-    });
   }
 
   if (transactions.length === 0) {
@@ -304,8 +305,11 @@ export function TransactionList({
         const dayHeld = group.items
           .filter((tx) => tx.type === "hold")
           .reduce((sum, tx) => sum + tx.amount, 0);
+        const refundIds = holdRefundIncomeIds(group.items);
         const dayIncome = group.items
-          .filter((tx) => tx.type === "income")
+          .filter(
+            (tx) => tx.type === "income" && !isHoldRefundIncome(tx, refundIds),
+          )
           .reduce((sum, tx) => sum + tx.amount, 0);
         const asCard = groupByDay || framed;
 

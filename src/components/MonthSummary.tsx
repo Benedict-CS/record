@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useBook } from "@/components/BookProvider";
 import { HoldStepButton } from "@/components/HoldStepButton";
 import { PeriodJump } from "@/components/PeriodJump";
 import { SimpleSummary } from "@/components/SimpleSummary";
 import { YearSpendCard } from "@/components/YearSpendCard";
 import { monthSummary } from "@/lib/db/crud";
-import { shiftYearMonth } from "@/lib/format";
+import { shiftYearMonth, throughToday, todayLocal } from "@/lib/format";
 import type { Transaction } from "@/lib/types";
 
 export function MonthSummary({
@@ -28,7 +28,14 @@ export function MonthSummary({
   onGoCurrent?: () => void;
 }) {
   const { book } = useBook();
-  const summary = monthSummary(transactions);
+  const today = todayLocal();
+  const isCurrentMonth =
+    year === Number(today.slice(0, 4)) && month === Number(today.slice(5, 7));
+  const counted = useMemo(
+    () => (isCurrentMonth ? throughToday(transactions, today) : transactions),
+    [isCurrentMonth, transactions, today],
+  );
+  const summary = useMemo(() => monthSummary(counted), [counted]);
   const currency = book?.currency;
 
   useEffect(() => {

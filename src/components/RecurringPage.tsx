@@ -242,16 +242,31 @@ export function RecurringPage({
   }
 
   function clearForm() {
+    const now = new Date();
     setEditingId(null);
     setName("");
     setAmount("");
     setKind("expense");
+    setDay(
+      String(
+        initialDay != null && initialDay >= 1 && initialDay <= 31
+          ? initialDay
+          : now.getDate(),
+      ),
+    );
+    setStartMonth(
+      `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
+    );
     setEndMonth("");
     setReimbursableOn(false);
     setReimbursableAmount("");
     setHoldOn(false);
     setHoldAmount("");
     setHoldName("");
+    setAccountId("");
+    setCategoryId("");
+    setHoldingId("");
+    setTargetId("");
     setError(null);
   }
 

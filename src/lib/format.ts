@@ -33,6 +33,23 @@ export function throughToday<T extends { date: string }>(
   return rows.filter((row) => row.date <= today);
 }
 
+export function isIsoDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function daysInMonth(year: number, month: number) {
+  return new Date(year, month, 0).getDate();
+}
+
+/** Same month/day in `year`, clamping 29 Feb onto 28 Feb in common years. */
+export function calendarDateInYear(year: number, isoDate: string): string {
+  const month = Number(isoDate.slice(5, 7));
+  const day = Number(isoDate.slice(8, 10));
+  if (!month || !day) return `${year}-12-31`;
+  const clamped = Math.min(day, daysInMonth(year, month));
+  return `${year}-${String(month).padStart(2, "0")}-${String(clamped).padStart(2, "0")}`;
+}
+
 export function todayLocal() {
   const now = new Date();
   const y = now.getFullYear();

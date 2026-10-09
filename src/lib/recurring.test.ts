@@ -100,6 +100,16 @@ const longSpan = periodsDue({
 });
 assert(longSpan.length === 24, "a long span posts at most 24 months at once");
 
+const aligned = periodsDue({
+  startMonth: "2020-01",
+  endMonth: "2026-09",
+  dayOfMonth: 1,
+  lastPosted: null,
+  today: "2026-10-01",
+  cap: Number.POSITIVE_INFINITY,
+});
+assert(aligned.length === 81, "aligning an old rule walks every posted month");
+
 const idA = recurringTransactionId("rule-1", "2026-10");
 const idB = recurringTransactionId("rule-1", "2026-10");
 const idC = recurringTransactionId("rule-1", "2026-11");

@@ -36,6 +36,7 @@ export function SyncBadge() {
   const { show } = useToast();
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressed = useRef(false);
+  const fromPointer = useRef(false);
 
   useEffect(() => {
     const stop = startSyncListeners();
@@ -82,6 +83,7 @@ export function SyncBadge() {
   }
 
   function onPointerDown() {
+    fromPointer.current = true;
     longPressed.current = false;
     clearPress();
     pressTimer.current = setTimeout(() => {
@@ -113,6 +115,13 @@ export function SyncBadge() {
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel}
+      onClick={(event) => {
+        if (fromPointer.current) {
+          fromPointer.current = false;
+          return;
+        }
+        void onSync(event.shiftKey);
+      }}
       aria-label={`同步狀態：${label}${detail}。點擊立即同步，長按完整同步`}
       aria-busy={status === "syncing" || busy}
       className={[

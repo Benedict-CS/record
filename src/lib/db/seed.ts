@@ -141,17 +141,28 @@ function groupBy<T>(rows: T[], keyOf: (row: T) => string) {
   return map;
 }
 
-async function seedBookContents(book: Book, clientId: string, stamp: string) {
+/**
+ * Give a brand-new book its default accounts and categories.
+ *
+ * Only books that have never had a row of that table (live or tombstoned)
+ * are filled. Matching by name used to resurrect deleted defaults and
+ * re-add a renamed default next to its new name, so the presence of any
+ * row — not the current names — is the signal that the user owns the list.
+ */
+export async function seedBookContents(
+  book: Book,
+  clientId: string = getClientId(),
+  stamp: string = nowIso(),
+): Promise<boolean> {
   const existingAccounts = await db.accounts
     .where("book_id")
     .equals(book.id)
-    .filter((row) => !row.deleted_at)
     .count();
   const existingCategories = await db.categories
     .where("book_id")
     .equals(book.id)
-    .filter((row) => !row.deleted_at)
     .count();
+  let inserted = false;
 
   if (existingAccounts === 0) {
     await db.accounts.bulkAdd(
@@ -166,69 +177,29 @@ async function seedBookContents(book: Book, clientId: string, stamp: string) {
         sync_status: "pending" as const,
       })),
     );
+    inserted = true;
   }
 
   if (existingCategories === 0) {
-    // Still respect soft-deleted names so wiping every live tag cannot
-    // resurrect the full default set on the next seed/sync.
-    const existing = await db.categories
-      .where("book_id")
-      .equals(book.id)
-      .toArray();
-    const have = new Set(
-      existing.map((row) => `${row.kind}:${row.name.trim()}`),
+    await db.categories.bulkAdd(
+      [...expenseCategories(), ...incomeCategories()].map((item) => ({
+        ...item,
+        id: crypto.randomUUID(),
+        book_id: book.id,
+        user_id: book.user_id,
+        updated_at: stamp,
+        deleted_at: null,
+        client_id: clientId,
+        sync_status: "pending" as const,
+      })),
     );
-    const missing = [...expenseCategories(), ...incomeCategories()].filter(
-      (item) => !have.has(`${item.kind}:${item.name.trim()}`),
-    );
-    if (missing.length) {
-      await db.categories.bulkAdd(
-        missing.map((item) => ({
-          ...item,
-          id: crypto.randomUUID(),
-          book_id: book.id,
-          user_id: book.user_id,
-          updated_at: stamp,
-          deleted_at: null,
-          client_id: clientId,
-          sync_status: "pending" as const,
-        })),
-      );
-    }
-  } else {
-    // Add newly introduced defaults (e.g. 運動 / 機車) without wiping user cats.
-    // Include soft-deleted names so user deletions are not resurrected on every boot.
-    const existing = await db.categories
-      .where("book_id")
-      .equals(book.id)
-      .toArray();
-    const have = new Set(
-      existing.map((row) => `${row.kind}:${row.name.trim()}`),
-    );
-    const missing = [...expenseCategories(), ...incomeCategories()].filter(
-      (item) => !have.has(`${item.kind}:${item.name.trim()}`),
-    );
-    if (missing.length) {
-      await db.categories.bulkAdd(
-        missing.map((item) => ({
-          ...item,
-          id: crypto.randomUUID(),
-          book_id: book.id,
-          user_id: book.user_id,
-          updated_at: stamp,
-          deleted_at: null,
-          client_id: clientId,
-          sync_status: "pending" as const,
-        })),
-      );
-    }
+    await pinCatchAllCategories(book.id, clientId, stamp);
+    inserted = true;
   }
-
-  // Keep catch-all tags at the end even if newer defaults were inserted after them.
-  await pinCatchAllCategories(book.id, clientId, stamp);
 
   // Do not seed empty placeholder holdings (郵局活儲 / ASM1 @ $0). Users add
   // real deposits themselves; empty shells just clutter the list and duplicate.
+  return inserted;
 }
 
 /**
@@ -431,44 +402,80 @@ async function dedupeSeedDuplicates() {
   }
 }
 
+const REPAIR_FLAG = "ledger_seed_repairs_v2";
+
+function repairsDone(ownerId: string | null): boolean {
+  if (typeof localStorage === "undefined") return true;
+  return localStorage.getItem(`${REPAIR_FLAG}:${ownerId ?? "local"}`) === "1";
+}
+
+function markRepairsDone(ownerId: string | null) {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(`${REPAIR_FLAG}:${ownerId ?? "local"}`, "1");
+}
+
+/**
+ * One-off clean-ups for data written by older builds: duplicate seed rows,
+ * rows without a book, categories without a colour. They scan whole tables,
+ * so they run once per owner per device instead of on every boot and sync.
+ */
+async function runLegacyRepairs(
+  ownerId: string | null,
+  defaultBookId: string | undefined,
+) {
+  await dedupeSeedDuplicates();
+
+  const missingColor = await db.categories
+    .filter((row) => !row.color)
+    .toArray();
+  for (const row of missingColor) {
+    await db.categories.update(row.id, { color: "#0f7a5f" });
+  }
+
+  const missingOpeningBalance = await db.accounts
+    .filter((row) => typeof row.opening_balance !== "number")
+    .toArray();
+  for (const row of missingOpeningBalance) {
+    await db.accounts.update(row.id, { opening_balance: 0 });
+  }
+
+  if (defaultBookId) {
+    for (const table of [
+      db.accounts,
+      db.categories,
+      db.transactions,
+      db.budgets,
+      db.templates,
+      db.holdings,
+    ] as const) {
+      const orphans = await table
+        .filter((row) => !row.book_id && sameOwner(row.user_id, ownerId))
+        .toArray();
+      for (const row of orphans) {
+        await table.update(row.id, { book_id: defaultBookId });
+      }
+    }
+  }
+
+  // Second pass after reassignment, so merged books don't keep twin 現金.
+  await dedupeSeedDuplicates();
+}
+
 async function runSeed(ownerId: string | null): Promise<void> {
   const clientId = getClientId();
   const stamp = nowIso();
+  const needsRepairs = !repairsDone(ownerId);
 
   await db.transaction("rw", db.tables, async () => {
-      await dedupeSeedDuplicates();
+    const owned = (row: { user_id: string | null }) =>
+      sameOwner(row.user_id, ownerId);
+    const books = (await db.books.toArray()).filter(owned);
 
-      const books = await db.books.toArray();
-      const owned = (row: { user_id: string | null }) =>
-        sameOwner(row.user_id, ownerId);
-      const active = books.filter((row) => !row.deleted_at && owned(row));
-
+    // Default books are created exactly once per owner. Any book — live,
+    // renamed or deleted — means the owner already has a ledger, so a rename
+    // or delete of 台灣帳本 must not conjure a fresh empty copy.
+    if (books.length === 0) {
       for (const def of BOOK_DEFS) {
-        const exists = active.some(
-          (row) =>
-            row.currency === def.currency && row.name.trim() === def.name,
-        );
-        if (exists) continue;
-
-        // Restore a soft-deleted twin of this same owner instead of minting
-        // a new empty UUID (orphans accounts/txs on the tombstoned id).
-        const tombstoned = books.find(
-          (row) =>
-            row.deleted_at &&
-            owned(row) &&
-            row.currency === def.currency &&
-            row.name.trim() === def.name,
-        );
-        if (tombstoned) {
-          await db.books.update(tombstoned.id, {
-            deleted_at: null,
-            updated_at: stamp,
-            client_id: clientId,
-            sync_status: "pending",
-          });
-          continue;
-        }
-
         await db.books.add({
           ...def,
           id: crypto.randomUUID(),
@@ -479,60 +486,22 @@ async function runSeed(ownerId: string | null): Promise<void> {
           sync_status: "pending",
         });
       }
+    }
 
-      const seededBooks = (await db.books.toArray())
-        .filter((row) => !row.deleted_at && owned(row))
-        .sort((a, b) => a.sort_order - b.sort_order);
+    const liveBooks = (await db.books.toArray())
+      .filter((row) => !row.deleted_at && owned(row))
+      .sort((a, b) => a.sort_order - b.sort_order);
 
-      for (const book of seededBooks) {
-        await seedBookContents(book, clientId, stamp);
-      }
+    for (const book of liveBooks) {
+      await seedBookContents(book, clientId, stamp);
+    }
 
-      const missingColor = await db.categories
-        .filter((row) => !row.color)
-        .toArray();
-      for (const row of missingColor) {
-        await db.categories.update(row.id, { color: "#0f7a5f" });
-      }
-
-      const missingOpeningBalance = await db.accounts
-        .filter((row) => typeof row.opening_balance !== "number")
-        .toArray();
-      for (const row of missingOpeningBalance) {
-        await db.accounts.update(row.id, { opening_balance: 0 });
-      }
-
-      const defaultBookId = seededBooks[0]?.id;
-      if (defaultBookId) {
-        for (const table of [
-          db.accounts,
-          db.categories,
-          db.transactions,
-          db.budgets,
-          db.templates,
-          db.holdings,
-        ] as const) {
-          const orphans = await table
-            .filter((row) => !row.book_id && sameOwner(row.user_id, ownerId))
-            .toArray();
-          for (const row of orphans) {
-            await table.update(row.id, { book_id: defaultBookId });
-          }
-        }
-      }
-
-      // Second pass after reassignment, so merged books don't keep twin 現金.
-      await dedupeSeedDuplicates();
-
-      const sync = await db.sync_state.get("default");
-      if (!sync) {
-        await db.sync_state.put({
-          id: "default",
-          last_pulled_at: null,
-          last_pushed_at: null,
-        });
-      }
+    if (needsRepairs) {
+      await runLegacyRepairs(ownerId, liveBooks[0]?.id);
+    }
   });
+
+  if (needsRepairs) markRepairsDone(ownerId);
 }
 
 const inflight = new Map<string, Promise<void>>();

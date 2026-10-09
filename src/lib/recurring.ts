@@ -40,17 +40,17 @@ export function periodsDue(input: {
   dayOfMonth: number;
   lastPosted: string | null;
   today: string;
+  /** Override the default 12-month catch-up / 24-month scheduled cap. */
+  cap?: number;
 }): string[] {
   const start = monthIndex(input.startMonth);
   if (start == null) return [];
 
   let end = start;
-  let cap = MAX_CATCH_UP;
   if (input.endMonth) {
     const scheduledEnd = monthIndex(input.endMonth);
     if (scheduledEnd == null || scheduledEnd < start) return [];
     end = scheduledEnd;
-    cap = MAX_SCHEDULED_MONTHS;
   } else {
     const [ty, tm, td] = input.today.split("-").map(Number);
     if (!ty || !tm || !td) return [];
@@ -65,6 +65,9 @@ export function periodsDue(input: {
     }
     end = endYear * 12 + endMonth;
   }
+
+  const cap =
+    input.cap ?? (input.endMonth ? MAX_SCHEDULED_MONTHS : MAX_CATCH_UP);
 
   const periods: string[] = [];
   let cursor = start;

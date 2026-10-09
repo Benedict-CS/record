@@ -1,3 +1,4 @@
+import { calendarDateInYear } from "./format";
 import {
   clampLedgerPeriod,
   dayAfter,
@@ -44,6 +45,15 @@ const december = searchBounds("2025-12-01", "2025-12-31");
 assert(
   december.start === "2025-12-01" && december.endExclusive === "2026-01-01",
   "the end date is inclusive",
+);
+
+assert(
+  calendarDateInYear(2025, "2026-10-09") === "2025-10-09",
+  "same month and day last year",
+);
+assert(
+  calendarDateInYear(2023, "2024-02-29") === "2023-02-28",
+  "29 Feb clamps onto 28 Feb",
 );
 
 console.log("period-jump tests ok");

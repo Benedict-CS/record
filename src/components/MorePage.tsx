@@ -189,10 +189,6 @@ export function MorePage() {
           <p className="mt-1 text-xs leading-relaxed">
             頁面上方隨時可以切換帳本，每本帳本的帳戶、分類、交易與預算完全分開。
           </p>
-          <p className="mt-2 text-xs leading-relaxed">
-            雲端與 Vercel 設定請看專案根目錄的{" "}
-            <code className="text-[var(--ink)]">SETUP.md</code>。
-          </p>
         </section>
       </div>
     </AppShell>

@@ -49,7 +49,10 @@ export function HoldStepButton({
       className={className}
       onPointerDown={start}
       onPointerUp={clear}
-      onPointerCancel={clear}
+      onPointerCancel={() => {
+        clear();
+        held.current = false;
+      }}
       onContextMenu={(event) => event.preventDefault()}
       onClick={() => {
         if (held.current) {
