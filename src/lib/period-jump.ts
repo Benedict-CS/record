@@ -2,21 +2,29 @@
 const FUTURE_YEARS = 1;
 /** How many years before this year stay one tap away. */
 const PAST_YEARS = 15;
+/** Bookkeeping starts in 2020. Earlier years stay out of the jump sheet. */
+export const LEDGER_START_YEAR = 2020;
 
 export const SEARCH_RANGE_START = "2000-01-01";
 export const SEARCH_RANGE_END = "2100-01-01";
 
-/** Years in the jump sheet, newest first. Always includes `selected`. */
+/** Years in the jump sheet, newest first. Never lists a year before 2020. */
 export function pickerYears(
   selected: number,
   nowYear: number,
   past = PAST_YEARS,
 ): number[] {
-  const end = Math.max(selected, nowYear + FUTURE_YEARS);
-  const start = Math.min(selected, nowYear - past);
+  const end = Math.max(selected, nowYear + FUTURE_YEARS, LEDGER_START_YEAR);
+  const start = Math.max(LEDGER_START_YEAR, Math.min(selected, nowYear - past));
   const years: number[] = [];
   for (let year = end; year >= start; year -= 1) years.push(year);
   return years;
+}
+
+/** Keep the open month inside the years the ledger shows. */
+export function clampLedgerPeriod(year: number, month: number) {
+  if (year < LEDGER_START_YEAR) return { year: LEDGER_START_YEAR, month: 1 };
+  return { year, month };
 }
 
 /** The calendar day after `YYYY-MM-DD`. */

@@ -15,6 +15,7 @@ import {
   upsertBudget,
 } from "@/lib/db/crud";
 import { formatMoney, shiftYearMonth } from "@/lib/format";
+import { clampLedgerPeriod } from "@/lib/period-jump";
 import {
   useBudgets,
   useCategories,
@@ -173,8 +174,9 @@ export function BudgetsPage() {
   }
 
   function jumpTo(nextYear: number, nextMonth: number) {
-    setYear(nextYear);
-    setMonth(nextMonth);
+    const next = clampLedgerPeriod(nextYear, nextMonth);
+    setYear(next.year);
+    setMonth(next.month);
     setDrafts({});
   }
 

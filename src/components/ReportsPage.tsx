@@ -25,6 +25,7 @@ import {
   throughToday,
   type MoneyCurrency,
 } from "@/lib/format";
+import { clampLedgerPeriod, LEDGER_START_YEAR } from "@/lib/period-jump";
 import {
   useCategories,
   useMonthTransactions,
@@ -140,13 +141,19 @@ export function ReportsPage() {
 
   function shiftPeriod(delta: number) {
     if (scope === "month") {
-      const next = shiftYearMonth(year, month, delta);
+      const shifted = shiftYearMonth(year, month, delta);
+      const next = clampLedgerPeriod(shifted.year, shifted.month);
       setYear(next.year);
       setMonth(next.month);
       return;
     }
-    setYear((value) => value + delta);
+    setYear((value) => clampLedgerPeriod(value + delta, 1).year);
   }
+
+  const hasPreviousPeriod =
+    scope === "month"
+      ? previousMonthRef.year >= LEDGER_START_YEAR
+      : year - 1 >= LEDGER_START_YEAR;
 
   const periodLabel =
     scope === "month" ? `${year} 年 ${month} 月` : `${year} 年`;
@@ -201,8 +208,9 @@ export function ReportsPage() {
                   month={month}
                   scope={scope}
                   onChange={(nextYear, nextMonth) => {
-                    setYear(nextYear);
-                    if (scope === "month") setMonth(nextMonth);
+                    const next = clampLedgerPeriod(nextYear, nextMonth);
+                    setYear(next.year);
+                    if (scope === "month") setMonth(next.month);
                   }}
                 />
                 {laterCount > 0 ? (
@@ -224,34 +232,36 @@ export function ReportsPage() {
             <SimpleSummary summary={summary} currency={currency} />
           </section>
 
-          <section className="space-y-2">
-            <div className="flex items-baseline justify-between gap-3">
-              <h2 className="text-sm font-medium text-[var(--ink)]">
-                與上期比較
-              </h2>
-              <p className="text-[11px] text-[var(--muted)]">
-                對比 {previousLabel}
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <DeltaCard
-                label="支出"
-                delta={comparison.expenseDelta}
-                percent={comparison.expensePercent}
-                previous={previousSummary.selfPay}
-                positiveIsGood={false}
-                currency={currency}
-              />
-              <DeltaCard
-                label="收入"
-                delta={comparison.incomeDelta}
-                percent={comparison.incomePercent}
-                previous={previousSummary.income}
-                positiveIsGood
-                currency={currency}
-              />
-            </div>
-          </section>
+          {hasPreviousPeriod ? (
+            <section className="space-y-2">
+              <div className="flex items-baseline justify-between gap-3">
+                <h2 className="text-sm font-medium text-[var(--ink)]">
+                  與上期比較
+                </h2>
+                <p className="text-[11px] text-[var(--muted)]">
+                  對比 {previousLabel}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <DeltaCard
+                  label="支出"
+                  delta={comparison.expenseDelta}
+                  percent={comparison.expensePercent}
+                  previous={previousSummary.selfPay}
+                  positiveIsGood={false}
+                  currency={currency}
+                />
+                <DeltaCard
+                  label="收入"
+                  delta={comparison.incomeDelta}
+                  percent={comparison.incomePercent}
+                  previous={previousSummary.income}
+                  positiveIsGood
+                  currency={currency}
+                />
+              </div>
+            </section>
+          ) : null}
 
           {topExpense ? (
             <button

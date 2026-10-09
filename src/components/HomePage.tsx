@@ -19,6 +19,7 @@ import {
   listTransactionsForMonth,
 } from "@/lib/db/crud";
 import { formatDayHeading } from "@/lib/format";
+import { clampLedgerPeriod } from "@/lib/period-jump";
 import {
   useAccounts,
   useCategories,
@@ -55,11 +56,12 @@ export function HomePage() {
     const nextYear = Number(params.get("y"));
     const nextMonth = Number(params.get("m"));
     if (!nextYear || nextMonth < 1 || nextMonth > 12) return;
+    const period = clampLedgerPeriod(nextYear, nextMonth);
     pinnedPeriod.current = true;
     // The query string exists only in the browser, so the server render stays on this month.
     // eslint-disable-next-line react-hooks/set-state-in-effect -- see above
-    setYear(nextYear);
-    setMonth(nextMonth);
+    setYear(period.year);
+    setMonth(period.month);
     const url = new URL(window.location.href);
     url.searchParams.delete("y");
     url.searchParams.delete("m");
@@ -114,8 +116,9 @@ export function HomePage() {
         (latest.year !== now.getFullYear() ||
           latest.month !== now.getMonth() + 1)
       ) {
-        setYear(latest.year);
-        setMonth(latest.month);
+        const next = clampLedgerPeriod(latest.year, latest.month);
+        setYear(next.year);
+        setMonth(next.month);
       }
     })();
     return () => {
@@ -131,15 +134,15 @@ export function HomePage() {
   const isCurrentMonth =
     year === now.getFullYear() && month === now.getMonth() + 1;
 
-  function shiftMonth(delta: number) {
-    const date = new Date(year, month - 1 + delta, 1);
-    setYear(date.getFullYear());
-    setMonth(date.getMonth() + 1);
+  function jumpTo(nextYear: number, nextMonth: number) {
+    const next = clampLedgerPeriod(nextYear, nextMonth);
+    setYear(next.year);
+    setMonth(next.month);
   }
 
-  function jumpTo(nextYear: number, nextMonth: number) {
-    setYear(nextYear);
-    setMonth(nextMonth);
+  function shiftMonth(delta: number) {
+    const date = new Date(year, month - 1 + delta, 1);
+    jumpTo(date.getFullYear(), date.getMonth() + 1);
   }
 
   function goToCurrentMonth() {

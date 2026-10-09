@@ -16,6 +16,7 @@ import {
   useSeedReady,
 } from "@/lib/hooks/useLedgerData";
 import { formatMoney, shiftYearMonth, todayLocal } from "@/lib/format";
+import { clampLedgerPeriod } from "@/lib/period-jump";
 import type { Transaction } from "@/lib/types";
 
 const WEEKDAYS = ["一", "二", "三", "四", "五", "六", "日"] as const;
@@ -72,12 +73,17 @@ export function CalendarPage() {
     if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
       const [y, m] = date.split("-").map(Number);
       if (y && m) {
+        const next = clampLedgerPeriod(y, m);
         // The query string exists only in the browser. Setting it during render
         // would disagree with the server HTML.
         // eslint-disable-next-line react-hooks/set-state-in-effect -- see above
-        setYear(y);
-        setMonth(m);
-        setSelectedDate(date);
+        setYear(next.year);
+        setMonth(next.month);
+        setSelectedDate(
+          next.year === y && next.month === m
+            ? date
+            : toDateKey(next.year, next.month, 1),
+        );
       }
     }
     if (txId) pendingEditId.current = txId;
@@ -129,13 +135,14 @@ export function CalendarPage() {
   }
 
   function jumpTo(nextYear: number, nextMonth: number) {
-    setYear(nextYear);
-    setMonth(nextMonth);
-    const prefix = `${nextYear}-${String(nextMonth).padStart(2, "0")}`;
+    const next = clampLedgerPeriod(nextYear, nextMonth);
+    setYear(next.year);
+    setMonth(next.month);
+    const prefix = `${next.year}-${String(next.month).padStart(2, "0")}`;
     if (today.startsWith(prefix)) {
       setSelectedDate(today);
     } else {
-      setSelectedDate(toDateKey(nextYear, nextMonth, 1));
+      setSelectedDate(toDateKey(next.year, next.month, 1));
     }
   }
 
