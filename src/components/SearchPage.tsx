@@ -193,6 +193,7 @@ export function SearchPage() {
               type="search"
               inputMode="search"
               autoComplete="off"
+              autoFocus
               placeholder="例如：午餐、咖啡、500、2026-09"
               className="min-h-12 w-full rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-3 text-sm outline-none focus:border-[var(--accent)]"
             />

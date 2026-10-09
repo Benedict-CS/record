@@ -11,6 +11,7 @@ import {
 } from "@/lib/day-order";
 import { roundMoney } from "@/lib/calculator";
 import { db } from "@/lib/db/schema";
+import { rankNotes } from "@/lib/note-suggest";
 import { seedBookContents } from "@/lib/db/seed";
 import { formatMoney, isIsoDate } from "@/lib/format";
 import {
@@ -350,6 +351,39 @@ export async function findLatestTransactionMonth(
   const month = Number(monthText);
   if (!year || !month) return null;
   return { year, month };
+}
+
+/** Recent unique notes for the add form, ranked by category then type. */
+export async function listRecentNotes(
+  bookId: string,
+  options: {
+    type?: TransactionType;
+    categoryId?: string | null;
+    query?: string;
+    limit?: number;
+  } = {},
+): Promise<string[]> {
+  const ownerId = getOwnerId();
+  const rows = await db.transactions
+    .where("[book_id+date]")
+    .between([bookId, ""], [bookId, "\uffff"])
+    .reverse()
+    .limit(800)
+    .toArray();
+  const live = rows.filter(
+    (row) =>
+      !row.deleted_at &&
+      row.type !== "transfer" &&
+      Boolean(row.note?.trim()) &&
+      sameOwner(row.user_id, ownerId),
+  );
+  return rankNotes(live, {
+    type: options.type,
+    categoryId: options.categoryId,
+    query: options.query,
+    limit: options.limit,
+    skipPrefix: HOLD_REFUND_NOTE_PREFIX,
+  });
 }
 
 export async function listTransactionsForYear(

@@ -1,16 +1,24 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { AmountKeypad } from "@/components/AmountKeypad";
 import { BankHoldingField } from "@/components/BankHoldingField";
 import { useBook } from "@/components/BookProvider";
 import { CategoryPickerGrid } from "@/components/CategoryPickerGrid";
+import { NoteSuggest } from "@/components/NoteSuggest";
 import { TreatTagField } from "@/components/TreatTagField";
-import { createTransaction, updateTransaction } from "@/lib/db/crud";
+import { createTransaction, listRecentNotes, updateTransaction } from "@/lib/db/crud";
 import { formatCalcNumber } from "@/lib/calculator";
 import { formatMoney, isIsoDate, todayLocal } from "@/lib/format";
 import { isSpendableBankHolding } from "@/lib/holding-spend";
+import {
+  preferredStoredId,
+  rememberAccount,
+  rememberHolding,
+  useRememberedAccount,
+  useRememberedHolding,
+} from "@/lib/last-account";
 import {
   preferredCategoryId,
   rememberCategory,
@@ -42,7 +50,7 @@ export function TransactionForm({
   accounts: Account[];
   categories: Category[];
   initial?: Transaction | null;
-  onSaved?: () => void;
+  onSaved?: (saved: { date: string }) => void;
   /** Drop the outer card chrome when the form lives inside a sheet. */
   bare?: boolean;
   /** Prefill date when creating (e.g. calendar day). */
@@ -70,9 +78,10 @@ export function TransactionForm({
   );
   const [note, setNote] = useState(initial?.note ?? "");
   const [accountId, setAccountId] = useState(
-    initial?.account_id ?? defaultAccountId ?? accounts[0]?.id ?? "",
+    initial?.account_id ?? defaultAccountId ?? "",
   );
   const [holdingId, setHoldingId] = useState(initial?.holding_id ?? "");
+  const [noteSuggestions, setNoteSuggestions] = useState<string[]>([]);
   const [categoryId, setCategoryId] = useState(initial?.category_id ?? "");
   const [treat, setTreat] = useState(initial?.tag === TREAT_TAG);
   const [keypadTarget, setKeypadTarget] = useState<KeypadTarget | null>(null);
@@ -109,7 +118,13 @@ export function TransactionForm({
     return categories.filter((category) => category.kind === type);
   }, [categories, type]);
 
-  const effectiveAccountId = accountId || accounts[0]?.id || "";
+  const rememberedAccount = useRememberedAccount(bookId);
+  const rememberedHolding = useRememberedHolding(bookId);
+  const effectiveAccountId = preferredStoredId(
+    accountId,
+    defaultAccountId || rememberedAccount,
+    accounts.map((account) => account.id),
+  );
   const selectedAccount =
     accounts.find((account) => account.id === effectiveAccountId) ?? null;
   const bankMove =
@@ -119,11 +134,11 @@ export function TransactionForm({
   const spendableHoldings = holdings.filter((holding) =>
     isSpendableBankHolding(holding.kind),
   );
-  const effectiveHoldingId =
-    holdingId ||
-    (!isEdit && bankMove && spendableHoldings.length === 1
-      ? spendableHoldings[0].id
-      : "");
+  const effectiveHoldingId = preferredStoredId(
+    holdingId,
+    !isEdit && bankMove ? rememberedHolding : "",
+    spendableHoldings.map((holding) => holding.id),
+  );
   const rememberedCategory = useRememberedCategory(type);
   const effectiveCategoryId =
     type === "hold"
@@ -133,6 +148,20 @@ export function TransactionForm({
           rememberedCategory,
           filteredCategories.map((category) => category.id),
         );
+
+  useEffect(() => {
+    if (!bookId || isEdit) return;
+    let cancelled = false;
+    void listRecentNotes(bookId, {
+      type,
+      categoryId: type === "hold" ? null : effectiveCategoryId || null,
+    }).then((notes) => {
+      if (!cancelled) setNoteSuggestions(notes);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [bookId, isEdit, type, effectiveCategoryId]);
 
   const estimatedSelfPay =
     type === "expense" &&
@@ -234,8 +263,12 @@ export function TransactionForm({
       if ((type === "expense" || type === "income") && effectiveCategoryId) {
         rememberCategory(type, String(effectiveCategoryId));
       }
+      if (bookId && effectiveAccountId) rememberAccount(bookId, effectiveAccountId);
+      if (bookId && bankMove && effectiveHoldingId) {
+        rememberHolding(bookId, effectiveHoldingId);
+      }
       void runSync();
-      onSaved?.();
+      onSaved?.({ date });
     } catch (err) {
       setError(err instanceof Error ? err.message : "儲存失敗");
     } finally {
@@ -354,19 +387,15 @@ export function TransactionForm({
           </div>
         ) : null}
 
-        <label className="block">
-          <span className="mb-1 block text-xs text-[var(--muted)]">
-            {type === "hold" ? "扣住項目" : "備註"}
-          </span>
-          <input
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder={
-              type === "hold" ? "例：宿舍押金、電費預繳" : "例：便當、請客"
-            }
-            className="min-h-12 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-3 text-base outline-none focus:border-[var(--accent)]"
-          />
-        </label>
+        <NoteSuggest
+          label={type === "hold" ? "扣住項目" : "備註"}
+          value={note}
+          onChange={setNote}
+          suggestions={isEdit ? [] : noteSuggestions}
+          placeholder={
+            type === "hold" ? "例：宿舍押金、電費預繳" : "例：便當、家樂福"
+          }
+        />
 
         {type !== "hold" ? (
           <div className="block">

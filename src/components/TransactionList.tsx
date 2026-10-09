@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CategoryIcon } from "@/components/CategoryIcon";
 import { useBook } from "@/components/BookProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
@@ -65,6 +65,21 @@ function IconEdit({ className }: { className?: string }) {
     >
       <path d="M12 20h9" />
       <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
+function IconMore({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      aria-hidden
+    >
+      <circle cx="5" cy="12" r="1.8" />
+      <circle cx="12" cy="12" r="1.8" />
+      <circle cx="19" cy="12" r="1.8" />
     </svg>
   );
 }
@@ -137,6 +152,7 @@ export function TransactionList({
   const confirm = useConfirm();
   const { show } = useToast();
 
+  const [menuId, setMenuId] = useState<string | null>(null);
   const holdings = useHoldings();
   const accountMap = useMemo(
     () =>
@@ -184,11 +200,30 @@ export function TransactionList({
     return result;
   }, [transactions, groupByDay, categoryMap]);
 
+  useEffect(() => {
+    if (!menuId) return;
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("[data-row-menu]")) return;
+      setMenuId(null);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenuId(null);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuId]);
+
   async function onDuplicate(tx: Transaction) {
     if (tx.type === "invest") return;
     try {
       const copy = await duplicateTransaction(tx.id, todayLocal());
       if (!copy) return;
+      setMenuId(null);
       void runSync();
       show("已複製到今天", { variant: "success" });
     } catch (err) {
@@ -264,6 +299,7 @@ export function TransactionList({
       destructive: true,
     });
     if (!ok) return;
+    setMenuId(null);
     try {
       const deleted = await softDeleteTransaction(tx.id);
       void runSync();
@@ -298,7 +334,7 @@ export function TransactionList({
 
   return (
     <div className="space-y-3">
-      {groups.map((group) => {
+      {groups.map((group, groupIndex) => {
         const dayExpense = group.items
           .filter((tx) => tx.type === "expense")
           .reduce((sum, tx) => sum + expenseDisplayAmount(tx), 0);
@@ -316,14 +352,15 @@ export function TransactionList({
         return (
           <section
             key={group.date || "all"}
+            id={groupByDay && group.date ? `day-${group.date}` : undefined}
             className={
               asCard
-                ? "overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]"
+                ? "scroll-mt-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)]"
                 : "space-y-2"
             }
           >
             {groupByDay ? (
-              <div className="flex items-center justify-between gap-2 border-b border-[var(--line)] py-1 pl-3 pr-1.5">
+              <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-t-2xl border-b border-[var(--line)] bg-[var(--surface)] py-1 pl-3 pr-1.5">
                 <p className="min-w-0 text-xs font-medium text-[var(--ink)]">
                   {formatDayHeading(group.date)}
                   <span className="ml-1.5 font-normal text-[var(--muted)]">
@@ -362,7 +399,10 @@ export function TransactionList({
             ) : null}
 
             <ul className={asCard ? "divide-y divide-[var(--line)]" : "space-y-2"}>
-              {group.items.map((tx) => {
+              {group.items.map((tx, itemIndex) => {
+                const menuOpensUp =
+                  groupIndex === groups.length - 1 &&
+                  itemIndex === group.items.length - 1;
                 const isHold = tx.type === "hold";
                 const holdReleased =
                   isHold && tx.hold_status === "released";
@@ -529,37 +569,65 @@ export function TransactionList({
                           撤銷
                         </button>
                       ) : null}
-                      {onEdit ? (
+                      <div className="relative" data-row-menu>
                         <button
                           type="button"
-                          className={`${actionBtn} hover:text-[var(--accent)]`}
-                          aria-label="編輯"
-                          title="編輯"
-                          onClick={() => onEdit(tx)}
+                          className={`${actionBtn} hover:text-[var(--ink)]`}
+                          aria-label="更多動作"
+                          aria-haspopup="menu"
+                          aria-expanded={menuId === tx.id}
+                          title="更多"
+                          onClick={() =>
+                            setMenuId((current) => (current === tx.id ? null : tx.id))
+                          }
                         >
-                          <IconEdit className="h-4 w-4" />
+                          <IconMore className="h-4 w-4" />
                         </button>
-                      ) : null}
-                      {tx.type === "invest" ? null : (
-                      <button
-                        type="button"
-                        className={`${actionBtn} hover:text-[var(--accent)]`}
-                        aria-label="複製到今天"
-                        title="複製到今天"
-                        onClick={() => void onDuplicate(tx)}
-                      >
-                        <IconCopyToday className="h-4 w-4" />
-                      </button>
-                      )}
-                      <button
-                        type="button"
-                        className={`${actionBtn} hover:text-rose-600`}
-                        aria-label="刪除"
-                        title="刪除"
-                        onClick={() => void onDelete(tx)}
-                      >
-                        <IconTrash className="h-4 w-4" />
-                      </button>
+                        {menuId === tx.id ? (
+                          <div
+                            role="menu"
+                            className={[
+                              "absolute right-0 z-[60] min-w-36 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-lg",
+                              menuOpensUp ? "bottom-full mb-1" : "top-full mt-1",
+                            ].join(" ")}
+                          >
+                            {onEdit ? (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-[var(--ink)] active:bg-[var(--paper)]"
+                                onClick={() => {
+                                  setMenuId(null);
+                                  onEdit(tx);
+                                }}
+                              >
+                                <IconEdit className="h-4 w-4 text-[var(--muted)]" />
+                                編輯
+                              </button>
+                            ) : null}
+                            {tx.type === "invest" ? null : (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-[var(--ink)] active:bg-[var(--paper)]"
+                                onClick={() => void onDuplicate(tx)}
+                              >
+                                <IconCopyToday className="h-4 w-4 text-[var(--muted)]" />
+                                複製到今天
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-rose-700 active:bg-rose-50"
+                              onClick={() => void onDelete(tx)}
+                            >
+                              <IconTrash className="h-4 w-4" />
+                              刪除
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 );

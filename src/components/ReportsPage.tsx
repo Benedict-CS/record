@@ -316,6 +316,27 @@ export function ReportsPage() {
                     if (scope === "month") setMonth(next.month);
                   }}
                 />
+                {scope === "month" && !isCurrentMonth ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setYear(nowYear);
+                      setMonth(nowMonth);
+                    }}
+                    className="text-[11px] text-[var(--accent)] underline-offset-2 hover:underline"
+                  >
+                    回到本月
+                  </button>
+                ) : null}
+                {scope === "year" && !isCurrentYear ? (
+                  <button
+                    type="button"
+                    onClick={() => setYear(nowYear)}
+                    className="text-[11px] text-[var(--accent)] underline-offset-2 hover:underline"
+                  >
+                    回到今年
+                  </button>
+                ) : null}
                 {laterCount > 0 ? (
                   <p className="text-[11px] text-[var(--muted)]">
                     不含今天之後先入帳的 {laterCount} 筆

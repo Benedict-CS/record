@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { BackupNudge } from "@/components/BackupNudge";
 import { BottomSheet } from "@/components/BottomSheet";
+import { MonthBudgetHint } from "@/components/MonthBudgetHint";
 import { PendingHomeLink } from "@/components/PendingList";
 import { useBook } from "@/components/BookProvider";
 import { MonthSummary } from "@/components/MonthSummary";
@@ -158,6 +159,18 @@ export function HomePage() {
     setAddOpen(true);
   }
 
+  function jumpToDate(isoDate: string) {
+    const nextYear = Number(isoDate.slice(0, 4));
+    const nextMonth = Number(isoDate.slice(5, 7));
+    if (!nextYear || !nextMonth) return;
+    jumpTo(nextYear, nextMonth);
+    window.setTimeout(() => {
+      document
+        .getElementById(`day-${isoDate}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  }
+
   const addDay = addDate ? Number(addDate.slice(8, 10)) : undefined;
 
   function closeAddSheet() {
@@ -189,6 +202,11 @@ export function HomePage() {
             <BackupNudge />
             <PendingHomeLink />
           </div>
+          <MonthBudgetHint
+            year={year}
+            month={month}
+            transactions={transactions}
+          />
           <QuickTemplateBar />
           <section className="space-y-2">
             <div className="flex items-center justify-between gap-2">
@@ -196,9 +214,18 @@ export function HomePage() {
                 {isCurrentMonth ? "本月明細" : `${month} 月明細`}
               </h2>
               <div className="flex items-center gap-2">
+                {isCurrentMonth ? (
+                  <button
+                    type="button"
+                    onClick={() => jumpToDate(today)}
+                    className="min-h-11 rounded-xl px-2 text-xs font-medium text-[var(--accent)]"
+                  >
+                    今天
+                  </button>
+                ) : null}
                 <Link
                   href="/search"
-                  className="text-xs text-[var(--accent)] underline-offset-2 hover:underline"
+                  className="inline-flex min-h-11 items-center rounded-xl px-2 text-xs font-medium text-[var(--accent)]"
                 >
                   搜尋
                 </Link>
@@ -222,7 +249,7 @@ export function HomePage() {
                   aria-pressed={typeFilter === id}
                   onClick={() => setTypeFilter(id)}
                   className={[
-                    "min-h-10 rounded-xl text-xs font-medium",
+                    "min-h-11 rounded-xl text-xs font-medium",
                     typeFilter === id
                       ? id === "hold"
                         ? "bg-amber-800 text-white"
@@ -255,7 +282,7 @@ export function HomePage() {
                 onEdit={setEditing}
                 onAddForDate={openAdd}
                 groupByDay
-                emptyMessage="這個月還沒有紀錄，點右下角 + 開始。"
+                emptyMessage="這個月還沒有紀錄，點下方 + 開始。"
               />
             )}
           </section>
@@ -308,8 +335,9 @@ export function HomePage() {
             defaultDate={addDate ?? undefined}
             accounts={accounts}
             categories={categories}
-            onSaved={() => {
+            onSaved={(saved) => {
               closeAddSheet();
+              jumpToDate(saved.date);
               show("已記一筆", { variant: "success" });
             }}
           />

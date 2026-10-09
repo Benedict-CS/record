@@ -168,7 +168,20 @@ export function CalendarPage() {
               >
                 ‹
               </HoldStepButton>
-              <PeriodJump year={year} month={month} onChange={jumpTo} />
+              <div className="flex min-w-0 flex-col items-center">
+                <PeriodJump year={year} month={month} onChange={jumpTo} />
+                {year !== Number(today.slice(0, 4)) ||
+                month !== Number(today.slice(5, 7)) ||
+                selectedDate !== today ? (
+                  <button
+                    type="button"
+                    onClick={() => jumpTo(Number(today.slice(0, 4)), Number(today.slice(5, 7)))}
+                    className="text-[11px] text-[var(--accent)] underline-offset-2 hover:underline"
+                  >
+                    今天
+                  </button>
+                ) : null}
+              </div>
               <HoldStepButton
                 ariaLabel="下一個月"
                 title="下一個月，長按跳一年"

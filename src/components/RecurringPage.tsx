@@ -17,6 +17,13 @@ import { formatMoney } from "@/lib/format";
 import { MAX_SCHEDULED_MONTHS, scheduledMonthCount } from "@/lib/recurring";
 import { isSpendableBankHolding } from "@/lib/holding-spend";
 import {
+  preferredStoredId,
+  rememberAccount,
+  rememberHolding,
+  useRememberedAccount,
+  useRememberedHolding,
+} from "@/lib/last-account";
+import {
   useAccounts,
   useCategories,
   useHoldings,
@@ -85,8 +92,15 @@ export function RecurringPage({
   const [error, setError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const [saving, setSaving] = useState(false);
+  const rememberedAccount = useRememberedAccount(bookId);
+  const rememberedHolding = useRememberedHolding(bookId);
+  const chosenAccountId = preferredStoredId(
+    accountId,
+    rememberedAccount,
+    accounts.map((row) => row.id),
+  );
 
-  const account = accounts.find((row) => row.id === (accountId || accounts[0]?.id));
+  const account = accounts.find((row) => row.id === chosenAccountId);
   const parsedHold = holdOn ? Number(holdAmount || amount) : NaN;
   const wholeHeld =
     kind === "expense" &&
@@ -100,6 +114,11 @@ export function RecurringPage({
   const categories = kind === "income" ? incomeCategories : expenseCategories;
   const sources = holdings.filter((row) => isSpendableBankHolding(row.kind));
   const targets = holdings.filter((row) => row.kind === "fund" || row.kind === "stock");
+  const selectedHoldingId = preferredStoredId(
+    holdingId,
+    rememberedHolding,
+    sources.map((row) => row.id),
+  );
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -163,7 +182,7 @@ export function RecurringPage({
         return;
       }
     }
-    const chosenAccount = accountId || accounts[0]?.id;
+    const chosenAccount = chosenAccountId;
     if (!chosenAccount) {
       setError("請先建立帳戶");
       return;
@@ -176,7 +195,8 @@ export function RecurringPage({
       setError("請先建立收入分類");
       return;
     }
-    if ((kind === "invest" || bankLinked) && !holdingId && sources.length !== 1) {
+    const sourceId = selectedHoldingId;
+    if ((kind === "invest" || bankLinked) && !sourceId) {
       setError(
         sources.length === 0
           ? "請先到存款新增活存或定存"
@@ -186,8 +206,6 @@ export function RecurringPage({
       );
       return;
     }
-    const sourceId =
-      holdingId || (sources.length === 1 ? sources[0].id : "");
     if (kind === "invest" && !sourceId) {
       setError("請選擇扣款銀行");
       return;
@@ -221,6 +239,8 @@ export function RecurringPage({
         : await createRecurringRule(bookId, draft);
       const posted = await postDueRecurring(bookId);
       const saved = (await listRecurringRules(bookId)).find((row) => row.id === created.id);
+      rememberAccount(bookId, chosenAccount);
+      if (sourceId) rememberHolding(bookId, sourceId);
       void runSync();
       if (saved?.last_error) {
         show(saved.last_error, { variant: "error" });
@@ -436,7 +456,7 @@ export function RecurringPage({
               <label className="block">
                 <span className="mb-1 block text-xs text-[var(--muted)]">帳戶</span>
                 <select
-                  value={accountId || accounts[0]?.id || ""}
+                  value={chosenAccountId}
                   onChange={(event) => setAccountId(event.target.value)}
                   className="min-h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 text-sm"
                 >
@@ -541,7 +561,7 @@ export function RecurringPage({
                 </p>
               ) : (
                 <select
-                  value={holdingId}
+                  value={selectedHoldingId}
                   onChange={(event) => setHoldingId(event.target.value)}
                   className="min-h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 text-sm"
                 >

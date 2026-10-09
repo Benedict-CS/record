@@ -16,7 +16,8 @@ import {
   updateTransaction,
 } from "@/lib/db/crud";
 import { formatMoney, isIsoDate, todayLocal } from "@/lib/format";
-import { preferredCategoryId } from "@/lib/last-category";
+import { rememberAccount, rememberHolding } from "@/lib/last-account";
+import { preferredCategoryId, rememberCategory } from "@/lib/last-category";
 import { TREAT_TAG } from "@/lib/transaction-tag";
 import { useHoldings } from "@/lib/hooks/useLedgerData";
 import { runSync } from "@/lib/sync/engine";
@@ -263,6 +264,11 @@ export function TransactionEditor({
         holding_id: bankMove && holdingId ? holdingId : null,
         tag: type === "expense" && treat ? TREAT_TAG : null,
       });
+      if ((type === "expense" || type === "income") && effectiveCategoryId) {
+        rememberCategory(type, String(effectiveCategoryId));
+      }
+      if (book?.id && effectiveAccountId) rememberAccount(book.id, effectiveAccountId);
+      if (book?.id && bankMove && holdingId) rememberHolding(book.id, holdingId);
       void runSync();
       onClose();
     } catch (err) {
