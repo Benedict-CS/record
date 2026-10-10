@@ -287,8 +287,12 @@ export function useAccountFlowTotals(accountId: string | null) {
 }
 
 export function useDateTransactions(date: string) {
+  return useDateTransactionsQuery(date).items;
+}
+
+export function useDateTransactionsQuery(date: string) {
   const { bookId } = useBook();
-  return useLiveList<Transaction>(
+  return useLiveQueryList<Transaction>(
     () =>
       bookId && date
         ? listTransactionsForDate(bookId, date)

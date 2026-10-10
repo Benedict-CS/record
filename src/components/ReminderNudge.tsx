@@ -74,7 +74,7 @@ export function ReminderNudge() {
 
   return (
     <section
-      aria-label="記帳提醒"
+      aria-label="今天記了沒"
       className="flex items-start gap-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 py-3"
     >
       <span
@@ -85,7 +85,7 @@ export function ReminderNudge() {
       </span>
 
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-[var(--ink)]">今天還沒記帳</p>
+        <p className="text-sm font-semibold text-[var(--ink)]">今天記了沒</p>
         <p className="mt-0.5 text-xs leading-relaxed text-[var(--muted)]">
           花十秒補上今天的花費，月底報表才會準。
         </p>

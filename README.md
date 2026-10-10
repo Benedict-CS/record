@@ -31,6 +31,7 @@ Live site: https://record.benedicttiong.site
 - Monthly budgets; amount keypad (amount **0** allowed, e.g. 請客)
 - CSV export; JSON backup; import 豬豬記帳 history into the TWD book (through 2025; occupied months skipped)
 - Privacy page + delete signed-in account (`/privacy`, `/delete-account`)
+- Daily reminder at a chosen time: home card「今天記了沒」plus an optional system notification (PWA; not a guaranteed alarm)
 - Installable PWA · light UI only (**no dark mode**)
 
 ## Local setup

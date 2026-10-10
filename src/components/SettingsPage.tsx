@@ -23,6 +23,7 @@ import {
   getReminderSettingsSnapshot,
   requestNotificationPermission,
   setReminderSettings,
+  showReminderNotification,
   subscribeNotificationPermission,
   subscribeReminderSettings,
   type NotificationOutcome,
@@ -262,7 +263,7 @@ export function SettingsPage() {
           <div className="border-b border-[var(--line)] px-4 py-3">
             <h2 className="text-sm font-medium text-[var(--ink)]">記帳提醒</h2>
             <p className="mt-0.5 text-xs leading-relaxed text-[var(--muted)]">
-              到了設定時間還沒記帳，開啟 App 時會提醒你一次。
+              每天固定時間還沒記帳，首頁會跳出「今天記了沒」。允許通知後也會推一則系統通知。
             </p>
           </div>
 
@@ -328,9 +329,25 @@ export function SettingsPage() {
             >
               啟用瀏覽器通知
             </button>
+            {permission === "granted" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (showReminderNotification()) {
+                    show("已送出「今天記了沒」", { variant: "success" });
+                  } else {
+                    show("現在無法送出通知", { variant: "error" });
+                  }
+                }}
+                className="min-h-11 w-full rounded-xl border border-[var(--line)] px-4 text-sm font-medium text-[var(--ink)]"
+              >
+                試送一則「今天記了沒」
+              </button>
+            ) : null}
             <p className="text-xs leading-relaxed text-[var(--muted)]">
-              iOS 需要先把這個 App「加入主畫面」並從主畫面開啟，才能接收通知；
-              在 Safari 分頁中無法啟用。即使不開通知，頁面上的提醒卡片仍會顯示。
+              開啟 App 時會檢查；已加到主畫面的 Android Chrome，背景偶爾也會再看一次（不是準點鬧鐘）。
+              iOS 要先「加入主畫面」並從圖示打開；App 被完全關掉後，通常要再打開一次才會推。
+              PWA 沒辦法像系統鬧鐘那樣保證每天剛好那一分鐘叫醒。即使不開通知，頁面上的卡片仍會顯示。
             </p>
           </div>
         </section>

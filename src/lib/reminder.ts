@@ -1,14 +1,26 @@
 /**
  * Bookkeeping reminder settings.
  *
- * Everything lives in localStorage so the feature keeps working offline and
- * needs no extra dependency. All browser APIs are guarded for SSR and for
- * browsers that ship without the Notification API (iOS Safari in a tab).
+ * Preferences stay in localStorage so the feature works offline. A compact
+ * clock copy also lives in a separate IndexedDB (`ledger_reminder`) so the
+ * service worker can decide whether to fire without opening Dexie / bumping
+ * `ledger_db`. All browser APIs are guarded for SSR and for browsers that
+ * ship without the Notification API (iOS Safari in a tab).
  */
 
 const SETTINGS_KEY = "ledger:reminder-settings";
 const DISMISSED_KEY = "ledger:reminder-dismissed-on";
 const NOTIFIED_KEY = "ledger:reminder-notified-on";
+
+const CLOCK_DB = "ledger_reminder";
+const CLOCK_STORE = "clock";
+const CLOCK_KEY = "current";
+
+/** Tag shared by the page, the service worker, and notificationclick. */
+export const REMINDER_SYNC_TAG = "ledger-daily-reminder";
+export const REMINDER_NOTIFICATION_TITLE = "今天記了沒";
+export const REMINDER_NOTIFICATION_BODY = "花十秒補上今天的花費。";
+export const REMINDER_OPEN_URL = "/#quick-add";
 
 /** 24h local wall-clock time used when the user has never picked one. */
 export const DEFAULT_REMINDER_TIME = "21:00";
@@ -19,11 +31,28 @@ export type ReminderSettings = {
   time: string;
 };
 
+/** Compact snapshot the service worker can read without Dexie. */
+export type ReminderClock = {
+  enabled: boolean;
+  time: string;
+  lastEntryDate: string | null;
+  notifiedOn: string | null;
+  dismissedOn: string | null;
+};
+
 export type NotificationOutcome = NotificationPermission | "unsupported";
 
 const DEFAULT_SETTINGS: ReminderSettings = {
   enabled: false,
   time: DEFAULT_REMINDER_TIME,
+};
+
+const EMPTY_CLOCK: ReminderClock = {
+  enabled: false,
+  time: DEFAULT_REMINDER_TIME,
+  lastEntryDate: null,
+  notifiedOn: null,
+  dismissedOn: null,
 };
 
 function isBrowser() {
@@ -50,7 +79,7 @@ function writeKey(key: string, value: string) {
 }
 
 /** Clamps any user/stored input into a valid "HH:MM" string. */
-function normalizeTime(value: unknown): string {
+export function normalizeReminderTime(value: unknown): string {
   if (typeof value !== "string") return DEFAULT_REMINDER_TIME;
   const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
   if (!match) return DEFAULT_REMINDER_TIME;
@@ -59,17 +88,65 @@ function normalizeTime(value: unknown): string {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
-function minutesOfTime(time: string): number {
-  const [hours, minutes] = normalizeTime(time).split(":");
+export function minutesOfTime(time: string): number {
+  const [hours, minutes] = normalizeReminderTime(time).split(":");
   return Number(hours) * 60 + Number(minutes);
 }
 
 /** Local (not UTC) YYYY-MM-DD key, so "today" matches the user's calendar. */
-function dateKey(date: Date): string {
+export function localDateKey(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+function laterDate(a: string | null | undefined, b: string | null | undefined) {
+  if (!a) return b ?? null;
+  if (!b) return a;
+  return a >= b ? a : b;
+}
+
+/**
+ * True when the reminder time has passed, nothing was recorded today, and
+ * the user has not already dismissed the nudge today.
+ */
+export function reminderIsDue(input: {
+  enabled: boolean;
+  time: string;
+  hasEntryToday: boolean;
+  dismissedOn: string | null;
+  now: Date;
+}): boolean {
+  if (!input.enabled) return false;
+  if (input.hasEntryToday) return false;
+  const nowMinutes = input.now.getHours() * 60 + input.now.getMinutes();
+  if (nowMinutes < minutesOfTime(input.time)) return false;
+  return input.dismissedOn !== localDateKey(input.now);
+}
+
+/** Service-worker / page shared rule for a one-shot daily notification. */
+export function reminderShouldNotify(input: {
+  enabled: boolean;
+  time: string;
+  lastEntryDate: string | null;
+  notifiedOn: string | null;
+  dismissedOn: string | null;
+  now: Date;
+}): boolean {
+  const today = localDateKey(input.now);
+  if (
+    !reminderIsDue({
+      enabled: input.enabled,
+      time: input.time,
+      hasEntryToday: input.lastEntryDate === today,
+      dismissedOn: input.dismissedOn,
+      now: input.now,
+    })
+  ) {
+    return false;
+  }
+  return input.notifiedOn !== today;
 }
 
 export function getReminderSettings(): ReminderSettings {
@@ -80,7 +157,7 @@ export function getReminderSettings(): ReminderSettings {
     if (!parsed || typeof parsed !== "object") return { ...DEFAULT_SETTINGS };
     return {
       enabled: parsed.enabled === true,
-      time: normalizeTime(parsed.time),
+      time: normalizeReminderTime(parsed.time),
     };
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -91,10 +168,12 @@ export function getReminderSettings(): ReminderSettings {
 export function setReminderSettings(next: ReminderSettings): ReminderSettings {
   const normalized: ReminderSettings = {
     enabled: next.enabled === true,
-    time: normalizeTime(next.time),
+    time: normalizeReminderTime(next.time),
   };
   writeKey(SETTINGS_KEY, JSON.stringify(normalized));
   emitSettings();
+  void publishReminderClock();
+  void registerDailyReminderSync();
   return normalized;
 }
 
@@ -108,20 +187,18 @@ export function shouldNudgeToday(
   now: Date = new Date(),
 ): boolean {
   if (!isBrowser()) return false;
-  if (hasEntryToday) return false;
-
-  const settings = getReminderSettings();
-  if (!settings.enabled) return false;
-
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  if (nowMinutes < minutesOfTime(settings.time)) return false;
-
-  return readKey(DISMISSED_KEY) !== dateKey(now);
+  return reminderIsDue({
+    ...getReminderSettings(),
+    hasEntryToday,
+    dismissedOn: readKey(DISMISSED_KEY),
+    now,
+  });
 }
 
 /** Hides the nudge until the next calendar day. */
 export function dismissNudgeForToday(now: Date = new Date()): void {
-  writeKey(DISMISSED_KEY, dateKey(now));
+  writeKey(DISMISSED_KEY, localDateKey(now));
+  void publishReminderClock();
 }
 
 /* ------------------------------------------------------------------ *
@@ -203,29 +280,57 @@ export async function requestNotificationPermission(): Promise<NotificationOutco
     return Notification.permission;
   } finally {
     permissionListeners.forEach((listener) => listener());
+    void registerDailyReminderSync();
   }
 }
 
+type PeriodicSyncRegistration = ServiceWorkerRegistration & {
+  periodicSync?: {
+    register: (tag: string, options?: { minInterval: number }) => Promise<void>;
+    unregister: (tag: string) => Promise<void>;
+  };
+};
+
 /**
- * Fires a single system notification per day when the reminder is due.
- * Returns true only when a notification was actually shown.
+ * Best-effort background check on installed Chromium PWAs. Browsers usually
+ * enforce a long minimum interval (often 12h) and never promise an exact
+ * wall-clock fire. iOS does not implement this API.
  */
-export function notifyIfDue(
-  hasEntryToday: boolean,
-  now: Date = new Date(),
-): boolean {
+export async function registerDailyReminderSync(): Promise<boolean> {
+  if (!isBrowser() || !("serviceWorker" in navigator)) return false;
+  try {
+    const registration = (await navigator.serviceWorker
+      .ready) as PeriodicSyncRegistration;
+    const periodic = registration.periodicSync;
+    if (!periodic) return false;
+    if (!getReminderSettings().enabled) {
+      await periodic.unregister(REMINDER_SYNC_TAG).catch(() => undefined);
+      return false;
+    }
+    await periodic.register(REMINDER_SYNC_TAG, {
+      minInterval: 12 * 60 * 60 * 1000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function reminderNotificationOptions(): NotificationOptions {
+  return {
+    body: REMINDER_NOTIFICATION_BODY,
+    tag: REMINDER_SYNC_TAG,
+    icon: "/icons/icon-192.png",
+    data: { url: REMINDER_OPEN_URL },
+  };
+}
+
+/** Shows the system notification. Returns false when the browser refused. */
+export function showReminderNotification(): boolean {
   if (!notificationsSupported()) return false;
   if (Notification.permission !== "granted") return false;
-  if (!shouldNudgeToday(hasEntryToday, now)) return false;
-
-  const today = dateKey(now);
-  if (readKey(NOTIFIED_KEY) === today) return false;
-
-  const title = "記帳提醒";
-  const options: NotificationOptions = {
-    body: "今天還沒記帳，花十秒補上吧。",
-    tag: "ledger-daily-reminder",
-  };
+  const title = REMINDER_NOTIFICATION_TITLE;
+  const options = reminderNotificationOptions();
   try {
     const worker = navigator.serviceWorker;
     if (worker) {
@@ -237,11 +342,130 @@ export function notifyIfDue(
     } else {
       new Notification(title, options);
     }
+    return true;
   } catch {
     // Some browsers require a service worker registration to construct one.
     return false;
   }
+}
 
+/**
+ * Fires a single system notification per day when the reminder is due.
+ * Returns true only when a notification was actually shown.
+ */
+export function notifyIfDue(
+  hasEntryToday: boolean,
+  now: Date = new Date(),
+): boolean {
+  const settings = getReminderSettings();
+  const today = localDateKey(now);
+  if (
+    !reminderShouldNotify({
+      enabled: settings.enabled,
+      time: settings.time,
+      lastEntryDate: hasEntryToday ? today : null,
+      notifiedOn: readKey(NOTIFIED_KEY),
+      dismissedOn: readKey(DISMISSED_KEY),
+      now,
+    })
+  ) {
+    return false;
+  }
+  if (!showReminderNotification()) return false;
   writeKey(NOTIFIED_KEY, today);
+  void publishReminderClock({
+    lastEntryDate: hasEntryToday ? today : null,
+    notifiedOn: today,
+  });
   return true;
+}
+
+/* ------------------------------------------------------------------ *
+ * Reminder clock (IndexedDB for the service worker)
+ * ------------------------------------------------------------------ */
+
+function openClockDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(CLOCK_DB, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(CLOCK_STORE)) {
+        db.createObjectStore(CLOCK_STORE);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("clock db"));
+  });
+}
+
+async function readClock(): Promise<ReminderClock | null> {
+  if (!isBrowser() || typeof indexedDB === "undefined") return null;
+  try {
+    const db = await openClockDb();
+    try {
+      const row = await new Promise<ReminderClock | undefined>((resolve, reject) => {
+        const request = db
+          .transaction(CLOCK_STORE, "readonly")
+          .objectStore(CLOCK_STORE)
+          .get(CLOCK_KEY);
+        request.onsuccess = () => resolve(request.result as ReminderClock | undefined);
+        request.onerror = () => reject(request.error);
+      });
+      return row ?? null;
+    } finally {
+      db.close();
+    }
+  } catch {
+    return null;
+  }
+}
+
+async function writeClock(clock: ReminderClock): Promise<void> {
+  if (!isBrowser() || typeof indexedDB === "undefined") return;
+  try {
+    const db = await openClockDb();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const request = db
+          .transaction(CLOCK_STORE, "readwrite")
+          .objectStore(CLOCK_STORE)
+          .put(clock, CLOCK_KEY);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    } finally {
+      db.close();
+    }
+  } catch {
+    // The page reminder still works from localStorage if this write fails.
+  }
+}
+
+/**
+ * Merge page state into the SW-readable clock. `lastEntryDate` is only
+ * overwritten when the caller knows whether today already has a booking.
+ */
+export async function publishReminderClock(
+  patch: Partial<ReminderClock> = {},
+): Promise<ReminderClock> {
+  const settings = getReminderSettings();
+  const previous = await readClock();
+  const clock: ReminderClock = {
+    enabled: settings.enabled,
+    time: settings.time,
+    lastEntryDate:
+      patch.lastEntryDate !== undefined
+        ? patch.lastEntryDate
+        : (previous?.lastEntryDate ?? EMPTY_CLOCK.lastEntryDate),
+    notifiedOn: laterDate(
+      patch.notifiedOn ?? readKey(NOTIFIED_KEY),
+      previous?.notifiedOn,
+    ),
+    dismissedOn: laterDate(
+      patch.dismissedOn ?? readKey(DISMISSED_KEY),
+      previous?.dismissedOn,
+    ),
+  };
+  await writeClock(clock);
+  return clock;
 }
