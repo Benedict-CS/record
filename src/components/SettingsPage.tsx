@@ -29,6 +29,7 @@ import {
   type NotificationOutcome,
   type ReminderSettings,
 } from "@/lib/reminder";
+import { webPushConfigured } from "@/lib/push/cloud";
 
 /** The time picker fires on every digit, so hold the toast back a moment. */
 const SAVE_TOAST_DELAY = 700;
@@ -345,9 +346,11 @@ export function SettingsPage() {
               </button>
             ) : null}
             <p className="text-xs leading-relaxed text-[var(--muted)]">
-              開啟 App 時會檢查；已加到主畫面的 Android Chrome，背景偶爾也會再看一次（不是準點鬧鐘）。
-              iOS 要先「加入主畫面」並從圖示打開；App 被完全關掉後，通常要再打開一次才會推。
-              PWA 沒辦法像系統鬧鐘那樣保證每天剛好那一分鐘叫醒。即使不開通知，頁面上的卡片仍會顯示。
+              {user && webPushConfigured()
+                ? "登入後，關掉 App 也會依雲端有沒有今天的帳推一則「今天記了沒」（iPhone 要先加入主畫面）。通知會寫今天幾筆；預算用到 80% 也會寫上去。"
+                : "開啟 App 時會檢查。登入並設定雲端推播後，關掉 App 也能收到。"}
+              {" "}
+              即使不開通知，頁面上的卡片仍會顯示。
             </p>
           </div>
         </section>

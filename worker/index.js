@@ -103,6 +103,23 @@ self.addEventListener("periodicsync", (event) => {
   }
 });
 
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = { body: event.data ? event.data.text() : "" };
+  }
+  event.waitUntil(
+    self.registration.showNotification(payload.title || REMINDER_TITLE, {
+      body: payload.body || REMINDER_BODY,
+      tag: REMINDER_TAG,
+      icon: "/icons/icon-192.png",
+      data: { url: payload.url || REMINDER_URL },
+    }),
+  );
+});
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const target = new URL(

@@ -7,7 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test": "npx --yes tsx src/lib/money.test.ts && npx --yes tsx src/lib/day-order.test.ts && npx --yes tsx src/lib/category-order.test.ts && npx --yes tsx src/lib/month-summary.test.ts && npx --yes tsx src/lib/summary-display.test.ts && npx --yes tsx src/lib/reimbursement.test.ts && npx --yes tsx src/lib/owner.test.ts && npx --yes tsx src/lib/holding-spend.test.ts && npx --yes tsx src/lib/account-name.test.ts && npx --yes tsx src/lib/sync/schema-compat.test.ts && npx --yes tsx src/lib/transaction-tag.test.ts && npx --yes tsx src/lib/recurring.test.ts && npx --yes tsx src/lib/open-items.test.ts && npx --yes tsx src/lib/backup-nudge.test.ts && npx --yes tsx src/lib/delete-account.test.ts && npx --yes tsx src/lib/piggy.test.ts && npx --yes tsx src/lib/sync/pull-page.test.ts && npx --yes tsx src/lib/period-jump.test.ts && npx --yes tsx src/lib/last-category.test.ts && npx --yes tsx src/lib/last-account.test.ts && npx --yes tsx src/lib/note-suggest.test.ts && npx --yes tsx src/lib/recent-search.test.ts && npx --yes tsx src/lib/reminder.test.ts",
+    "test": "npx --yes tsx src/lib/money.test.ts && npx --yes tsx src/lib/day-order.test.ts && npx --yes tsx src/lib/category-order.test.ts && npx --yes tsx src/lib/month-summary.test.ts && npx --yes tsx src/lib/summary-display.test.ts && npx --yes tsx src/lib/reimbursement.test.ts && npx --yes tsx src/lib/owner.test.ts && npx --yes tsx src/lib/holding-spend.test.ts && npx --yes tsx src/lib/account-name.test.ts && npx --yes tsx src/lib/sync/schema-compat.test.ts && npx --yes tsx src/lib/transaction-tag.test.ts && npx --yes tsx src/lib/recurring.test.ts && npx --yes tsx src/lib/open-items.test.ts && npx --yes tsx src/lib/backup-nudge.test.ts && npx --yes tsx src/lib/delete-account.test.ts && npx --yes tsx src/lib/piggy.test.ts && npx --yes tsx src/lib/sync/pull-page.test.ts && npx --yes tsx src/lib/period-jump.test.ts && npx --yes tsx src/lib/last-category.test.ts && npx --yes tsx src/lib/last-account.test.ts && npx --yes tsx src/lib/note-suggest.test.ts && npx --yes tsx src/lib/recent-search.test.ts && npx --yes tsx src/lib/reminder.test.ts && npx --yes tsx src/lib/reminder-copy.test.ts && npx --yes tsx src/lib/zoned-clock.test.ts",
     "health": "node scripts/health-check.js",
     "deploy": "vercel deploy --yes --prod --scope team_sGRRuKcFWr48UE0zblZkTCCe"
   },
@@ -18,7 +18,8 @@
     "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "recharts": "^3.10.1"
+    "recharts": "^3.10.1",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",
@@ -26,9 +27,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/web-push": "^3.6.4",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "allowScripts": {
+    "unrs-resolver": true
   }
 }

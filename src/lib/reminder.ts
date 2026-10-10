@@ -8,6 +8,17 @@
  * ship without the Notification API (iOS Safari in a tab).
  */
 
+import {
+  fetchReminderDates,
+  syncPushSubscription,
+  upsertReminderPrefs,
+} from "./push/cloud";
+import {
+  REMINDER_NOTIFICATION_BODY,
+  REMINDER_NOTIFICATION_TITLE,
+  reminderNotificationCopy,
+} from "./reminder-copy";
+
 const SETTINGS_KEY = "ledger:reminder-settings";
 const DISMISSED_KEY = "ledger:reminder-dismissed-on";
 const NOTIFIED_KEY = "ledger:reminder-notified-on";
@@ -18,8 +29,10 @@ const CLOCK_KEY = "current";
 
 /** Tag shared by the page, the service worker, and notificationclick. */
 export const REMINDER_SYNC_TAG = "ledger-daily-reminder";
-export const REMINDER_NOTIFICATION_TITLE = "今天記了沒";
-export const REMINDER_NOTIFICATION_BODY = "花十秒補上今天的花費。";
+export {
+  REMINDER_NOTIFICATION_BODY,
+  REMINDER_NOTIFICATION_TITLE,
+} from "./reminder-copy";
 export const REMINDER_OPEN_URL = "/#quick-add";
 
 /** 24h local wall-clock time used when the user has never picked one. */
@@ -107,6 +120,40 @@ function laterDate(a: string | null | undefined, b: string | null | undefined) {
   return a >= b ? a : b;
 }
 
+export function reminderCloudSnapshot() {
+  return {
+    ...getReminderSettings(),
+    notifiedOn: readKey(NOTIFIED_KEY),
+    dismissedOn: readKey(DISMISSED_KEY),
+    timeZone:
+      typeof Intl === "undefined"
+        ? "Asia/Taipei"
+        : Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Taipei",
+  };
+}
+
+/** Keep the later of local / cloud dates so a push and a local dismiss do not fight. */
+export function applyRemoteReminderDates(input: {
+  notifiedOn?: string | null;
+  dismissedOn?: string | null;
+}) {
+  const notified = laterDate(input.notifiedOn, readKey(NOTIFIED_KEY));
+  if (notified) writeKey(NOTIFIED_KEY, notified);
+  const dismissed = laterDate(input.dismissedOn, readKey(DISMISSED_KEY));
+  if (dismissed) writeKey(DISMISSED_KEY, dismissed);
+}
+
+function syncReminderToCloud() {
+  return upsertReminderPrefs(reminderCloudSnapshot());
+}
+
+export async function pullReminderFromCloud(): Promise<boolean> {
+  const remote = await fetchReminderDates();
+  if (!remote) return false;
+  applyRemoteReminderDates(remote);
+  return true;
+}
+
 /**
  * True when the reminder time has passed, nothing was recorded today, and
  * the user has not already dismissed the nudge today.
@@ -134,19 +181,32 @@ export function reminderShouldNotify(input: {
   dismissedOn: string | null;
   now: Date;
 }): boolean {
-  const today = localDateKey(input.now);
-  if (
-    !reminderIsDue({
-      enabled: input.enabled,
-      time: input.time,
-      hasEntryToday: input.lastEntryDate === today,
-      dismissedOn: input.dismissedOn,
-      now: input.now,
-    })
-  ) {
-    return false;
-  }
-  return input.notifiedOn !== today;
+  return reminderShouldNotifyAt({
+    enabled: input.enabled,
+    time: input.time,
+    lastEntryDate: input.lastEntryDate,
+    notifiedOn: input.notifiedOn,
+    dismissedOn: input.dismissedOn,
+    dateKey: localDateKey(input.now),
+    minutes: input.now.getHours() * 60 + input.now.getMinutes(),
+  });
+}
+
+/** Same rule with a precomputed wall-clock, so cron can use the user's zone. */
+export function reminderShouldNotifyAt(input: {
+  enabled: boolean;
+  time: string;
+  lastEntryDate: string | null;
+  notifiedOn: string | null;
+  dismissedOn: string | null;
+  dateKey: string;
+  minutes: number;
+}): boolean {
+  if (!input.enabled) return false;
+  if (input.lastEntryDate === input.dateKey) return false;
+  if (input.dismissedOn === input.dateKey) return false;
+  if (input.minutes < minutesOfTime(input.time)) return false;
+  return input.notifiedOn !== input.dateKey;
 }
 
 export function getReminderSettings(): ReminderSettings {
@@ -174,6 +234,8 @@ export function setReminderSettings(next: ReminderSettings): ReminderSettings {
   emitSettings();
   void publishReminderClock();
   void registerDailyReminderSync();
+  void syncReminderToCloud();
+  if (normalized.enabled) void syncPushSubscription();
   return normalized;
 }
 
@@ -199,6 +261,7 @@ export function shouldNudgeToday(
 export function dismissNudgeForToday(now: Date = new Date()): void {
   writeKey(DISMISSED_KEY, localDateKey(now));
   void publishReminderClock();
+  void syncReminderToCloud();
 }
 
 /* ------------------------------------------------------------------ *
@@ -272,16 +335,19 @@ export function getNotificationPermission(): NotificationOutcome {
 
 export async function requestNotificationPermission(): Promise<NotificationOutcome> {
   if (!notificationsSupported()) return "unsupported";
-  if (Notification.permission !== "default") return Notification.permission;
-  try {
-    return await Notification.requestPermission();
-  } catch {
-    // Older Safari only supports the callback form and may reject outright.
-    return Notification.permission;
-  } finally {
-    permissionListeners.forEach((listener) => listener());
-    void registerDailyReminderSync();
+  let outcome: NotificationOutcome = Notification.permission;
+  if (outcome === "default") {
+    try {
+      outcome = await Notification.requestPermission();
+    } catch {
+      // Older Safari only supports the callback form and may reject outright.
+      outcome = Notification.permission;
+    }
   }
+  permissionListeners.forEach((listener) => listener());
+  void registerDailyReminderSync();
+  if (outcome === "granted") void syncPushSubscription();
+  return outcome;
 }
 
 type PeriodicSyncRegistration = ServiceWorkerRegistration & {
@@ -316,9 +382,9 @@ export async function registerDailyReminderSync(): Promise<boolean> {
   }
 }
 
-function reminderNotificationOptions(): NotificationOptions {
+function reminderNotificationOptions(body = REMINDER_NOTIFICATION_BODY): NotificationOptions {
   return {
-    body: REMINDER_NOTIFICATION_BODY,
+    body,
     tag: REMINDER_SYNC_TAG,
     icon: "/icons/icon-192.png",
     data: { url: REMINDER_OPEN_URL },
@@ -326,11 +392,14 @@ function reminderNotificationOptions(): NotificationOptions {
 }
 
 /** Shows the system notification. Returns false when the browser refused. */
-export function showReminderNotification(): boolean {
+export function showReminderNotification(copy?: {
+  title?: string;
+  body?: string;
+}): boolean {
   if (!notificationsSupported()) return false;
   if (Notification.permission !== "granted") return false;
-  const title = REMINDER_NOTIFICATION_TITLE;
-  const options = reminderNotificationOptions();
+  const title = copy?.title ?? REMINDER_NOTIFICATION_TITLE;
+  const options = reminderNotificationOptions(copy?.body);
   try {
     const worker = navigator.serviceWorker;
     if (worker) {
@@ -356,6 +425,7 @@ export function showReminderNotification(): boolean {
 export function notifyIfDue(
   hasEntryToday: boolean,
   now: Date = new Date(),
+  stats?: { todayCount?: number; budgetUsedPct?: number | null },
 ): boolean {
   const settings = getReminderSettings();
   const today = localDateKey(now);
@@ -371,12 +441,17 @@ export function notifyIfDue(
   ) {
     return false;
   }
-  if (!showReminderNotification()) return false;
+  const copy = reminderNotificationCopy({
+    todayCount: stats?.todayCount ?? (hasEntryToday ? 1 : 0),
+    budgetUsedPct: stats?.budgetUsedPct ?? null,
+  });
+  if (!showReminderNotification(copy)) return false;
   writeKey(NOTIFIED_KEY, today);
   void publishReminderClock({
     lastEntryDate: hasEntryToday ? today : null,
     notifiedOn: today,
   });
+  void syncReminderToCloud();
   return true;
 }
 

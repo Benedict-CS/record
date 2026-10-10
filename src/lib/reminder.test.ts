@@ -5,6 +5,7 @@ import {
   normalizeReminderTime,
   reminderIsDue,
   reminderShouldNotify,
+  reminderShouldNotifyAt,
 } from "./reminder";
 
 function assert(condition: unknown, label: string): asserts condition {
@@ -122,6 +123,31 @@ assert(
     now: evening,
   }) === false,
   "already booked today skips the push",
+);
+
+assert(
+  reminderShouldNotifyAt({
+    enabled: true,
+    time: "21:00",
+    lastEntryDate: null,
+    notifiedOn: null,
+    dismissedOn: null,
+    dateKey: "2026-10-10",
+    minutes: 21 * 60,
+  }) === true,
+  "zoned 21:00 is due",
+);
+assert(
+  reminderShouldNotifyAt({
+    enabled: true,
+    time: "21:00",
+    lastEntryDate: null,
+    notifiedOn: null,
+    dismissedOn: null,
+    dateKey: "2026-10-10",
+    minutes: 20 * 60 + 59,
+  }) === false,
+  "one minute early is not due",
 );
 
 console.log("reminder.test.ts ok");

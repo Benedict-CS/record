@@ -19,6 +19,7 @@
 | 登出 | ✅ | 登出後仍可離線記帳，不再雲端同步 |
 | 刪除帳號 | ✅ | `/delete-account`。需先在 Supabase 執行 `016_delete_own_account.sql`。刪雲端帳號與這台該帳號的紀錄；其他裝置的本機副本不會遠端清除 |
 | 多裝置同步 | ✅ | 同一帳號登入後，有網路時自動 sync |
+| 每天提醒「今天記了沒」 | ✅ | 本機卡片 + 開啟 App 時通知。登入且跑過 `017`、設好 VAPID／service role／cron 後，關掉 App 也能推 |
 | 忘記密碼／重設密碼（寄信） | ❌ **尚未做** | 需要寄信；Supabase 內建信箱有嚴格 rate limit，正式做建議先接自訂 SMTP |
 | Google／其他社群登入 | ❌ | 刻意不做 |
 | Username（非 Email）登入 | ✅ | 例如 `benedict` + 密碼。`009` 把 `ben111611@gmail.com` 改成這個名稱 |

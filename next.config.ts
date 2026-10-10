@@ -23,6 +23,7 @@ const withPWA = withPWAInit({
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   turbopack: {},
+  serverExternalPackages: ["web-push"],
 };
 
 export default withPWA(nextConfig);

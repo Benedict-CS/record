@@ -31,7 +31,7 @@ Live site: https://record.benedicttiong.site
 - Monthly budgets; amount keypad (amount **0** allowed, e.g. 請客)
 - CSV export; JSON backup; import 豬豬記帳 history into the TWD book (through 2025; occupied months skipped)
 - Privacy page + delete signed-in account (`/privacy`, `/delete-account`)
-- Daily reminder at a chosen time: home card「今天記了沒」plus an optional system notification (PWA; not a guaranteed alarm)
+- Daily reminder at a chosen time: home card「今天記了沒」plus an optional system notification. Signed-in devices can also get a Web Push after migration `017` and VAPID env vars (still not a guaranteed alarm on a free Vercel cron)
 - Installable PWA · light UI only (**no dark mode**)
 
 ## Local setup
