@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import {
   useCallback,
   useEffect,
@@ -70,6 +69,14 @@ export function ReminderNudge() {
     setDismissedOn(todayLocal());
   }, []);
 
+  const openQuickAdd = useCallback(() => {
+    if (window.location.hash === "#quick-add") {
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+      return;
+    }
+    window.location.hash = "quick-add";
+  }, []);
+
   if (!visible) return null;
 
   return (
@@ -90,12 +97,13 @@ export function ReminderNudge() {
           花十秒補上今天的花費，月底報表才會準。
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Link
-            href="/#quick-add"
+          <button
+            type="button"
+            onClick={openQuickAdd}
             className="inline-flex min-h-11 items-center rounded-xl bg-[var(--accent)] px-3 text-sm font-semibold text-[var(--surface)] active:scale-[0.98]"
           >
             現在記一筆
-          </Link>
+          </button>
           <button
             type="button"
             onClick={dismiss}
