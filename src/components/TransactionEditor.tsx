@@ -5,6 +5,7 @@ import { AmountKeypad } from "@/components/AmountKeypad";
 import { BankHoldingField } from "@/components/BankHoldingField";
 import { useBook } from "@/components/BookProvider";
 import { CategoryPickerGrid } from "@/components/CategoryPickerGrid";
+import { NoteSuggest } from "@/components/NoteSuggest";
 import { TreatTagField } from "@/components/TreatTagField";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useToast } from "@/components/ToastProvider";
@@ -13,10 +14,11 @@ import {
   markReimbursementReceived,
   releaseHold,
   undoReimbursementReceived,
+  listRecentNotes,
   updateTransaction,
 } from "@/lib/db/crud";
 import { formatMoney, isIsoDate, todayLocal } from "@/lib/format";
-import { rememberAccount, rememberHolding } from "@/lib/last-account";
+import { rememberAccount, rememberHolding, rememberTxType } from "@/lib/last-account";
 import { preferredCategoryId, rememberCategory } from "@/lib/last-category";
 import { TREAT_TAG } from "@/lib/transaction-tag";
 import { useHoldings } from "@/lib/hooks/useLedgerData";
@@ -64,6 +66,7 @@ export function TransactionEditor({
   const [holdingId, setHoldingId] = useState(transaction.holding_id ?? "");
   const [categoryId, setCategoryId] = useState(transaction.category_id ?? "");
   const [treat, setTreat] = useState(transaction.tag === TREAT_TAG);
+  const [noteSuggestions, setNoteSuggestions] = useState<string[]>([]);
   const [keypadTarget, setKeypadTarget] = useState<KeypadTarget | null>(null);
   const [saving, setSaving] = useState(false);
   const [releasing, setReleasing] = useState(false);
@@ -133,6 +136,20 @@ export function TransactionEditor({
         ? categoryId
         : null
       : preferredCategoryId(categoryId, "", availableCategoryIds);
+
+  useEffect(() => {
+    if (!book?.id) return;
+    let cancelled = false;
+    void listRecentNotes(book.id, {
+      type,
+      categoryId: type === "hold" ? null : effectiveCategoryId || null,
+    }).then((notes) => {
+      if (!cancelled) setNoteSuggestions(notes);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [book?.id, type, effectiveCategoryId]);
 
   const estimatedSelfPay =
     type === "expense" &&
@@ -264,6 +281,7 @@ export function TransactionEditor({
         holding_id: bankMove && holdingId ? holdingId : null,
         tag: type === "expense" && treat ? TREAT_TAG : null,
       });
+      rememberTxType(type);
       if ((type === "expense" || type === "income") && effectiveCategoryId) {
         rememberCategory(type, String(effectiveCategoryId));
       }
@@ -478,19 +496,15 @@ export function TransactionEditor({
               </p>
             ) : null}
 
-            <label className="block">
-              <span className="mb-1 block text-xs text-[var(--muted)]">
-                {type === "hold" ? "扣住項目" : "備註"}
-              </span>
-              <input
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-                placeholder={
-                  type === "hold" ? "例：宿舍押金、電費預繳" : "可選"
-                }
-                className="min-h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-              />
-            </label>
+            <NoteSuggest
+              label={type === "hold" ? "扣住項目" : "備註"}
+              value={note}
+              onChange={setNote}
+              suggestions={noteSuggestions}
+              placeholder={
+                type === "hold" ? "例：宿舍押金、電費預繳" : "例：便當、家樂福"
+              }
+            />
 
             {type !== "hold" ? (
               <div className="block">

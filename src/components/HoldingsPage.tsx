@@ -383,7 +383,7 @@ export function HoldingsPage() {
               type="button"
               onClick={() => setKindFilter("all")}
               className={[
-                "min-h-10 shrink-0 rounded-full px-3 text-xs",
+                "min-h-11 shrink-0 rounded-full px-3 text-xs",
                 kindFilter === "all"
                   ? "bg-[var(--accent)] text-white"
                   : "bg-[var(--surface)] text-[var(--muted)]",
@@ -400,7 +400,7 @@ export function HoldingsPage() {
                   type="button"
                   onClick={() => setKindFilter(item.id)}
                   className={[
-                    "min-h-10 shrink-0 rounded-full px-3 text-xs",
+                    "min-h-11 shrink-0 rounded-full px-3 text-xs",
                     kindFilter === item.id
                       ? "bg-[var(--accent)] text-white"
                       : "bg-[var(--surface)] text-[var(--muted)]",

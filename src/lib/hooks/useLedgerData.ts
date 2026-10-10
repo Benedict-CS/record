@@ -25,6 +25,7 @@ import {
   outstandingHeldTotal,
   searchTransactions,
 } from "@/lib/db/crud";
+import { listRecurringRules } from "@/lib/db/recurring-post";
 import { ledgerEndYear } from "@/lib/period-jump";
 import type {
   Account,
@@ -34,6 +35,7 @@ import type {
   Category,
   CategoryKind,
   Holding,
+  RecurringRule,
   Template,
   Transaction,
 } from "@/lib/types";
@@ -219,6 +221,14 @@ export function useHoldings() {
   );
 }
 
+export function useRecurringRules() {
+  const { bookId } = useBook();
+  return useLiveList<RecurringRule>(
+    () => (bookId ? listRecurringRules(bookId) : Promise.resolve([])),
+    [bookId],
+  );
+}
+
 export function useAccountBalances() {
   const { bookId } = useBook();
   return useLiveList<AccountBalance>(
@@ -315,6 +325,7 @@ export type {
   Budget,
   Category,
   Holding,
+  RecurringRule,
   Template,
   Transaction,
 };

@@ -20,6 +20,7 @@ import {
   useSeedReady,
   useTransactionsBetween,
 } from "@/lib/hooks/useLedgerData";
+import { rememberSearch, useRecentSearches } from "@/lib/recent-search";
 import type { Transaction, TransactionType } from "@/lib/types";
 
 type TypeFilter = "all" | TransactionType;
@@ -54,6 +55,7 @@ export function SearchPage() {
 
   const [input, setInput] = useState("");
   const [query, setQuery] = useState("");
+  const recentSearches = useRecentSearches();
   const [showFilters, setShowFilters] = useState(false);
   const [type, setType] = useState<TypeFilter>("all");
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
@@ -67,7 +69,9 @@ export function SearchPage() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setQuery(input.trim());
+      const next = input.trim();
+      setQuery(next);
+      if (next.length >= 2) rememberSearch(next);
     }, 200);
     return () => window.clearTimeout(timer);
   }, [input]);
@@ -198,6 +202,20 @@ export function SearchPage() {
               className="min-h-12 w-full rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-3 text-sm outline-none focus:border-[var(--accent)]"
             />
           </label>
+          {!input.trim() && recentSearches.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {recentSearches.map((term) => (
+                <button
+                  key={term}
+                  type="button"
+                  onClick={() => setInput(term)}
+                  className="max-w-full truncate rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-xs text-[var(--ink)]"
+                >
+                  {term}
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           <div className="flex items-center gap-2">
             <button

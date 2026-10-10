@@ -1,7 +1,9 @@
 import {
   dueDate,
+  nextUpcomingCharge,
   periodsDue,
   recurringTransactionId,
+  upcomingChargeLabel,
 } from "./recurring";
 
 function assert(condition: unknown, label: string): asserts condition {
@@ -119,5 +121,33 @@ assert(
   /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-a[0-9a-f]{3}-[0-9a-f]{12}$/.test(idA),
   "id is a uuid",
 );
+
+const upcoming = nextUpcomingCharge({
+  startMonth: "2026-01",
+  dayOfMonth: 15,
+  lastPosted: "2026-09",
+  today: "2026-10-09",
+});
+assert(upcoming?.date === "2026-10-15", "next charge is this month's due day");
+assert(upcoming?.daysUntil === 6, "days until the 15th from the 9th");
+assert(upcomingChargeLabel(6) === "還有 6 天", "upcoming label");
+assert(upcomingChargeLabel(0) === "今天", "due today");
+
+const afterPost = nextUpcomingCharge({
+  startMonth: "2026-01",
+  dayOfMonth: 15,
+  lastPosted: "2026-10",
+  today: "2026-10-16",
+});
+assert(afterPost?.date === "2026-11-15", "after posting, look at next month");
+
+const ended = nextUpcomingCharge({
+  startMonth: "2026-01",
+  endMonth: "2026-09",
+  dayOfMonth: 1,
+  lastPosted: "2026-09",
+  today: "2026-10-09",
+});
+assert(ended === null, "a finished rule has no next charge");
 
 console.log("recurring tests ok");

@@ -7,6 +7,7 @@ import { BackupNudge } from "@/components/BackupNudge";
 import { BottomSheet } from "@/components/BottomSheet";
 import { MonthBudgetHint } from "@/components/MonthBudgetHint";
 import { PendingHomeLink } from "@/components/PendingList";
+import { UpcomingRecurring } from "@/components/UpcomingRecurring";
 import { useBook } from "@/components/BookProvider";
 import { MonthSummary } from "@/components/MonthSummary";
 import { QuickTemplateBar } from "@/components/QuickTemplateBar";
@@ -207,6 +208,7 @@ export function HomePage() {
             month={month}
             transactions={transactions}
           />
+          <UpcomingRecurring />
           <QuickTemplateBar />
           <section className="space-y-2">
             <div className="flex items-center justify-between gap-2">

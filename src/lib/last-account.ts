@@ -23,6 +23,14 @@ export function lastHoldingStorageKey(bookId: string) {
   return `ledger_last_holding_${bookId}`;
 }
 
+export function lastTxTypeStorageKey() {
+  return "ledger_last_tx_type";
+}
+
+export function isFormTxType(value: string): value is "expense" | "income" | "hold" {
+  return value === "expense" || value === "income" || value === "hold";
+}
+
 function readKey(key: string) {
   try {
     return localStorage.getItem(key) ?? "";
@@ -50,6 +58,10 @@ export function rememberHolding(bookId: string, id: string) {
   writeKey(lastHoldingStorageKey(bookId), id);
 }
 
+export function rememberTxType(type: "expense" | "income" | "hold") {
+  writeKey(lastTxTypeStorageKey(), type);
+}
+
 function useStoredId(key: string) {
   return useSyncExternalStore(
     (onChange) => {
@@ -71,4 +83,8 @@ export function useRememberedAccount(bookId: string | null | undefined) {
 
 export function useRememberedHolding(bookId: string | null | undefined) {
   return useStoredId(bookId ? lastHoldingStorageKey(bookId) : "");
+}
+
+export function useRememberedTxType() {
+  return useStoredId(lastTxTypeStorageKey());
 }

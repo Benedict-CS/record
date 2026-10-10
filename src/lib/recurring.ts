@@ -81,6 +81,64 @@ export function periodsDue(input: {
   return periods;
 }
 
+function dateDiffDays(from: string, to: string): number {
+  const start = Date.UTC(
+    Number(from.slice(0, 4)),
+    Number(from.slice(5, 7)) - 1,
+    Number(from.slice(8, 10)),
+  );
+  const end = Date.UTC(
+    Number(to.slice(0, 4)),
+    Number(to.slice(5, 7)) - 1,
+    Number(to.slice(8, 10)),
+  );
+  return Math.round((end - start) / 86_400_000);
+}
+
+export function upcomingChargeLabel(daysUntil: number): string {
+  if (daysUntil === 0) return "今天";
+  if (daysUntil === 1) return "明天";
+  if (daysUntil === -1) return "昨天到期";
+  if (daysUntil < 0) return `${-daysUntil} 天前到期`;
+  return `還有 ${daysUntil} 天`;
+}
+
+/** Next month this rule will post, for home / the rule list. */
+export function nextUpcomingCharge(input: {
+  startMonth: string;
+  endMonth?: string | null;
+  dayOfMonth: number;
+  lastPosted: string | null;
+  today: string;
+}): { period: string; date: string; daysUntil: number } | null {
+  const start = monthIndex(input.startMonth);
+  if (start == null || !/^\d{4}-\d{2}-\d{2}$/.test(input.today)) return null;
+  const endLimit = input.endMonth ? monthIndex(input.endMonth) : null;
+  if (input.endMonth && endLimit == null) return null;
+
+  const [ty, tm] = input.today.split("-").map(Number);
+  const todayIndex = ty * 12 + tm;
+  let cursor = start;
+  if (input.lastPosted) {
+    const posted = monthIndex(input.lastPosted);
+    if (posted != null) cursor = Math.max(cursor, posted + 1);
+  }
+  cursor = Math.max(cursor, todayIndex - 1);
+
+  for (let step = 0; step < 14; step += 1) {
+    if (endLimit != null && cursor > endLimit) return null;
+    if (cursor >= start) {
+      const year = Math.floor((cursor - 1) / 12);
+      const month = cursor - year * 12;
+      const period = `${year}-${String(month).padStart(2, "0")}`;
+      const date = dueDate(year, month, input.dayOfMonth);
+      return { period, date, daysUntil: dateDiffDays(input.today, date) };
+    }
+    cursor += 1;
+  }
+  return null;
+}
+
 /** Stable id so two devices posting the same month collapse to one row. */
 export function recurringTransactionId(ruleId: string, period: string): string {
   let h0 = 0x811c9dc5;

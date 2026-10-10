@@ -13,8 +13,13 @@ import {
   softDeleteRecurringRule,
   updateRecurringRule,
 } from "@/lib/db/recurring-post";
-import { formatMoney } from "@/lib/format";
-import { MAX_SCHEDULED_MONTHS, scheduledMonthCount } from "@/lib/recurring";
+import { formatMoney, todayLocal } from "@/lib/format";
+import {
+  MAX_SCHEDULED_MONTHS,
+  nextUpcomingCharge,
+  scheduledMonthCount,
+  upcomingChargeLabel,
+} from "@/lib/recurring";
 import { isSpendableBankHolding } from "@/lib/holding-spend";
 import {
   preferredStoredId,
@@ -32,6 +37,22 @@ import { liveQuery } from "dexie";
 import { useEffect } from "react";
 import { runSync } from "@/lib/sync/engine";
 import type { RecurringRule } from "@/lib/types";
+
+function NextDueLine({ rule }: { rule: RecurringRule }) {
+  const next = nextUpcomingCharge({
+    startMonth: rule.start_month,
+    endMonth: rule.end_month,
+    dayOfMonth: rule.day_of_month,
+    lastPosted: rule.last_posted,
+    today: todayLocal(),
+  });
+  if (!next) return null;
+  return (
+    <p className="mt-1 text-xs tabular-nums text-[var(--ink)]">
+      下次 {next.date.slice(5).replace("-", "/")} · {upcomingChargeLabel(next.daysUntil)}
+    </p>
+  );
+}
 
 function useRules(bookId: string | null) {
   const [rules, setRules] = useState<RecurringRule[]>([]);
@@ -651,6 +672,7 @@ export function RecurringPage({
                       {rule.end_month ? `，${rule.end_month} 結束` : "，沒有結束"}
                       {rule.last_posted ? ` · 已入帳至 ${rule.last_posted}` : " · 尚未入帳"}
                     </p>
+                    <NextDueLine rule={rule} />
                     {rule.last_error ? (
                       <p className="mt-1 text-xs text-rose-700">{rule.last_error}</p>
                     ) : null}

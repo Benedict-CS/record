@@ -14,10 +14,13 @@ import { formatMoney, isIsoDate, todayLocal } from "@/lib/format";
 import { isSpendableBankHolding } from "@/lib/holding-spend";
 import {
   preferredStoredId,
+  isFormTxType,
   rememberAccount,
   rememberHolding,
+  rememberTxType,
   useRememberedAccount,
   useRememberedHolding,
+  useRememberedTxType,
 } from "@/lib/last-account";
 import {
   preferredCategoryId,
@@ -62,7 +65,15 @@ export function TransactionForm({
   const holdings = useHoldings();
   const isEdit = Boolean(initial?.id);
 
-  const [type, setType] = useState<FormType>(toFormType(initial?.type));
+  const [typeChoice, setTypeChoice] = useState<FormType | "">(
+    initial ? toFormType(initial.type) : "",
+  );
+  const rememberedType = useRememberedTxType();
+  const type: FormType = typeChoice
+    ? typeChoice
+    : isFormTxType(rememberedType)
+      ? rememberedType
+      : "expense";
   const [amount, setAmount] = useState<number | null>(
     initial && Number.isFinite(initial.amount) ? initial.amount : null,
   );
@@ -93,7 +104,7 @@ export function TransactionForm({
   if (seededFrom !== initial) {
     setSeededFrom(initial);
     if (initial) {
-      setType(toFormType(initial.type));
+      setTypeChoice(toFormType(initial.type));
       setAmount(Number.isFinite(initial.amount) ? initial.amount : null);
       setReimbursable(
         initial.reimbursable_amount != null &&
@@ -263,6 +274,7 @@ export function TransactionForm({
       if ((type === "expense" || type === "income") && effectiveCategoryId) {
         rememberCategory(type, String(effectiveCategoryId));
       }
+      rememberTxType(type);
       if (bookId && effectiveAccountId) rememberAccount(bookId, effectiveAccountId);
       if (bookId && bankMove && effectiveHoldingId) {
         rememberHolding(bookId, effectiveHoldingId);
@@ -307,7 +319,7 @@ export function TransactionForm({
               key={value}
               type="button"
               onClick={() => {
-                setType(value);
+                setTypeChoice(value);
                 setCategoryId("");
                 if (value !== "expense") setReimbursable(null);
               }}

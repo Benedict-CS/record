@@ -1,6 +1,8 @@
 import {
+  isFormTxType,
   lastAccountStorageKey,
   lastHoldingStorageKey,
+  lastTxTypeStorageKey,
   preferredStoredId,
 } from "./last-account";
 
@@ -32,5 +34,8 @@ assert(
   lastHoldingStorageKey("book-1") === "ledger_last_holding_book-1",
   "holding key keeps the ledger_ prefix",
 );
+assert(lastTxTypeStorageKey() === "ledger_last_tx_type", "type key keeps the ledger_ prefix");
+assert(isFormTxType("income"), "income is a form type");
+assert(!isFormTxType("invest"), "invest is not a form type");
 
 console.log("last-account tests ok");

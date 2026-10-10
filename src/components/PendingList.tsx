@@ -169,6 +169,14 @@ function GroupCard({
             <span className="tabular-nums">{formatMoney(group.amount, currency)}</span>
           </p>
         </button>
+        {!many ? (
+          <Link
+            href={`/calendar?date=${group.items[0].date}&tx=${group.items[0].id}`}
+            className="inline-flex min-h-10 shrink-0 items-center rounded-xl px-2 text-xs text-[var(--accent)]"
+          >
+            看
+          </Link>
+        ) : null}
         <button
           type="button"
           onClick={group.kind === "hold" ? onRelease : onReimburse}
@@ -186,7 +194,10 @@ function GroupCard({
         <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
           {group.items.map((tx) => (
             <li key={tx.id} className="flex items-center gap-2 px-3 py-2">
-              <p className="min-w-0 flex-1 text-[11px] text-[var(--muted)]">
+              <Link
+                href={`/calendar?date=${tx.date}&tx=${tx.id}`}
+                className="min-w-0 flex-1 text-[11px] text-[var(--muted)] underline-offset-2 hover:underline"
+              >
                 {formatDayHeading(tx.date)}
                 {" · "}
                 <span className="tabular-nums">
@@ -195,7 +206,7 @@ function GroupCard({
                     currency,
                   )}
                 </span>
-              </p>
+              </Link>
               <button
                 type="button"
                 onClick={() =>

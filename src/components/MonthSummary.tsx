@@ -6,8 +6,9 @@ import { HoldStepButton } from "@/components/HoldStepButton";
 import { PeriodJump } from "@/components/PeriodJump";
 import { SimpleSummary } from "@/components/SimpleSummary";
 import { YearSpendCard } from "@/components/YearSpendCard";
-import { monthSummary } from "@/lib/db/crud";
-import { shiftYearMonth, throughToday, todayLocal } from "@/lib/format";
+import { compareSummaries, monthSummary } from "@/lib/db/crud";
+import { formatMoney, shiftYearMonth, throughToday, todayLocal } from "@/lib/format";
+import { useMonthTransactions } from "@/lib/hooks/useLedgerData";
 import type { Transaction } from "@/lib/types";
 
 export function MonthSummary({
@@ -36,7 +37,24 @@ export function MonthSummary({
     [isCurrentMonth, transactions, today],
   );
   const summary = useMemo(() => monthSummary(counted), [counted]);
+  const previous = shiftYearMonth(year, month, -1);
+  const previousTransactions = useMonthTransactions(
+    previous.year,
+    previous.month,
+  );
+  const previousCounted = useMemo(() => {
+    if (!isCurrentMonth) return previousTransactions;
+    const cutoff = `${previous.year}-${String(previous.month).padStart(2, "0")}-${today.slice(8, 10)}`;
+    return previousTransactions.filter((row) => row.date <= cutoff);
+  }, [isCurrentMonth, previous.month, previous.year, previousTransactions, today]);
+  const comparison = useMemo(
+    () => compareSummaries(summary, monthSummary(previousCounted)),
+    [previousCounted, summary],
+  );
   const currency = book?.currency;
+  const spendDelta = comparison.expenseDelta;
+  const showDelta =
+    summary.selfPay > 0 || monthSummary(previousCounted).selfPay > 0;
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -117,6 +135,17 @@ export function MonthSummary({
       </div>
 
       <SimpleSummary summary={summary} currency={currency} />
+      {showDelta ? (
+        <p className="mt-2 text-[11px] tabular-nums text-[var(--muted)]">
+          {Math.abs(spendDelta) < 0.005
+            ? isCurrentMonth
+              ? "支出和上月同一天一樣"
+              : "支出和上月一樣"
+            : `${isCurrentMonth ? "支出比上月同期" : "支出比上月"}${
+                spendDelta > 0 ? "多" : "少"
+              } ${formatMoney(Math.abs(spendDelta), currency)}`}
+        </p>
+      ) : null}
       <div className="mt-2 border-t border-[var(--line)] pt-2">
         <YearSpendCard year={year} />
       </div>
