@@ -77,6 +77,27 @@ export interface Transaction extends SyncMeta {
    * Expense rows leave this null.
    */
   target_holding_id: string | null;
+  /**
+   * Photo of the slip. `local:{id}` while only on this device;
+   * a Storage path after upload.
+   */
+  receipt_path?: string | null;
+  /** Who else is on this bill. Null / empty means not split. */
+  splits?: SplitShare[] | null;
+}
+
+/** One person on a split expense. Amounts are that person's share. */
+export type SplitShare = {
+  name: string;
+  amount: number;
+};
+
+export interface ReceiptBlob {
+  /** Same id as the transaction. */
+  id: string;
+  mime: string;
+  data_url: string;
+  updated_at: string;
 }
 
 /** Monthly bill or dollar-cost purchase. One row posts at most once per month. */

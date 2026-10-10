@@ -5,6 +5,7 @@ import type {
   Budget,
   Category,
   Holding,
+  ReceiptBlob,
   RecurringRule,
   SyncState,
   Template,
@@ -21,6 +22,7 @@ export class RecordDB extends Dexie {
   templates!: EntityTable<Template, "id">;
   holdings!: EntityTable<Holding, "id">;
   recurring_rules!: EntityTable<RecurringRule, "id">;
+  receipts!: EntityTable<ReceiptBlob, "id">;
   sync_state!: EntityTable<SyncState, "id">;
 
   constructor() {
@@ -430,6 +432,39 @@ export class RecordDB extends Dexie {
         for (const row of rows) {
           if (row.held_name === undefined) {
             await table.update(row.id, { held_name: null });
+          }
+        }
+      });
+    this.version(14)
+      .stores({
+        books:
+          "id, user_id, currency, updated_at, sync_status, deleted_at, sort_order",
+        accounts:
+          "id, book_id, user_id, updated_at, sync_status, deleted_at, sort_order",
+        categories:
+          "id, book_id, user_id, kind, updated_at, sync_status, deleted_at, sort_order, [book_id+kind]",
+        transactions:
+          "id, book_id, user_id, date, account_id, category_id, updated_at, sync_status, deleted_at, type, [book_id+date]",
+        budgets:
+          "id, book_id, user_id, year, month, category_id, updated_at, sync_status, deleted_at, [book_id+year+month]",
+        templates:
+          "id, book_id, user_id, updated_at, sync_status, deleted_at, sort_order, [book_id+sort_order]",
+        holdings:
+          "id, book_id, user_id, kind, updated_at, sync_status, deleted_at, sort_order, [book_id+kind]",
+        recurring_rules:
+          "id, book_id, user_id, updated_at, sync_status, deleted_at, sort_order, [book_id+sort_order]",
+        receipts: "id, updated_at",
+        sync_state: "id",
+      })
+      .upgrade(async (tx) => {
+        const table = tx.table("transactions");
+        const rows = await table.toArray();
+        for (const row of rows) {
+          const patch: Record<string, unknown> = {};
+          if (row.receipt_path === undefined) patch.receipt_path = null;
+          if (row.splits === undefined) patch.splits = null;
+          if (Object.keys(patch).length > 0) {
+            await table.update(row.id, patch);
           }
         }
       });

@@ -22,6 +22,7 @@ const NAV = [
 
 const MORE_PREFIXES = [
   "/more",
+  "/today",
   "/accounts",
   "/categories",
   "/budgets",

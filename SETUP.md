@@ -89,6 +89,7 @@
 | 15 | `supabase/migrations/015_recurring_income.sql` |
 | 16 | `supabase/migrations/016_delete_own_account.sql` |
 | 17 | `supabase/migrations/017_push_reminders.sql` |
+| 18 | `supabase/migrations/018_receipts_splits.sql` |
 
 **每個檔案的操作步驟：**
 
@@ -99,7 +100,7 @@
 5. 確認右下角顯示成功（Success / 無錯誤）。
 6. 再開一個 **New query**，對下一份檔案重複同樣步驟。
 
-執行完成後應有：`accounts`、`categories`、`transactions`、`budgets`、`books`、`templates`、`holdings`、`recurring_rules`，以及各表的 RLS 政策；`003` 會替子表加上 `book_id`；`005` 是存款／資產（定存、基金、電子錢包）；`006` 為交易「扣住（hold）」欄位（`hold_status`、`release_transaction_id`）；`007` 為待報銷；`008` 為銀行支出連動存款的 `transactions.holding_id`。如果專案早已跑過前面幾份，只要補跑尚未執行的遷移即可。銀行支出選活存／定存扣款之前，必須先跑 `008`，否則這類交易上傳會失敗。`009` 把既有帳號 `ben111611@gmail.com` 改成帳號名稱 `benedict`（同一個人、同一本帳、密碼不變）。請在任何人用「benedict」註冊之前跑完，否則名稱會被佔走。`010` 為支出的請客標籤 `transactions.tag`。沒跑之前，標籤只留在這台裝置，同步會略過這個欄位。`011` 為每月固定扣款與定期定額。`012`–`015` 補結束月份、扣住金額／名稱、以及每月固定收入。沒跑這些之前，規則只留在這台裝置，其他帳目仍會照常同步。`016` 讓登入者可以刪除自己的雲端帳號。沒跑之前，App 裡的「刪除帳號」會失敗，雲端資料還在。`017` 存提醒時間與 Web Push 訂閱；沒跑之前，關掉 App 後的雲端推播不會生效，本機卡片與通知仍可用。
+執行完成後應有：`accounts`、`categories`、`transactions`、`budgets`、`books`、`templates`、`holdings`、`recurring_rules`，以及各表的 RLS 政策；`003` 會替子表加上 `book_id`；`005` 是存款／資產（定存、基金、電子錢包）；`006` 為交易「扣住（hold）」欄位（`hold_status`、`release_transaction_id`）；`007` 為待報銷；`008` 為銀行支出連動存款的 `transactions.holding_id`。如果專案早已跑過前面幾份，只要補跑尚未執行的遷移即可。銀行支出選活存／定存扣款之前，必須先跑 `008`，否則這類交易上傳會失敗。`009` 把既有帳號 `ben111611@gmail.com` 改成帳號名稱 `benedict`（同一個人、同一本帳、密碼不變）。請在任何人用「benedict」註冊之前跑完，否則名稱會被佔走。`010` 為支出的請客標籤 `transactions.tag`。沒跑之前，標籤只留在這台裝置，同步會略過這個欄位。`011` 為每月固定扣款與定期定額。`012`–`015` 補結束月份、扣住金額／名稱、以及每月固定收入。沒跑這些之前，規則只留在這台裝置，其他帳目仍會照常同步。`016` 讓登入者可以刪除自己的雲端帳號。沒跑之前，App 裡的「刪除帳號」會失敗，雲端資料還在。`017` 存提醒時間與 Web Push 訂閱；沒跑之前，關掉 App 後的雲端推播不會生效，本機卡片與通知仍可用。`018` 為收據照片與分帳；沒跑之前照片只留在這台裝置，分帳同步會略過。
 
 ---
 
@@ -282,7 +283,7 @@ vercel deploy --yes --prod --scope team_sGRRuKcFWr48UE0zblZkTCCe
 
 - [ ] Supabase 專案已建立  
 - [ ] 已複製 **Project URL** 與 **anon public**（不是 service_role）  
-- [ ] SQL Editor 已依序執行 `001` → `017`
+- [ ] SQL Editor 已依序執行 `001` → `018`
 - [ ] Authentication → Providers → Email 已啟用  
 - [ ] Redirect URLs 含 localhost 與正式網域 `/auth/callback`  
 - [ ] 本機 `.env.local` 已填兩行 `NEXT_PUBLIC_*`  

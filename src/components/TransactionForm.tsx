@@ -7,8 +7,13 @@ import { BankHoldingField } from "@/components/BankHoldingField";
 import { useBook } from "@/components/BookProvider";
 import { CategoryPickerGrid } from "@/components/CategoryPickerGrid";
 import { NoteSuggest } from "@/components/NoteSuggest";
+import { ReceiptField } from "@/components/ReceiptField";
+import { SplitField } from "@/components/SplitField";
 import { TreatTagField } from "@/components/TreatTagField";
 import { createTransaction, listRecentNotes, updateTransaction } from "@/lib/db/crud";
+import { deleteReceipt, getReceipt, putReceipt } from "@/lib/db/receipts";
+import { compressReceiptFile } from "@/lib/receipt";
+import { parseSplits, splitsOverAmount } from "@/lib/split";
 import { formatCalcNumber } from "@/lib/calculator";
 import { formatMoney, isIsoDate, todayLocal } from "@/lib/format";
 import { isSpendableBankHolding } from "@/lib/holding-spend";
@@ -30,7 +35,7 @@ import {
 import { TREAT_TAG } from "@/lib/transaction-tag";
 import { useHoldings } from "@/lib/hooks/useLedgerData";
 import { runSync } from "@/lib/sync/engine";
-import type { Account, Category, Transaction, TransactionType } from "@/lib/types";
+import type { Account, Category, SplitShare, Transaction, TransactionType } from "@/lib/types";
 
 type FormType = "income" | "expense" | "hold";
 type KeypadTarget = "amount" | "reimbursable";
@@ -95,6 +100,12 @@ export function TransactionForm({
   const [noteSuggestions, setNoteSuggestions] = useState<string[]>([]);
   const [categoryId, setCategoryId] = useState(initial?.category_id ?? "");
   const [treat, setTreat] = useState(initial?.tag === TREAT_TAG);
+  const [splits, setSplits] = useState<SplitShare[] | null>(
+    parseSplits(initial?.splits),
+  );
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [clearReceipt, setClearReceipt] = useState(false);
   const [keypadTarget, setKeypadTarget] = useState<KeypadTarget | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -119,6 +130,14 @@ export function TransactionForm({
       setCategoryId(initial.category_id ?? "");
       setHoldingId(initial.holding_id ?? "");
       setTreat(initial.tag === TREAT_TAG);
+      setSplits(parseSplits(initial.splits));
+      setReceiptFile(null);
+      setClearReceipt(false);
+    } else {
+      setSplits(null);
+      setReceiptPreview(null);
+      setReceiptFile(null);
+      setClearReceipt(false);
     }
   }
 
@@ -159,6 +178,19 @@ export function TransactionForm({
           rememberedCategory,
           filteredCategories.map((category) => category.id),
         );
+
+  useEffect(() => {
+    if (!initial?.id || !initial.receipt_path || clearReceipt || receiptFile) {
+      return;
+    }
+    let cancelled = false;
+    void getReceipt(initial.id).then((row) => {
+      if (!cancelled) setReceiptPreview(row?.data_url ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [initial?.id, initial?.receipt_path, clearReceipt, receiptFile]);
 
   useEffect(() => {
     if (!bookId || isEdit) return;
@@ -219,6 +251,15 @@ export function TransactionForm({
       setError("待報銷金額不可大於實付");
       return;
     }
+    if (
+      type === "expense" &&
+      splits &&
+      amount != null &&
+      splitsOverAmount(amount, splits)
+    ) {
+      setError("別人的份額加起來超過這筆金額");
+      return;
+    }
     if (bankMove && !isEdit && !effectiveHoldingId) {
       setError(
         spendableHoldings.length === 0
@@ -238,6 +279,19 @@ export function TransactionForm({
 
     setSaving(true);
     try {
+      const id = isEdit && initial ? initial.id : crypto.randomUUID();
+      let receipt_path = clearReceipt ? null : (initial?.receipt_path ?? null);
+      if (clearReceipt) {
+        await deleteReceipt(id);
+      } else if (receiptFile) {
+        const compressed = await compressReceiptFile(receiptFile);
+        receipt_path = await putReceipt({
+          id,
+          mime: compressed.mime,
+          dataUrl: compressed.dataUrl,
+        });
+      }
+
       const payload = {
         type,
         amount,
@@ -259,16 +313,22 @@ export function TransactionForm({
             : null,
         holding_id: bankMove && effectiveHoldingId ? effectiveHoldingId : null,
         tag: type === "expense" && treat ? TREAT_TAG : null,
+        receipt_path,
+        splits: type === "expense" ? splits : null,
       };
 
       if (isEdit && initial) {
         await updateTransaction(initial.id, payload);
       } else {
-        await createTransaction(bookId!, payload);
+        await createTransaction(bookId!, { ...payload, id });
         setAmount(null);
         setReimbursable(null);
         setNote("");
         setTreat(false);
+        setSplits(null);
+        setReceiptFile(null);
+        setReceiptPreview(null);
+        setClearReceipt(false);
         if (spendableHoldings.length !== 1) setHoldingId("");
       }
       if ((type === "expense" || type === "income") && effectiveCategoryId) {
@@ -430,8 +490,14 @@ export function TransactionForm({
               />
             )}
             {type === "expense" ? (
-              <div className="mt-2.5">
+              <div className="mt-2.5 space-y-2">
                 <TreatTagField checked={treat} onChange={setTreat} />
+                <SplitField
+                  amount={amount}
+                  currency={book?.currency}
+                  value={splits}
+                  onChange={setSplits}
+                />
               </div>
             ) : null}
           </div>
@@ -490,6 +556,20 @@ export function TransactionForm({
             現金不會自動改動存款，請自己到存款頁調整現金。
           </p>
         ) : null}
+
+        <ReceiptField
+          transactionId={initial?.id ?? null}
+          previewUrl={clearReceipt ? null : receiptPreview}
+          onPick={(file) => {
+            setReceiptFile(file);
+            setClearReceipt(false);
+          }}
+          onClear={() => {
+            setReceiptFile(null);
+            setReceiptPreview(null);
+            setClearReceipt(true);
+          }}
+        />
 
         {error ? <p className="text-sm text-rose-600">{error}</p> : null}
 

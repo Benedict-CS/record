@@ -32,6 +32,9 @@ Live site: https://record.benedicttiong.site
 - CSV export; JSON backup; import 豬豬記帳 history into the TWD book (through 2025; occupied months skipped)
 - Privacy page + delete signed-in account (`/privacy`, `/delete-account`)
 - Daily reminder at a chosen time: home card「今天記了沒」plus an optional system notification. Signed-in devices can also get a Web Push after migration `017` and VAPID env vars (still not a guaranteed alarm on a free Vercel cron)
+- Receipt photo on a booking (local first; Storage upload after `018`)
+- Split an expense with named shares
+- Compact `/today` page + PWA shortcut (not a real iOS home-screen widget)
 - Installable PWA · light UI only (**no dark mode**)
 
 ## Local setup

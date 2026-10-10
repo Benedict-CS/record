@@ -14,6 +14,7 @@ import { db } from "@/lib/db/schema";
 import { rankNotes } from "@/lib/note-suggest";
 import { seedBookContents } from "@/lib/db/seed";
 import { formatMoney, isIsoDate } from "@/lib/format";
+import { parseSplits } from "@/lib/split";
 import {
   NO_HOLDING_LINK,
   holdingBalanceDeltas,
@@ -601,6 +602,8 @@ export async function createTransaction(
     reimbursement_status?: ReimbursementStatus | null;
     holding_id?: string | null;
     tag?: string | null;
+    receipt_path?: string | null;
+    splits?: Transaction["splits"];
     id?: string;
   },
 ): Promise<Transaction> {
@@ -641,6 +644,8 @@ export async function createTransaction(
     holding_id: null,
     tag: normalizeTransactionTag(input.type, input.tag),
     target_holding_id: null,
+    receipt_path: input.receipt_path ?? null,
+    splits: input.type === "expense" ? parseSplits(input.splits) : null,
   };
   await db.transaction(
     "rw",
@@ -683,6 +688,8 @@ export async function updateTransaction(
       | "reimbursement_status"
       | "holding_id"
       | "tag"
+      | "receipt_path"
+      | "splits"
     >
   >,
 ): Promise<void> {
@@ -754,6 +761,12 @@ export async function updateTransaction(
           nextType,
           patch.tag !== undefined ? patch.tag : existing.tag,
         ),
+        splits:
+          nextType === "expense"
+            ? parseSplits(
+                patch.splits !== undefined ? patch.splits : existing.splits,
+              )
+            : null,
         updated_at: nowIso(),
         client_id: getClientId(),
         sync_status: "pending",

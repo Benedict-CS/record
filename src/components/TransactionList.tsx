@@ -22,6 +22,8 @@ import {
   isHoldRefundIncome,
 } from "@/lib/reimbursement";
 import { useHoldings } from "@/lib/hooks/useLedgerData";
+import { ReceiptThumb } from "@/components/ReceiptThumb";
+import { splitsSummary } from "@/lib/split";
 import { TREAT_TAG } from "@/lib/transaction-tag";
 import { runSync } from "@/lib/sync/engine";
 import type { Account, Category, Transaction } from "@/lib/types";
@@ -474,6 +476,7 @@ export function TransactionList({
                     ? `已報銷 ${formatMoney(reimbAmount, currency)}`
                     : null,
                   tx.type === "invest" ? null : note || null,
+                  splitsSummary(tx.amount, tx.splits ?? null),
                 ].filter(Boolean);
 
                 const row = (
@@ -500,6 +503,10 @@ export function TransactionList({
                         className="!h-7 !w-7"
                       />
                     )}
+                    <ReceiptThumb
+                      transactionId={tx.id}
+                      receiptPath={tx.receipt_path ?? null}
+                    />
                     <button
                       type="button"
                       className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_6.75rem] items-center gap-x-2 gap-y-0.5 text-left"

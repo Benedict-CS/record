@@ -19,7 +19,9 @@ import {
   remoteWins,
   withoutColumn,
 } from "@/lib/sync/schema-compat";
+import { parseSplits } from "@/lib/split";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { pullMissingReceipts, pushLocalReceipts } from "@/lib/sync/receipts";
 import type {
   CloudAccount,
   CloudBook,
@@ -452,6 +454,11 @@ async function mergeRemoteTransactions(remoteRows: CloudTransaction[]) {
       remote,
       "target_holding_id",
     );
+    const remoteHasReceipt = Object.prototype.hasOwnProperty.call(
+      remote,
+      "receipt_path",
+    );
+    const remoteHasSplits = Object.prototype.hasOwnProperty.call(remote, "splits");
     const fieldTimes = {
       remoteUpdatedAt: remote.updated_at,
       localUpdatedAt: local?.updated_at,
@@ -474,8 +481,24 @@ async function mergeRemoteTransactions(remoteRows: CloudTransaction[]) {
       localValue: local?.target_holding_id,
       ...fieldTimes,
     });
+    const receipt = preserveUnsyncedField({
+      remoteHasKey: remoteHasReceipt,
+      remoteValue: remote.receipt_path,
+      localValue: local?.receipt_path,
+      ...fieldTimes,
+    });
+    const splitField = preserveUnsyncedField({
+      remoteHasKey: remoteHasSplits,
+      remoteValue: remote.splits ? JSON.stringify(remote.splits) : null,
+      localValue: local?.splits ? JSON.stringify(local.splits) : null,
+      ...fieldTimes,
+    });
     const needsUpload =
-      holding.needsUpload || tag.needsUpload || target.needsUpload;
+      holding.needsUpload ||
+      tag.needsUpload ||
+      target.needsUpload ||
+      receipt.needsUpload ||
+      splitField.needsUpload;
     const normalised: CloudTransaction & { sync_status: SyncStatus } = {
       ...remote,
       amount: Number(remote.amount),
@@ -491,6 +514,8 @@ async function mergeRemoteTransactions(remoteRows: CloudTransaction[]) {
       holding_id: holding.value,
       tag: tag.value,
       target_holding_id: target.value,
+      receipt_path: receipt.value,
+      splits: parseSplits(splitField.value),
       sync_status: needsUpload ? "pending" : "synced",
     };
     if (!local || remoteWins(remote.updated_at, local.updated_at)) {
@@ -828,6 +853,8 @@ async function pushPending(userId: string): Promise<"column" | "table" | null> {
       holding_id: row.holding_id ?? null,
       tag: row.tag ?? null,
       target_holding_id: row.target_holding_id ?? null,
+      receipt_path: row.receipt_path ?? null,
+      splits: parseSplits(row.splits),
     }));
   const ownedBudgets = budgets
     .filter((row) => row.user_id === userId)
@@ -1092,7 +1119,9 @@ export async function runSync(options: RunSyncOptions = {}): Promise<void> {
       }
     }
 
+    await pushLocalReceipts(supabase, user.id);
     const schemaGap = await pushPending(user.id);
+    await pullMissingReceipts(supabase, user.id);
     const syncState = await db.sync_state.get(syncStateKey(user.id));
     await db.sync_state.put({
       id: syncStateKey(user.id),

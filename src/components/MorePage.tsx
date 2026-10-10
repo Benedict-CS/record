@@ -19,6 +19,11 @@ const LINKS: {
   description: string;
 }[] = [
   {
+    href: "/today",
+    title: "今天小工具",
+    description: "今天花費與快速記一筆",
+  },
+  {
     href: "/pending",
     title: "待處理",
     description: "還沒銷帳的核銷，和還沒退回的扣住",
