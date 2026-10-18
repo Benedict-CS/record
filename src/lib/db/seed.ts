@@ -461,9 +461,14 @@ async function runLegacyRepairs(
 
   // Second pass after reassignment, so merged books don't keep twin 現金.
   await dedupeSeedDuplicates();
+}
 
-  const books = await db.books.toArray();
-  for (const book of books) {
+async function migrateHaircutAndLaundryCategories(ownerId: string | null) {
+  const owned = (row: { user_id: string | null }) => sameOwner(row.user_id, ownerId);
+  const liveBooks = (await db.books.toArray())
+    .filter((row) => !row.deleted_at && owned(row));
+
+  for (const book of liveBooks) {
     let haircutCat = await db.categories
       .where({ book_id: book.id, name: "剪頭髮" })
       .first();
@@ -510,14 +515,14 @@ async function runLegacyRepairs(
 
     if (haircutCat) {
       const haircutTxRows = await db.transactions
-        .filter((row) => row.book_id === book.id && row.type === "expense" && (
-          row.note != null && (
+        .filter((row) => row.book_id === book.id && row.type === "expense" && row.category_id !== haircutCat.id && (
+          (row.note != null && (
             row.note.includes("頭髮") ||
             row.note.includes("剪髮") ||
             row.note.includes("理髮") ||
             row.note.includes("染髮") ||
             row.note.includes("燙髮")
-          ) ||
+          )) ||
           row.tag === "haircut" || row.tag === "剪頭髮"
         ))
         .toArray();
@@ -525,17 +530,20 @@ async function runLegacyRepairs(
         await db.transactions.update(row.id, {
           category_id: haircutCat.id,
           tag: null,
+          updated_at: nowIso(),
+          client_id: getClientId(),
+          sync_status: "pending",
         });
       }
     }
 
     if (laundryCat) {
       const laundryTxRows = await db.transactions
-        .filter((row) => row.book_id === book.id && row.type === "expense" && (
-          row.note != null && (
+        .filter((row) => row.book_id === book.id && row.type === "expense" && row.category_id !== laundryCat.id && (
+          (row.note != null && (
             row.note.includes("洗衣") ||
             row.note.includes("洗衣服")
-          ) ||
+          )) ||
           row.tag === "laundry" || row.tag === "洗衣"
         ))
         .toArray();
@@ -543,6 +551,9 @@ async function runLegacyRepairs(
         await db.transactions.update(row.id, {
           category_id: laundryCat.id,
           tag: null,
+          updated_at: nowIso(),
+          client_id: getClientId(),
+          sync_status: "pending",
         });
       }
     }
@@ -583,6 +594,8 @@ async function runSeed(ownerId: string | null): Promise<void> {
     for (const book of liveBooks) {
       await seedBookContents(book, clientId, stamp);
     }
+
+    await migrateHaircutAndLaundryCategories(ownerId);
 
     if (needsRepairs) {
       await runLegacyRepairs(ownerId, liveBooks[0]?.id);
