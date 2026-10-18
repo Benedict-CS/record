@@ -16,8 +16,8 @@ begin
 
     if haircut_cat_id is null then
       haircut_cat_id := gen_random_uuid();
-      insert into public.categories (id, book_id, user_id, name, kind, icon, color, sort_order, updated_at, client_id, sync_status)
-      values (haircut_cat_id, b.id, b.user_id, '剪頭髮', 'expense', 'scissors', '#2980b9', 14, timezone('utc'::text, now()), 'migration', 'synced');
+      insert into public.categories (id, book_id, user_id, name, kind, icon, color, sort_order, updated_at, client_id)
+      values (haircut_cat_id, b.id, b.user_id, '剪頭髮', 'expense', 'scissors', '#2980b9', 14, timezone('utc'::text, now()), 'migration');
     end if;
 
     -- Ensure '洗衣' category exists
@@ -27,8 +27,8 @@ begin
 
     if laundry_cat_id is null then
       laundry_cat_id := gen_random_uuid();
-      insert into public.categories (id, book_id, user_id, name, kind, icon, color, sort_order, updated_at, client_id, sync_status)
-      values (laundry_cat_id, b.id, b.user_id, '洗衣', 'expense', 'shirt', '#8e44ad', 15, timezone('utc'::text, now()), 'migration', 'synced');
+      insert into public.categories (id, book_id, user_id, name, kind, icon, color, sort_order, updated_at, client_id)
+      values (laundry_cat_id, b.id, b.user_id, '洗衣', 'expense', 'shirt', '#8e44ad', 15, timezone('utc'::text, now()), 'migration');
     end if;
 
     -- Migrate haircut transactions matching notes or tags
