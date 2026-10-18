@@ -511,8 +511,13 @@ async function runLegacyRepairs(
     if (haircutCat) {
       const haircutTxRows = await db.transactions
         .filter((row) => row.book_id === book.id && row.type === "expense" && (
-          row.note === "剪頭髮" || row.note === "剪髮" || row.note === "理髮" ||
-          (row.note != null && (row.note.includes("剪頭髮") || row.note.includes("剪髮") || row.note.includes("理髮"))) ||
+          row.note != null && (
+            row.note.includes("頭髮") ||
+            row.note.includes("剪髮") ||
+            row.note.includes("理髮") ||
+            row.note.includes("染髮") ||
+            row.note.includes("燙髮")
+          ) ||
           row.tag === "haircut" || row.tag === "剪頭髮"
         ))
         .toArray();
@@ -527,8 +532,10 @@ async function runLegacyRepairs(
     if (laundryCat) {
       const laundryTxRows = await db.transactions
         .filter((row) => row.book_id === book.id && row.type === "expense" && (
-          row.note === "洗衣" || row.note === "洗衣服" ||
-          (row.note != null && (row.note.includes("洗衣") || row.note.includes("洗衣服"))) ||
+          row.note != null && (
+            row.note.includes("洗衣") ||
+            row.note.includes("洗衣服")
+          ) ||
           row.tag === "laundry" || row.tag === "洗衣"
         ))
         .toArray();

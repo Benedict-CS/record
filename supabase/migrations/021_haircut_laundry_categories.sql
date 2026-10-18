@@ -39,8 +39,11 @@ begin
       and type = 'expense'
       and deleted_at is null
       and (
-        note = '剪頭髮' or note = '剪髮' or note = '理髮' or
-        note like '%剪頭髮%' or note like '%剪髮%' or note like '%理髮%' or
+        note like '%頭髮%' or
+        note like '%剪髮%' or
+        note like '%理髮%' or
+        note like '%染髮%' or
+        note like '%燙髮%' or
         tag = 'haircut' or tag = '剪頭髮'
       );
 
@@ -52,8 +55,8 @@ begin
       and type = 'expense'
       and deleted_at is null
       and (
-        note = '洗衣' or note = '洗衣服' or
-        note like '%洗衣%' or note like '%洗衣服%' or
+        note like '%洗衣%' or
+        note like '%洗衣服%' or
         tag = 'laundry' or tag = '洗衣'
       );
   end loop;
