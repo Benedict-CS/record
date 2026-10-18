@@ -1,0 +1,30 @@
+{
+  "feb": {
+    "chars": 336,
+    "file": "d:\\record\\_ocr_batch\\feb.txt"
+  },
+  "apr_long": {
+    "chars": 593,
+    "file": "d:\\record\\_ocr_batch\\apr_long.txt"
+  },
+  "jan_or_other": {
+    "chars": 603,
+    "file": "d:\\record\\_ocr_batch\\jan_or_other.txt"
+  },
+  "mar": {
+    "chars": 220,
+    "file": "d:\\record\\_ocr_batch\\mar.txt"
+  },
+  "apr_or_other": {
+    "chars": 605,
+    "file": "d:\\record\\_ocr_batch\\apr_or_other.txt"
+  },
+  "may_a": {
+    "chars": 699,
+    "file": "d:\\record\\_ocr_batch\\may_a.txt"
+  },
+  "may_b": {
+    "chars": 619,
+    "file": "d:\\record\\_ocr_batch\\may_b.txt"
+  }
+}

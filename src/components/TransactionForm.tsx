@@ -32,9 +32,7 @@ import {
   rememberCategory,
   useRememberedCategory,
 } from "@/lib/last-category";
-import { HAIRCUT_TAG, LAUNDRY_TAG, TREAT_TAG } from "@/lib/transaction-tag";
-import { HaircutTagField } from "@/components/HaircutTagField";
-import { LaundryTagField } from "@/components/LaundryTagField";
+import { TREAT_TAG } from "@/lib/transaction-tag";
 import { useHoldings } from "@/lib/hooks/useLedgerData";
 import { runSync } from "@/lib/sync/engine";
 import type { Account, Category, SplitShare, Transaction, TransactionType } from "@/lib/types";
@@ -102,8 +100,6 @@ export function TransactionForm({
   const [noteSuggestions, setNoteSuggestions] = useState<string[]>([]);
   const [categoryId, setCategoryId] = useState(initial?.category_id ?? "");
   const [treat, setTreat] = useState(initial?.tag === TREAT_TAG);
-  const [haircut, setHaircut] = useState(initial?.tag === HAIRCUT_TAG);
-  const [laundry, setLaundry] = useState(initial?.tag === LAUNDRY_TAG);
   const [splits, setSplits] = useState<SplitShare[] | null>(
     parseSplits(initial?.splits),
   );
@@ -134,8 +130,6 @@ export function TransactionForm({
       setCategoryId(initial.category_id ?? "");
       setHoldingId(initial.holding_id ?? "");
       setTreat(initial.tag === TREAT_TAG);
-      setHaircut(initial.tag === HAIRCUT_TAG);
-      setLaundry(initial.tag === LAUNDRY_TAG);
       setSplits(parseSplits(initial.splits));
       setReceiptFile(null);
       setClearReceipt(false);
@@ -318,16 +312,7 @@ export function TransactionForm({
                 : ("pending" as const))
             : null,
         holding_id: bankMove && effectiveHoldingId ? effectiveHoldingId : null,
-        tag:
-          type === "expense"
-            ? treat
-              ? TREAT_TAG
-              : haircut
-                ? HAIRCUT_TAG
-                : laundry
-                  ? LAUNDRY_TAG
-                  : null
-            : null,
+        tag: type === "expense" && treat ? TREAT_TAG : null,
         receipt_path,
         splits: type === "expense" ? splits : null,
       };
@@ -340,8 +325,6 @@ export function TransactionForm({
         setReimbursable(null);
         setNote("");
         setTreat(false);
-        setHaircut(false);
-        setLaundry(false);
         setSplits(null);
         setReceiptFile(null);
         setReceiptPreview(null);
@@ -508,36 +491,7 @@ export function TransactionForm({
             )}
             {type === "expense" ? (
               <div className="mt-2.5 space-y-2">
-                <TreatTagField
-                  checked={treat}
-                  onChange={(c) => {
-                    setTreat(c);
-                    if (c) {
-                      setHaircut(false);
-                      setLaundry(false);
-                    }
-                  }}
-                />
-                <HaircutTagField
-                  checked={haircut}
-                  onChange={(c) => {
-                    setHaircut(c);
-                    if (c) {
-                      setTreat(false);
-                      setLaundry(false);
-                    }
-                  }}
-                />
-                <LaundryTagField
-                  checked={laundry}
-                  onChange={(c) => {
-                    setLaundry(c);
-                    if (c) {
-                      setTreat(false);
-                      setHaircut(false);
-                    }
-                  }}
-                />
+                <TreatTagField checked={treat} onChange={setTreat} />
                 <SplitField
                   amount={amount}
                   currency={book?.currency}

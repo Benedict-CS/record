@@ -52,3 +52,6 @@ public/worker-*.js
 supabase/.temp/
 
 .vercel
+
+.vercel
+.env*

@@ -20,9 +20,7 @@ import {
 import { formatMoney, isIsoDate, todayLocal } from "@/lib/format";
 import { rememberAccount, rememberHolding, rememberTxType } from "@/lib/last-account";
 import { preferredCategoryId, rememberCategory } from "@/lib/last-category";
-import { HAIRCUT_TAG, LAUNDRY_TAG, TREAT_TAG } from "@/lib/transaction-tag";
-import { HaircutTagField } from "@/components/HaircutTagField";
-import { LaundryTagField } from "@/components/LaundryTagField";
+import { TREAT_TAG } from "@/lib/transaction-tag";
 import { useHoldings } from "@/lib/hooks/useLedgerData";
 import { runSync } from "@/lib/sync/engine";
 import type { Account, Category, Transaction, TransactionType } from "@/lib/types";
@@ -68,8 +66,6 @@ export function TransactionEditor({
   const [holdingId, setHoldingId] = useState(transaction.holding_id ?? "");
   const [categoryId, setCategoryId] = useState(transaction.category_id ?? "");
   const [treat, setTreat] = useState(transaction.tag === TREAT_TAG);
-  const [haircut, setHaircut] = useState(transaction.tag === HAIRCUT_TAG);
-  const [laundry, setLaundry] = useState(transaction.tag === LAUNDRY_TAG);
   const [noteSuggestions, setNoteSuggestions] = useState<string[]>([]);
   const [keypadTarget, setKeypadTarget] = useState<KeypadTarget | null>(null);
   const [saving, setSaving] = useState(false);
@@ -110,8 +106,6 @@ export function TransactionEditor({
     setCategoryId(transaction.category_id ?? "");
     setHoldingId(transaction.holding_id ?? "");
     setTreat(transaction.tag === TREAT_TAG);
-    setHaircut(transaction.tag === HAIRCUT_TAG);
-    setLaundry(transaction.tag === LAUNDRY_TAG);
     setError(null);
   }
 
@@ -285,16 +279,7 @@ export function TransactionEditor({
                 : "pending")
             : null,
         holding_id: bankMove && holdingId ? holdingId : null,
-        tag:
-          type === "expense"
-            ? treat
-              ? TREAT_TAG
-              : haircut
-                ? HAIRCUT_TAG
-                : laundry
-                  ? LAUNDRY_TAG
-                  : null
-            : null,
+        tag: type === "expense" && treat ? TREAT_TAG : null,
       });
       rememberTxType(type);
       if ((type === "expense" || type === "income") && effectiveCategoryId) {
@@ -536,37 +521,8 @@ export function TransactionEditor({
                   />
                 )}
                 {type === "expense" ? (
-                  <div className="mt-2.5 space-y-2">
-                    <TreatTagField
-                      checked={treat}
-                      onChange={(c) => {
-                        setTreat(c);
-                        if (c) {
-                          setHaircut(false);
-                          setLaundry(false);
-                        }
-                      }}
-                    />
-                    <HaircutTagField
-                      checked={haircut}
-                      onChange={(c) => {
-                        setHaircut(c);
-                        if (c) {
-                          setTreat(false);
-                          setLaundry(false);
-                        }
-                      }}
-                    />
-                    <LaundryTagField
-                      checked={laundry}
-                      onChange={(c) => {
-                        setLaundry(c);
-                        if (c) {
-                          setTreat(false);
-                          setHaircut(false);
-                        }
-                      }}
-                    />
+                  <div className="mt-2.5">
+                    <TreatTagField checked={treat} onChange={setTreat} />
                   </div>
                 ) : null}
               </div>

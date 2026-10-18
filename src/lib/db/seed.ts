@@ -2,7 +2,6 @@ import { getClientId } from "@/lib/client-id";
 import { sameOwner } from "@/lib/db/owner";
 import { sortCategories } from "@/lib/category-order";
 import { db } from "@/lib/db/schema";
-import { HAIRCUT_TAG, LAUNDRY_TAG } from "@/lib/transaction-tag";
 import type { Account, Book, BookCurrency, Category } from "@/lib/types";
 
 const BOOK_DEFS: {
@@ -39,9 +38,11 @@ function expenseCategories(): Omit<
     { name: "娛樂", kind: "expense", icon: "smile", color: "#8e44ad", sort_order: 11 },
     { name: "醫療", kind: "expense", icon: "heart", color: "#c0392b", sort_order: 12 },
     { name: "學習", kind: "expense", icon: "book", color: "#2980b9", sort_order: 13 },
-    { name: "請客", kind: "expense", icon: "cup", color: "#e67e22", sort_order: 14 },
-    { name: "水果", kind: "expense", icon: "leaf", color: "#27ae60", sort_order: 15 },
-    { name: "其他支出", kind: "expense", icon: "dots", color: "#7f8c8d", sort_order: 16 },
+    { name: "剪頭髮", kind: "expense", icon: "scissors", color: "#2980b9", sort_order: 14 },
+    { name: "洗衣", kind: "expense", icon: "shirt", color: "#8e44ad", sort_order: 15 },
+    { name: "請客", kind: "expense", icon: "cup", color: "#e67e22", sort_order: 16 },
+    { name: "水果", kind: "expense", icon: "leaf", color: "#27ae60", sort_order: 17 },
+    { name: "其他支出", kind: "expense", icon: "dots", color: "#7f8c8d", sort_order: 18 },
   ];
 }
 
@@ -461,27 +462,82 @@ async function runLegacyRepairs(
   // Second pass after reassignment, so merged books don't keep twin 現金.
   await dedupeSeedDuplicates();
 
-  const haircutRows = await db.transactions
-    .filter((row) => row.type === "expense" && (
-      row.note === "剪頭髮" || (row.note != null && (row.note.includes("剪頭髮") || row.note.includes("剪髮") || row.note.includes("理髮"))) ||
-      row.tag === "剪頭髮" || row.tag === "haircut"
-    ))
-    .toArray();
-  for (const row of haircutRows) {
-    if (row.tag !== HAIRCUT_TAG) {
-      await db.transactions.update(row.id, { tag: HAIRCUT_TAG });
+  const books = await db.books.toArray();
+  for (const book of books) {
+    let haircutCat = await db.categories
+      .where({ book_id: book.id, name: "剪頭髮" })
+      .first();
+    if (!haircutCat) {
+      const id = crypto.randomUUID();
+      await db.categories.add({
+        id,
+        book_id: book.id,
+        user_id: book.user_id,
+        name: "剪頭髮",
+        kind: "expense",
+        icon: "scissors",
+        color: "#2980b9",
+        sort_order: 14,
+        updated_at: nowIso(),
+        deleted_at: null,
+        client_id: getClientId(),
+        sync_status: "pending",
+      });
+      haircutCat = await db.categories.get(id);
     }
-  }
 
-  const laundryRows = await db.transactions
-    .filter((row) => row.type === "expense" && (
-      row.note === "洗衣" || row.note === "洗衣服" || (row.note != null && (row.note.includes("洗衣") || row.note.includes("洗衣服"))) ||
-      row.tag === "洗衣" || row.tag === "laundry"
-    ))
-    .toArray();
-  for (const row of laundryRows) {
-    if (row.tag !== LAUNDRY_TAG) {
-      await db.transactions.update(row.id, { tag: LAUNDRY_TAG });
+    let laundryCat = await db.categories
+      .where({ book_id: book.id, name: "洗衣" })
+      .first();
+    if (!laundryCat) {
+      const id = crypto.randomUUID();
+      await db.categories.add({
+        id,
+        book_id: book.id,
+        user_id: book.user_id,
+        name: "洗衣",
+        kind: "expense",
+        icon: "shirt",
+        color: "#8e44ad",
+        sort_order: 15,
+        updated_at: nowIso(),
+        deleted_at: null,
+        client_id: getClientId(),
+        sync_status: "pending",
+      });
+      laundryCat = await db.categories.get(id);
+    }
+
+    if (haircutCat) {
+      const haircutTxRows = await db.transactions
+        .filter((row) => row.book_id === book.id && row.type === "expense" && (
+          row.note === "剪頭髮" || row.note === "剪髮" || row.note === "理髮" ||
+          (row.note != null && (row.note.includes("剪頭髮") || row.note.includes("剪髮") || row.note.includes("理髮"))) ||
+          row.tag === "haircut" || row.tag === "剪頭髮"
+        ))
+        .toArray();
+      for (const row of haircutTxRows) {
+        await db.transactions.update(row.id, {
+          category_id: haircutCat.id,
+          tag: null,
+        });
+      }
+    }
+
+    if (laundryCat) {
+      const laundryTxRows = await db.transactions
+        .filter((row) => row.book_id === book.id && row.type === "expense" && (
+          row.note === "洗衣" || row.note === "洗衣服" ||
+          (row.note != null && (row.note.includes("洗衣") || row.note.includes("洗衣服"))) ||
+          row.tag === "laundry" || row.tag === "洗衣"
+        ))
+        .toArray();
+      for (const row of laundryTxRows) {
+        await db.transactions.update(row.id, {
+          category_id: laundryCat.id,
+          tag: null,
+        });
+      }
     }
   }
 }

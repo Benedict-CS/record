@@ -1,0 +1,56 @@
+=== may_b size=163x1024 ===
+
+--- slice 0 y=0-1024 ---
+ro Le
+Records (2026/5) Of
+Income Expense Total (Perioc _
+
+0 6,677 6,677
+
+5/13 (Wed) -162
+RE ane a7
+ee rd 75
+5/12(Tue) -185
+RE ead 90
+午 苞 et 95
+5/11 (Mon) -100
+RH bb 0
+午餐 家 所 了 100
+§/10 (Sun) 163
+RE 全 家 6
+午餐 7 87
+5/9 (Sat) “1,227
+Bi RIE 985
+午餐 ? 87
+其 他 ante 20
+ee Ba 135
+5/8 (Fri) 265
+RE sae 170
+Fe a 95
+5/7 (Thu) -200
+Fe sey 100
+RR 227 100
+5/6 (Wed) ~180
+ee mie 105
+Fe eH 75
+5/5 (Tue) -95
+=e aR 0
+晚餐 aad 95
+5/4 (Mon) 75
+Re eb 0
+$e 1 75
+5/3 (Sun) -99
+Fe *R 0
+Re ku 99
+5/2 (Sat) -290
+Bett aK 90
+-# 20 79
+= 水 級 12
+5/1 (Fri) 173
+午餐 7 78
+3 3 or 95
+B 八 5 2 @
+
+My 1
+amr.
+

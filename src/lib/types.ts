@@ -188,10 +188,6 @@ export interface CategoryBreakdownItem {
   percent: number;
   /** Tagged 請客 amount already included in amount. Absent when this list is not expenses. */
   treatAmount?: number;
-  /** Tagged 剪頭髮 amount already included in amount. Absent when this list is not expenses. */
-  haircutAmount?: number;
-  /** Tagged 洗衣 amount already included in amount. Absent when this list is not expenses. */
-  laundryAmount?: number;
 }
 
 export interface DayBucket {
