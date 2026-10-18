@@ -24,7 +24,7 @@ import {
 import { useHoldings } from "@/lib/hooks/useLedgerData";
 import { ReceiptThumb } from "@/components/ReceiptThumb";
 import { splitsSummary } from "@/lib/split";
-import { HAIRCUT_TAG, TREAT_TAG } from "@/lib/transaction-tag";
+import { HAIRCUT_TAG, LAUNDRY_TAG, TREAT_TAG } from "@/lib/transaction-tag";
 import { runSync } from "@/lib/sync/engine";
 import type { Account, Category, Transaction } from "@/lib/types";
 
@@ -524,6 +524,10 @@ export function TransactionList({
                         ) : tx.tag === HAIRCUT_TAG ? (
                           <span className="shrink-0 rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-900">
                             剪頭髮
+                          </span>
+                        ) : tx.tag === LAUNDRY_TAG ? (
+                          <span className="shrink-0 rounded-md bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-900">
+                            洗衣
                           </span>
                         ) : null}
                       </span>

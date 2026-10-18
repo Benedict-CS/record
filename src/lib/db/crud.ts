@@ -27,6 +27,7 @@ import {
 import { monthlyInterest, yearlyInterest } from "@/lib/interest";
 import {
   HAIRCUT_TAG,
+  LAUNDRY_TAG,
   normalizeTransactionTag,
   tagSearchText,
   TREAT_TAG,
@@ -1585,7 +1586,7 @@ export function categoryBreakdown(
 ): CategoryBreakdownItem[] {
   const map = new Map<
     string | null,
-    { amount: number; treatAmount: number; haircutAmount: number }
+    { amount: number; treatAmount: number; haircutAmount: number; laundryAmount: number }
   >();
   const refundIds =
     type === "income" ? holdRefundIncomeIds(transactions) : new Set<string>();
@@ -1599,11 +1600,14 @@ export function categoryBreakdown(
       amount: 0,
       treatAmount: 0,
       haircutAmount: 0,
+      laundryAmount: 0,
     };
     bucket.amount += amount;
     if (type === "expense" && tx.tag === TREAT_TAG) bucket.treatAmount += amount;
     if (type === "expense" && tx.tag === HAIRCUT_TAG)
       bucket.haircutAmount += amount;
+    if (type === "expense" && tx.tag === LAUNDRY_TAG)
+      bucket.laundryAmount += amount;
     map.set(key, bucket);
   }
 
@@ -1624,6 +1628,7 @@ export function categoryBreakdown(
         percent: total > 0 ? (bucket.amount / total) * 100 : 0,
         treatAmount: bucket.treatAmount,
         haircutAmount: bucket.haircutAmount,
+        laundryAmount: bucket.laundryAmount,
       };
     })
     .sort((a, b) => b.amount - a.amount);

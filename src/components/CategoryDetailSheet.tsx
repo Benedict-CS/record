@@ -9,7 +9,7 @@ import {
   holdRefundIncomeIds,
   isHoldRefundIncome,
 } from "@/lib/reimbursement";
-import { HAIRCUT_TAG, TREAT_TAG } from "@/lib/transaction-tag";
+import { HAIRCUT_TAG, LAUNDRY_TAG, TREAT_TAG } from "@/lib/transaction-tag";
 import type { CategoryKind, Transaction } from "@/lib/types";
 
 function rowAmount(tx: Transaction) {
@@ -176,7 +176,7 @@ export function CategoryDetailSheet({
                       )
                     }
                     className="flex w-full items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2.5 text-left active:bg-[var(--surface)]"
-                    aria-label={`到 ${tx.date} 修改${tx.tag === TREAT_TAG ? "，請客" : tx.tag === HAIRCUT_TAG ? "，剪頭髮" : ""}${tx.note ? `：${tx.note}` : ""}`}
+                    aria-label={`到 ${tx.date} 修改${tx.tag === TREAT_TAG ? "，請客" : tx.tag === HAIRCUT_TAG ? "，剪頭髮" : tx.tag === LAUNDRY_TAG ? "，洗衣" : ""}${tx.note ? `：${tx.note}` : ""}`}
                   >
                     <div className="min-w-0">
                       <p className="flex items-center gap-1.5 text-sm font-medium tabular-nums text-[var(--ink)]">
@@ -188,6 +188,10 @@ export function CategoryDetailSheet({
                         ) : tx.tag === HAIRCUT_TAG ? (
                           <span className="rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-900">
                             剪頭髮
+                          </span>
+                        ) : tx.tag === LAUNDRY_TAG ? (
+                          <span className="rounded-md bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-900">
+                            洗衣
                           </span>
                         ) : null}
                       </p>

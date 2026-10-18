@@ -2,7 +2,7 @@ import { getClientId } from "@/lib/client-id";
 import { sameOwner } from "@/lib/db/owner";
 import { sortCategories } from "@/lib/category-order";
 import { db } from "@/lib/db/schema";
-import { HAIRCUT_TAG } from "@/lib/transaction-tag";
+import { HAIRCUT_TAG, LAUNDRY_TAG } from "@/lib/transaction-tag";
 import type { Account, Book, BookCurrency, Category } from "@/lib/types";
 
 const BOOK_DEFS: {
@@ -462,11 +462,26 @@ async function runLegacyRepairs(
   await dedupeSeedDuplicates();
 
   const haircutRows = await db.transactions
-    .filter((row) => row.type === "expense" && (row.note === "剪頭髮" || row.tag === "剪頭髮" || row.tag === "haircut"))
+    .filter((row) => row.type === "expense" && (
+      row.note === "剪頭髮" || (row.note != null && (row.note.includes("剪頭髮") || row.note.includes("剪髮") || row.note.includes("理髮"))) ||
+      row.tag === "剪頭髮" || row.tag === "haircut"
+    ))
     .toArray();
   for (const row of haircutRows) {
     if (row.tag !== HAIRCUT_TAG) {
       await db.transactions.update(row.id, { tag: HAIRCUT_TAG });
+    }
+  }
+
+  const laundryRows = await db.transactions
+    .filter((row) => row.type === "expense" && (
+      row.note === "洗衣" || row.note === "洗衣服" || (row.note != null && (row.note.includes("洗衣") || row.note.includes("洗衣服"))) ||
+      row.tag === "洗衣" || row.tag === "laundry"
+    ))
+    .toArray();
+  for (const row of laundryRows) {
+    if (row.tag !== LAUNDRY_TAG) {
+      await db.transactions.update(row.id, { tag: LAUNDRY_TAG });
     }
   }
 }
