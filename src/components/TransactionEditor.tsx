@@ -20,7 +20,8 @@ import {
 import { formatMoney, isIsoDate, todayLocal } from "@/lib/format";
 import { rememberAccount, rememberHolding, rememberTxType } from "@/lib/last-account";
 import { preferredCategoryId, rememberCategory } from "@/lib/last-category";
-import { TREAT_TAG } from "@/lib/transaction-tag";
+import { HAIRCUT_TAG, TREAT_TAG } from "@/lib/transaction-tag";
+import { HaircutTagField } from "@/components/HaircutTagField";
 import { useHoldings } from "@/lib/hooks/useLedgerData";
 import { runSync } from "@/lib/sync/engine";
 import type { Account, Category, Transaction, TransactionType } from "@/lib/types";
@@ -66,6 +67,7 @@ export function TransactionEditor({
   const [holdingId, setHoldingId] = useState(transaction.holding_id ?? "");
   const [categoryId, setCategoryId] = useState(transaction.category_id ?? "");
   const [treat, setTreat] = useState(transaction.tag === TREAT_TAG);
+  const [haircut, setHaircut] = useState(transaction.tag === HAIRCUT_TAG);
   const [noteSuggestions, setNoteSuggestions] = useState<string[]>([]);
   const [keypadTarget, setKeypadTarget] = useState<KeypadTarget | null>(null);
   const [saving, setSaving] = useState(false);
@@ -106,6 +108,7 @@ export function TransactionEditor({
     setCategoryId(transaction.category_id ?? "");
     setHoldingId(transaction.holding_id ?? "");
     setTreat(transaction.tag === TREAT_TAG);
+    setHaircut(transaction.tag === HAIRCUT_TAG);
     setError(null);
   }
 
@@ -279,7 +282,7 @@ export function TransactionEditor({
                 : "pending")
             : null,
         holding_id: bankMove && holdingId ? holdingId : null,
-        tag: type === "expense" && treat ? TREAT_TAG : null,
+        tag: type === "expense" ? (treat ? TREAT_TAG : haircut ? HAIRCUT_TAG : null) : null,
       });
       rememberTxType(type);
       if ((type === "expense" || type === "income") && effectiveCategoryId) {
@@ -521,8 +524,21 @@ export function TransactionEditor({
                   />
                 )}
                 {type === "expense" ? (
-                  <div className="mt-2.5">
-                    <TreatTagField checked={treat} onChange={setTreat} />
+                  <div className="mt-2.5 space-y-2">
+                    <TreatTagField
+                      checked={treat}
+                      onChange={(c) => {
+                        setTreat(c);
+                        if (c) setHaircut(false);
+                      }}
+                    />
+                    <HaircutTagField
+                      checked={haircut}
+                      onChange={(c) => {
+                        setHaircut(c);
+                        if (c) setTreat(false);
+                      }}
+                    />
                   </div>
                 ) : null}
               </div>

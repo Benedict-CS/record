@@ -2,6 +2,7 @@ import { getClientId } from "@/lib/client-id";
 import { sameOwner } from "@/lib/db/owner";
 import { sortCategories } from "@/lib/category-order";
 import { db } from "@/lib/db/schema";
+import { HAIRCUT_TAG } from "@/lib/transaction-tag";
 import type { Account, Book, BookCurrency, Category } from "@/lib/types";
 
 const BOOK_DEFS: {
@@ -459,6 +460,15 @@ async function runLegacyRepairs(
 
   // Second pass after reassignment, so merged books don't keep twin 現金.
   await dedupeSeedDuplicates();
+
+  const haircutRows = await db.transactions
+    .filter((row) => row.type === "expense" && (row.note === "剪頭髮" || row.tag === "剪頭髮" || row.tag === "haircut"))
+    .toArray();
+  for (const row of haircutRows) {
+    if (row.tag !== HAIRCUT_TAG) {
+      await db.transactions.update(row.id, { tag: HAIRCUT_TAG });
+    }
+  }
 }
 
 async function runSeed(ownerId: string | null): Promise<void> {

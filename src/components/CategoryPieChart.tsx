@@ -95,6 +95,11 @@ export function CategoryPieChart({
                       含請客 {formatMoney(item.treatAmount, currency)}
                     </span>
                   ) : null}
+                  {item.haircutAmount ? (
+                    <span className="block truncate text-[10px] font-medium text-sky-800">
+                      含剪頭髮 {formatMoney(item.haircutAmount, currency)}
+                    </span>
+                  ) : null}
                 </span>
               </div>
               <div className="flex shrink-0 items-center gap-2 text-right">

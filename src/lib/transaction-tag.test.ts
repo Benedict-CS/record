@@ -1,5 +1,6 @@
 import { categoryBreakdown, monthSummary } from "./db/crud";
 import {
+  HAIRCUT_TAG,
   normalizeTransactionTag,
   tagSearchText,
   TREAT_TAG,
@@ -37,10 +38,13 @@ function tx(
 }
 
 assert(normalizeTransactionTag("expense", TREAT_TAG) === TREAT_TAG, "expense can be tagged 請客");
+assert(normalizeTransactionTag("expense", HAIRCUT_TAG) === HAIRCUT_TAG, "expense can be tagged 剪頭髮");
+assert(normalizeTransactionTag("expense", "剪頭髮") === HAIRCUT_TAG, "expense label 剪頭髮 normalizes to haircut tag");
 assert(normalizeTransactionTag("expense", "dinner") === null, "unknown tags are dropped");
 assert(normalizeTransactionTag("income", TREAT_TAG) === null, "income cannot carry the tag");
 assert(normalizeTransactionTag("hold", TREAT_TAG) === null, "a hold cannot carry the tag");
 assert(tagSearchText(TREAT_TAG) === "請客", "search text is the label");
+assert(tagSearchText(HAIRCUT_TAG) === "剪頭髮", "search text is the haircut label");
 assert(tagSearchText(null) === "", "untagged rows add no search text");
 
 const dinner: Category = {
