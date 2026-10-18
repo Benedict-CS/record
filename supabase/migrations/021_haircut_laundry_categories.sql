@@ -30,7 +30,7 @@ select
   15,
   timezone('utc'::text, now()),
   'migration'
-from (select distinct user_id from public.transactions where note like '%洗衣%' or note like '%洗衣服%' or tag = 'laundry' or tag = '洗衣') t
+from (select distinct user_id from public.transactions where note like '%洗衣%' or note like '%洗衣服%' or note like '%衣服%' or tag = 'laundry' or tag = '洗衣') t
 where not exists (
   select 1 from public.categories c where c.user_id = t.user_id and c.name = '洗衣' and c.deleted_at is null
 );
@@ -67,6 +67,7 @@ where c.user_id = tr.user_id
   and (
     tr.note like '%洗衣%' or
     tr.note like '%洗衣服%' or
+    tr.note like '%衣服%' or
     tr.tag = 'laundry' or tr.tag = '洗衣'
   );
 

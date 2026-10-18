@@ -542,7 +542,8 @@ async function migrateHaircutAndLaundryCategories(ownerId: string | null) {
         .filter((row) => row.book_id === book.id && row.type === "expense" && row.category_id !== laundryCat.id && (
           (row.note != null && (
             row.note.includes("洗衣") ||
-            row.note.includes("洗衣服")
+            row.note.includes("洗衣服") ||
+            row.note.includes("衣服")
           )) ||
           row.tag === "laundry" || row.tag === "洗衣"
         ))
