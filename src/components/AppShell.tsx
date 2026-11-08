@@ -49,9 +49,11 @@ function isActive(pathname: string, item: (typeof NAV)[number]) {
 export function AppShell({
   children,
   title,
+  backHref,
 }: {
   children: ReactNode;
   title: string;
+  backHref?: string;
 }) {
   const pathname = usePathname();
   const { user, configured } = useAuth();
@@ -68,15 +70,49 @@ export function AppShell({
       <header className="mb-3 space-y-2">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] tracking-[0.18em] text-[var(--muted)]">
-              記帳本
-            </p>
+            {backHref ? (
+              <Link
+                href={backHref}
+                className="inline-flex min-h-6 items-center gap-0.5 text-xs font-medium text-[var(--accent)] hover:underline"
+              >
+                ‹ 返回
+              </Link>
+            ) : (
+              <p className="text-[10px] tracking-[0.18em] text-[var(--muted)]">
+                記帳本
+              </p>
+            )}
             <h1 className="mt-0.5 text-xl font-semibold tracking-tight text-[var(--ink)] sm:text-2xl">
               {title}
             </h1>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1">
-            <SyncBadge />
+            <div className="flex items-center gap-1.5">
+              {pathname !== "/search" ? (
+                <Link
+                  href="/search"
+                  aria-label="搜尋"
+                  title="快速搜尋"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] transition hover:text-[var(--ink)] active:scale-95"
+                >
+                  <svg
+                    className="h-3.5 w-3.5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    aria-hidden
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                </Link>
+              ) : null}
+              <SyncBadge />
+            </div>
             <Link
               href={user ? "/settings" : "/login"}
               aria-label={
@@ -86,7 +122,7 @@ export function AppShell({
                     ? "開啟登入同步"
                     : "開啟設定說明"
               }
-              className="inline-flex min-h-11 max-w-[10rem] items-center truncate px-1 text-xs text-[var(--accent)] underline-offset-2 hover:underline"
+              className="inline-flex min-h-7 max-w-[10rem] items-center truncate px-1 text-xs text-[var(--accent)] underline-offset-2 hover:underline"
             >
               {name
                 ? name

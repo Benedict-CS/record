@@ -190,7 +190,7 @@ export function BudgetsPage() {
   }
 
   return (
-    <AppShell title="預算">
+    <AppShell title="預算" backHref="/more">
       {!ready ? (
         <div className="space-y-4">
           <CardSkeleton lines={1} />

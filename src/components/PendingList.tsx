@@ -6,9 +6,10 @@ import { AppShell } from "@/components/AppShell";
 import { useBook } from "@/components/BookProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useToast } from "@/components/ToastProvider";
+import { TransactionEditor } from "@/components/TransactionEditor";
 import { markReimbursementReceived, releaseHold } from "@/lib/db/crud";
 import { formatDayHeading, formatMoney, todayLocal } from "@/lib/format";
-import { useCategories, useOpenItems } from "@/lib/hooks/useLedgerData";
+import { useAccounts, useCategories, useOpenItems } from "@/lib/hooks/useLedgerData";
 import { groupOpenItems, type OpenGroup } from "@/lib/open-items";
 import { runSync } from "@/lib/sync/engine";
 import type { Transaction } from "@/lib/types";
@@ -46,9 +47,12 @@ function OpenItemList() {
   const { book } = useBook();
   const currency = book?.currency;
   const { items, groups } = useOpenGroups();
+  const accounts = useAccounts();
+  const categories = useCategories();
   const confirm = useConfirm();
   const { show } = useToast();
   const [openKey, setOpenKey] = useState<string | null>(null);
+  const [editingTx, setEditingTx] = useState<Transaction | null>(null);
 
   async function releaseAll(rows: Transaction[]) {
     const ok = await confirm({
@@ -116,6 +120,7 @@ function OpenItemList() {
             onToggle={() =>
               setOpenKey((current) => (current === group.key ? null : group.key))
             }
+            onView={(tx) => setEditingTx(tx)}
             onRelease={() => void releaseAll(group.items)}
             onReimburse={() => void reimburseAll(group.items)}
             onReleaseOne={(tx) => void releaseAll([tx])}
@@ -123,6 +128,15 @@ function OpenItemList() {
           />
         ))}
       </ul>
+
+      {editingTx ? (
+        <TransactionEditor
+          transaction={editingTx}
+          accounts={accounts}
+          categories={categories}
+          onClose={() => setEditingTx(null)}
+        />
+      ) : null}
     </section>
   );
 }
@@ -132,6 +146,7 @@ function GroupCard({
   currency,
   expanded,
   onToggle,
+  onView,
   onRelease,
   onReimburse,
   onReleaseOne,
@@ -141,6 +156,7 @@ function GroupCard({
   currency: string | undefined;
   expanded: boolean;
   onToggle: () => void;
+  onView: (tx: Transaction) => void;
   onRelease: () => void;
   onReimburse: () => void;
   onReleaseOne: (tx: Transaction) => void;
@@ -170,12 +186,13 @@ function GroupCard({
           </p>
         </button>
         {!many ? (
-          <Link
-            href={`/calendar?date=${group.items[0].date}&tx=${group.items[0].id}`}
-            className="inline-flex min-h-10 shrink-0 items-center rounded-xl px-2 text-xs text-[var(--accent)]"
+          <button
+            type="button"
+            onClick={() => onView(group.items[0])}
+            className="inline-flex min-h-10 shrink-0 items-center rounded-xl px-2 text-xs text-[var(--accent)] hover:underline"
           >
             看
-          </Link>
+          </button>
         ) : null}
         <button
           type="button"
@@ -194,9 +211,10 @@ function GroupCard({
         <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
           {group.items.map((tx) => (
             <li key={tx.id} className="flex items-center gap-2 px-3 py-2">
-              <Link
-                href={`/calendar?date=${tx.date}&tx=${tx.id}`}
-                className="min-w-0 flex-1 text-[11px] text-[var(--muted)] underline-offset-2 hover:underline"
+              <button
+                type="button"
+                onClick={() => onView(tx)}
+                className="min-w-0 flex-1 text-left text-[11px] text-[var(--muted)] underline-offset-2 hover:underline"
               >
                 {formatDayHeading(tx.date)}
                 {" · "}
@@ -206,7 +224,7 @@ function GroupCard({
                     currency,
                   )}
                 </span>
-              </Link>
+              </button>
               <button
                 type="button"
                 onClick={() =>
@@ -226,7 +244,7 @@ function GroupCard({
 
 export function PendingPage() {
   return (
-    <AppShell title="待處理">
+    <AppShell title="待處理" backHref="/">
       <OpenItemList />
     </AppShell>
   );

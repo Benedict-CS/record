@@ -9,6 +9,7 @@ import { CategoryPickerGrid } from "@/components/CategoryPickerGrid";
 import { NoteSuggest } from "@/components/NoteSuggest";
 import { ReceiptField } from "@/components/ReceiptField";
 import { SplitField } from "@/components/SplitField";
+import { useToast } from "@/components/ToastProvider";
 import { TreatTagField } from "@/components/TreatTagField";
 import { createTransaction, listRecentNotes, updateTransaction } from "@/lib/db/crud";
 import { deleteReceipt, getReceipt, putReceipt } from "@/lib/db/receipts";
@@ -68,6 +69,7 @@ export function TransactionForm({
 }) {
   const { book, bookId } = useBook();
   const holdings = useHoldings();
+  const { show } = useToast();
   const isEdit = Boolean(initial?.id);
 
   const [typeChoice, setTypeChoice] = useState<FormType | "">(
@@ -214,8 +216,7 @@ export function TransactionForm({
       ? Math.max(0, amount - reimbursable)
       : null;
 
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
+  async function handleSave(keepOpen = false) {
     setError(null);
 
     if (!isIsoDate(date)) {
@@ -340,12 +341,23 @@ export function TransactionForm({
         rememberHolding(bookId, effectiveHoldingId);
       }
       void runSync();
-      onSaved?.({ date });
+
+      if (keepOpen) {
+        show("已記一筆，請繼續記下一筆", { variant: "success" });
+        setKeypadTarget("amount");
+      } else {
+        onSaved?.({ date });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "儲存失敗");
     } finally {
       setSaving(false);
     }
+  }
+
+  function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    void handleSave(false);
   }
 
   const amountLabel =
@@ -573,23 +585,45 @@ export function TransactionForm({
 
         {error ? <p className="text-sm text-rose-600">{error}</p> : null}
 
-        <button
-          type="submit"
-          disabled={
-            saving ||
-            accounts.length === 0 ||
-            (type !== "hold" && filteredCategories.length === 0)
-          }
-          className="min-h-12 w-full rounded-xl bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-[var(--paper)] disabled:opacity-60"
-        >
-          {saving
-            ? "儲存中…"
-            : isEdit
-              ? "更新"
-              : type === "hold"
-                ? "記一筆扣住"
-                : "記一筆"}
-        </button>
+        {!isEdit ? (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={
+                saving ||
+                accounts.length === 0 ||
+                (type !== "hold" && filteredCategories.length === 0)
+              }
+              onClick={() => void handleSave(true)}
+              className="flex min-h-12 flex-1 items-center justify-center rounded-xl border border-[var(--line)] bg-[var(--paper)] px-4 py-2.5 text-sm font-medium text-[var(--ink)] transition active:bg-[rgba(28,43,36,0.04)] disabled:opacity-50"
+            >
+              {saving ? "儲存中…" : "再記一筆"}
+            </button>
+            <button
+              type="submit"
+              disabled={
+                saving ||
+                accounts.length === 0 ||
+                (type !== "hold" && filteredCategories.length === 0)
+              }
+              className="flex min-h-12 flex-1 items-center justify-center rounded-xl bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-[var(--paper)] transition active:scale-[0.99] disabled:opacity-60"
+            >
+              {saving
+                ? "儲存中…"
+                : type === "hold"
+                  ? "記一筆扣住"
+                  : "記一筆"}
+            </button>
+          </div>
+        ) : (
+          <button
+            type="submit"
+            disabled={saving || accounts.length === 0}
+            className="min-h-12 w-full rounded-xl bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-[var(--paper)] disabled:opacity-60"
+          >
+            {saving ? "儲存中…" : "更新"}
+          </button>
+        )}
       </form>
 
       <AmountKeypad

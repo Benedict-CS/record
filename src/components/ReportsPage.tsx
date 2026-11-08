@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { useBook } from "@/components/BookProvider";
 import { CategoryDetailSheet } from "@/components/CategoryDetailSheet";
@@ -737,13 +736,19 @@ export function ReportsPage() {
                 <YearBarChart months={monthlyTotals} currency={currency} />
                 <div className="mt-3 grid grid-cols-6 gap-1.5 px-1">
                   {monthlyTotals.map((row) => (
-                    <Link
+                    <button
+                      type="button"
                       key={row.month}
-                      href={`/?y=${year}&m=${row.month}`}
-                      className="flex min-h-10 items-center justify-center rounded-lg text-xs font-medium text-[var(--ink)] active:bg-[var(--paper)]"
+                      onClick={() => {
+                        setYear(year);
+                        setMonth(row.month);
+                        setScope("month");
+                      }}
+                      className="flex min-h-10 items-center justify-center rounded-lg text-xs font-medium text-[var(--ink)] transition active:bg-[var(--paper)]"
+                      aria-label={`查看 ${year} 年 ${row.month} 月報表`}
                     >
                       {row.month}月
-                    </Link>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -757,13 +762,19 @@ export function ReportsPage() {
                 <YearBarChart months={rangeMonths} currency={currency} />
                 <div className="mt-3 flex flex-wrap gap-1.5 px-1">
                   {rangeMonths.map((row) => (
-                    <Link
+                    <button
+                      type="button"
                       key={`${row.year}-${row.month}`}
-                      href={`/?y=${row.year}&m=${row.month}`}
-                      className="flex min-h-9 items-center justify-center rounded-lg border border-[var(--line)] px-2.5 text-xs font-medium text-[var(--ink)] active:bg-[var(--paper)]"
+                      onClick={() => {
+                        setYear(row.year);
+                        setMonth(row.month);
+                        setScope("month");
+                      }}
+                      className="flex min-h-9 items-center justify-center rounded-lg border border-[var(--line)] px-2.5 text-xs font-medium text-[var(--ink)] transition active:bg-[var(--paper)]"
+                      aria-label={`查看 ${row.label} 報表`}
                     >
                       {row.label}
-                    </Link>
+                    </button>
                   ))}
                 </div>
               </div>

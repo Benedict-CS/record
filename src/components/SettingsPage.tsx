@@ -59,7 +59,7 @@ export function SettingsPage() {
   }
 
   return (
-    <AppShell title="帳號設定">
+    <AppShell title="帳號設定" backHref="/more">
       <div className="space-y-4">
         {configured ? (
           <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">

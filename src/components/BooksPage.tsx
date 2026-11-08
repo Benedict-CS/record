@@ -137,7 +137,7 @@ export function BooksPage() {
   }
 
   return (
-    <AppShell title="帳本">
+    <AppShell title="帳本" backHref="/more">
       {!ready ? (
         <p className="text-sm text-[var(--muted)]">載入本機資料…</p>
       ) : (

@@ -702,5 +702,5 @@ export function RecurringPage({
   );
 
   if (embedded) return body;
-  return <AppShell title="每月固定">{body}</AppShell>;
+  return <AppShell title="每月固定" backHref="/more">{body}</AppShell>;
 }

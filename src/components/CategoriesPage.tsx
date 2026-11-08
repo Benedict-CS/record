@@ -291,7 +291,7 @@ export function CategoriesPage() {
   }
 
   return (
-    <AppShell title="分類">
+    <AppShell title="分類" backHref="/more">
       {!ready ? (
         <ListSkeleton rows={6} />
       ) : (

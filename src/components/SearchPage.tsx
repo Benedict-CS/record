@@ -182,7 +182,7 @@ export function SearchPage() {
   const searching = Boolean(query) || hasFilters;
 
   return (
-    <AppShell title="搜尋">
+    <AppShell title="搜尋" backHref="/">
       {!ready ? (
         <p className="text-sm text-[var(--muted)]">載入本機資料…</p>
       ) : (
