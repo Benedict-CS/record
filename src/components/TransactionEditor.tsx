@@ -6,6 +6,7 @@ import { BankHoldingField } from "@/components/BankHoldingField";
 import { useBook } from "@/components/BookProvider";
 import { CategoryPickerGrid } from "@/components/CategoryPickerGrid";
 import { NoteSuggest } from "@/components/NoteSuggest";
+import { SplitField } from "@/components/SplitField";
 import { TreatTagField } from "@/components/TreatTagField";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useToast } from "@/components/ToastProvider";
@@ -24,10 +25,11 @@ import { formatMoney, isIsoDate, todayLocal } from "@/lib/format";
 import { rememberAccount, rememberHolding, rememberTxType } from "@/lib/last-account";
 import { preferredCategoryId, rememberCategory } from "@/lib/last-category";
 import { HOLD_REFUND_NOTE_PREFIX } from "@/lib/reimbursement";
+import { parseSplits, splitsOverAmount } from "@/lib/split";
 import { TREAT_TAG } from "@/lib/transaction-tag";
 import { useHoldings } from "@/lib/hooks/useLedgerData";
 import { runSync } from "@/lib/sync/engine";
-import type { Account, Category, Transaction, TransactionType } from "@/lib/types";
+import type { Account, Category, SplitShare, Transaction, TransactionType } from "@/lib/types";
 
 type FormType = "income" | "expense" | "hold";
 type KeypadTarget = "amount" | "reimbursable";
@@ -70,6 +72,9 @@ export function TransactionEditor({
   const [holdingId, setHoldingId] = useState(transaction.holding_id ?? "");
   const [categoryId, setCategoryId] = useState(transaction.category_id ?? "");
   const [treat, setTreat] = useState(transaction.tag === TREAT_TAG);
+  const [splits, setSplits] = useState<SplitShare[] | null>(
+    parseSplits(transaction.splits),
+  );
   const [noteSuggestions, setNoteSuggestions] = useState<string[]>([]);
   const [keypadTarget, setKeypadTarget] = useState<KeypadTarget | null>(null);
   const [saving, setSaving] = useState(false);
@@ -112,6 +117,7 @@ export function TransactionEditor({
     setCategoryId(transaction.category_id ?? "");
     setHoldingId(transaction.holding_id ?? "");
     setTreat(transaction.tag === TREAT_TAG);
+    setSplits(parseSplits(transaction.splits));
     setError(null);
   }
 
@@ -330,6 +336,11 @@ export function TransactionEditor({
       return;
     }
 
+    if (type === "expense" && splits && splitsOverAmount(amount, splits)) {
+      setError("別人的份額加起來超過這筆總金額");
+      return;
+    }
+
     setSaving(true);
     try {
       await updateTransaction(transaction.id, {
@@ -341,6 +352,7 @@ export function TransactionEditor({
         category_id: effectiveCategoryId ? String(effectiveCategoryId) : null,
         transfer_account_id: null,
         hold_status: type === "hold" ? (transaction.hold_status ?? "held") : null,
+        splits: type === "expense" ? splits : null,
         reimbursable_amount:
           type === "expense" && reimbursable != null && reimbursable > 0
             ? reimbursable
@@ -604,8 +616,14 @@ export function TransactionEditor({
                   />
                 )}
                 {type === "expense" ? (
-                  <div className="mt-2.5">
+                  <div className="mt-2.5 space-y-2">
                     <TreatTagField checked={treat} onChange={setTreat} />
+                    <SplitField
+                      amount={amount}
+                      currency={book?.currency}
+                      value={splits}
+                      onChange={setSplits}
+                    />
                   </div>
                 ) : null}
               </div>

@@ -969,6 +969,7 @@ export async function duplicateTransaction(
         : null,
     holding_id: existing.holding_id,
     tag: existing.tag,
+    splits: existing.type === "expense" ? existing.splits : null,
   });
 }
 
