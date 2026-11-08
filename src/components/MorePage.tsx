@@ -4,9 +4,6 @@ import Link from "next/link";
 import { accountLabel } from "@/lib/account-name";
 import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/components/AuthProvider";
-import { useBook } from "@/components/BookProvider";
-import { useOpenItems } from "@/lib/hooks/useLedgerData";
-import { groupOpenItems } from "@/lib/open-items";
 
 interface MoreLinkItem {
   href: string;
@@ -15,16 +12,6 @@ interface MoreLinkItem {
 }
 
 const LINKS: MoreLinkItem[] = [
-  {
-    href: "/pending",
-    title: "待處理",
-    description: "還沒銷帳的核銷，和還沒退回的扣住",
-  },
-  {
-    href: "/books",
-    title: "帳本",
-    description: "新增、切換與管理帳本",
-  },
   {
     href: "/categories",
     title: "分類",
@@ -49,14 +36,12 @@ const LINKS: MoreLinkItem[] = [
 
 export function MorePage() {
   const { user } = useAuth();
-  const { book } = useBook();
-  const openCount = groupOpenItems(useOpenItems()).length;
 
   return (
     <AppShell title="更多">
       <div className="space-y-3">
         <p className="text-sm text-[var(--muted)]">
-          管理帳本、分類、預算與帳號設定。
+          管理分類、預算、固定項目與帳號設定。
         </p>
 
         <ul className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">
@@ -88,16 +73,6 @@ export function MorePage() {
                       {isSettings && user ? (
                         <span className="ml-2 text-xs font-normal text-[var(--accent)]">
                           已同步
-                        </span>
-                      ) : null}
-                      {item.href === "/pending" && openCount > 0 ? (
-                        <span className="ml-2 text-xs font-normal tabular-nums text-[var(--accent)]">
-                          {openCount} 件
-                        </span>
-                      ) : null}
-                      {item.href === "/books" && book ? (
-                        <span className="ml-2 text-xs font-normal text-[var(--accent)]">
-                          {book.name}
                         </span>
                       ) : null}
                     </p>

@@ -5,7 +5,6 @@ import { useBook } from "@/components/BookProvider";
 import { HoldStepButton } from "@/components/HoldStepButton";
 import { PeriodJump } from "@/components/PeriodJump";
 import { SimpleSummary } from "@/components/SimpleSummary";
-import { YearSpendCard } from "@/components/YearSpendCard";
 import { compareSummaries, monthSummary } from "@/lib/db/crud";
 import { formatMoney, shiftYearMonth, throughToday, todayLocal } from "@/lib/format";
 import { useMonthTransactions } from "@/lib/hooks/useLedgerData";
@@ -134,7 +133,7 @@ export function MonthSummary({
         </HoldStepButton>
       </div>
 
-      <SimpleSummary summary={summary} currency={currency} showAssetsLink />
+      <SimpleSummary summary={summary} currency={currency} />
       {showDelta ? (
         <p className="mt-2 text-[11px] tabular-nums text-[var(--muted)]">
           {Math.abs(spendDelta) < 0.005
@@ -146,9 +145,6 @@ export function MonthSummary({
               } ${formatMoney(Math.abs(spendDelta), currency)}`}
         </p>
       ) : null}
-      <div className="mt-2 border-t border-[var(--line)] pt-2">
-        <YearSpendCard year={year} />
-      </div>
     </section>
   );
 }

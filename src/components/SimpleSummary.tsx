@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { formatMoney, type MoneyCurrency } from "@/lib/format";
 import {
   periodBalance,
@@ -12,14 +11,12 @@ export function SimpleSummary({
   summary,
   currency,
   heldMode = "period",
-  showAssetsLink = false,
   periodLabel = "本月",
 }: {
   summary: PeriodSummary;
   currency?: MoneyCurrency;
   /** Year/all reports show money still locked; a month keeps every hold dated in it. */
   heldMode?: "period" | "outstanding";
-  showAssetsLink?: boolean;
   periodLabel?: string;
 }) {
   const spend = periodSpend(summary);
@@ -46,37 +43,23 @@ export function SimpleSummary({
 
   return (
     <div>
-      <div className="mt-1 flex items-baseline justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-[var(--muted)]">
-            {balanceLabel}
-          </p>
-          <p
-            className={`mt-0.5 text-2xl font-bold tracking-tight tabular-nums sm:text-3xl ${
-              balance > 0.005
-                ? "text-emerald-700"
-                : balance < -0.005
-                  ? "text-rose-700"
-                  : "text-[var(--ink)]"
-            }`}
-          >
-            {balance > 0.005
-              ? `+${formatMoney(balance, currency)}`
-              : formatMoney(balance, currency)}
-          </p>
-        </div>
-        {showAssetsLink ? (
-          <Link
-            href="/holdings"
-            className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--paper)] px-3 py-1 text-xs font-medium text-[var(--ink)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] active:scale-95"
-            title="查看存款與資產"
-          >
-            <span>資產</span>
-            <span aria-hidden className="text-[13px] text-[var(--muted)]">
-              ⇄
-            </span>
-          </Link>
-        ) : null}
+      <div className="mt-1 min-w-0">
+        <p className="text-xs font-medium text-[var(--muted)]">
+          {balanceLabel}
+        </p>
+        <p
+          className={`mt-0.5 text-2xl font-bold tracking-tight tabular-nums sm:text-3xl ${
+            balance > 0.005
+              ? "text-emerald-700"
+              : balance < -0.005
+                ? "text-rose-700"
+                : "text-[var(--ink)]"
+          }`}
+        >
+          {balance > 0.005
+            ? `+${formatMoney(balance, currency)}`
+            : formatMoney(balance, currency)}
+        </p>
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2 border-t border-[var(--line)] pt-3">
