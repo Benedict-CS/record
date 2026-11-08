@@ -9,8 +9,15 @@ import { HoldStepButton } from "@/components/HoldStepButton";
 import { PeriodJump } from "@/components/PeriodJump";
 import { SimpleSummary } from "@/components/SimpleSummary";
 import { CategoryPieChart } from "@/components/CategoryPieChart";
+import { RangePickerSheet } from "@/components/RangePickerSheet";
 import { TrendLineChart, type TrendPoint } from "@/components/TrendLineChart";
 import { YearBarChart } from "@/components/YearBarChart";
+import {
+  defaultCustomRange,
+  getRangeBounds,
+  monthlyTotalsForRange,
+  type CustomRange,
+} from "@/lib/custom-range";
 import {
   categoryBreakdown,
   compareSummaries,
@@ -38,7 +45,7 @@ import {
 } from "@/lib/hooks/useLedgerData";
 import type { CategoryBreakdownItem, CategoryKind } from "@/lib/types";
 
-type ReportScope = "month" | "year" | "all";
+type ReportScope = "month" | "year" | "range" | "all";
 
 function pad2(value: number) {
   return String(value).padStart(2, "0");
@@ -58,6 +65,10 @@ export function ReportsPage() {
   const [scope, setScope] = useState<ReportScope>("month");
   const [year, setYear] = useState(nowYear);
   const [month, setMonth] = useState(nowMonth);
+  const [customRange, setCustomRange] = useState<CustomRange>(() =>
+    defaultCustomRange(),
+  );
+  const [rangePickerOpen, setRangePickerOpen] = useState(false);
   const [pieKind, setPieKind] = useState<CategoryKind>("expense");
   const [detail, setDetail] = useState<
     (CategoryBreakdownItem & { kind: CategoryKind }) | null
@@ -65,12 +76,21 @@ export function ReportsPage() {
 
   const categories = useCategories();
   const endYear = useLedgerEndYear();
+  const rangeBounds = useMemo(
+    () => getRangeBounds(customRange),
+    [customRange],
+  );
   const monthTransactions = useMonthTransactions(
     year,
     month,
     scope === "month",
   );
   const yearTransactions = useYearTransactions(year, scope === "year");
+  const rangeTransactions = useTransactionsBetween(
+    rangeBounds.start,
+    rangeBounds.endExclusive,
+    scope === "range",
+  );
   const historyTransactions = useTransactionsBetween(
     `${LEDGER_START_YEAR}-01-01`,
     "2100-01-01",
@@ -98,7 +118,9 @@ export function ReportsPage() {
       ? monthTransactions
       : scope === "year"
         ? yearTransactions
-        : historyTransactions;
+        : scope === "range"
+          ? rangeTransactions
+          : historyTransactions;
   const monthCounted = useMemo(
     () =>
       isCurrentMonth
@@ -166,6 +188,25 @@ export function ReportsPage() {
       ),
     [scope, activeTransactions, nowYear],
   );
+  const rangeMonths = useMemo(() => {
+    if (scope !== "range" || customRange.mode !== "month") return [];
+    return monthlyTotalsForRange(
+      activeTransactions,
+      customRange.startYear,
+      customRange.startMonth,
+      customRange.endYear,
+      customRange.endMonth,
+    );
+  }, [scope, customRange, activeTransactions]);
+
+  const rangeYears = useMemo(() => {
+    if (scope !== "range" || customRange.mode !== "year") return [];
+    return yearlyTotals(
+      activeTransactions,
+      customRange.startYear,
+      customRange.endYear,
+    );
+  }, [scope, customRange, activeTransactions]);
 
   const trendPoints = useMemo<TrendPoint[]>(() => {
     if (scope === "month") {
@@ -194,12 +235,81 @@ export function ReportsPage() {
         expense: row.expense,
       }));
     }
-    return monthlyTotals.map((row) => ({
-      label: `${row.month}月`,
-      fullLabel: `${year} 年 ${row.month} 月`,
-      income: row.income,
-      expense: row.expense,
-    }));
+    if (scope === "year") {
+      return monthlyTotals.map((row) => ({
+        label: `${row.month}月`,
+        fullLabel: `${year} 年 ${row.month} 月`,
+        income: row.income,
+        expense: row.expense,
+      }));
+    }
+    // scope === "range"
+    if (customRange.mode === "year") {
+      return rangeYears.map((row) => ({
+        label: String(row.year),
+        fullLabel: `${row.year} 年`,
+        income: row.income,
+        expense: row.expense,
+      }));
+    }
+    if (customRange.mode === "month") {
+      if (rangeMonths.length === 1) {
+        const only = rangeMonths[0];
+        const byDate = new Map(
+          dailyTrend(activeTransactions).map((point) => [point.date, point]),
+        );
+        const lastDay = daysInMonth(only.year, only.month);
+        return Array.from({ length: lastDay }, (_, index) => {
+          const day = index + 1;
+          const date = `${only.year}-${pad2(only.month)}-${pad2(day)}`;
+          const point = byDate.get(date);
+          return {
+            label: String(day),
+            fullLabel: `${only.month} 月 ${day} 日`,
+            income: point?.income ?? 0,
+            expense: point?.expense ?? 0,
+          };
+        });
+      }
+      return rangeMonths.map((row) => ({
+        label: row.label,
+        fullLabel: `${row.year} 年 ${row.month} 月`,
+        income: row.income,
+        expense: row.expense,
+      }));
+    }
+    // date mode
+    const byDate = new Map(
+      dailyTrend(activeTransactions).map((point) => [point.date, point]),
+    );
+    const dates = Array.from(byDate.keys()).sort();
+    if (dates.length <= 45) {
+      return dates.map((date) => {
+        const point = byDate.get(date);
+        return {
+          label: date.slice(5),
+          fullLabel: date,
+          income: point?.income ?? 0,
+          expense: point?.expense ?? 0,
+        };
+      });
+    }
+    const byMonth = new Map<string, { income: number; expense: number }>();
+    for (const [date, point] of byDate.entries()) {
+      const mKey = date.slice(0, 7);
+      const cur = byMonth.get(mKey) ?? { income: 0, expense: 0 };
+      cur.income += point.income;
+      cur.expense += point.expense;
+      byMonth.set(mKey, cur);
+    }
+    return Array.from(byMonth.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([mKey, val]) => ({
+        label: mKey,
+        fullLabel: `${mKey.slice(0, 4)} 年 ${Number(mKey.slice(5, 7))} 月`,
+        income: val.income,
+        expense: val.expense,
+      }));
   }, [
     scope,
     activeTransactions,
@@ -207,6 +317,9 @@ export function ReportsPage() {
     today,
     monthlyTotals,
     historyYears,
+    rangeMonths,
+    rangeYears,
+    customRange.mode,
     year,
     month,
   ]);
@@ -217,7 +330,9 @@ export function ReportsPage() {
       ? `${month} 月消費最多`
       : scope === "year"
         ? `${year} 年消費最多`
-        : "全部消費最多";
+        : scope === "range"
+          ? "區間消費最多"
+          : "全部消費最多";
   const rankingTitle = `${pieKind === "expense" ? "支出" : "收入"}排行 TOP 5`;
 
   function shiftPeriod(delta: number) {
@@ -232,7 +347,7 @@ export function ReportsPage() {
   }
 
   const hasPreviousPeriod =
-    scope === "all"
+    scope === "all" || scope === "range"
       ? false
       : scope === "month"
         ? previousMonthRef.year >= LEDGER_START_YEAR
@@ -243,7 +358,9 @@ export function ReportsPage() {
       ? `${year} 年 ${month} 月`
       : scope === "year"
         ? `${year} 年`
-        : `${LEDGER_START_YEAR} 年至今`;
+        : scope === "range"
+          ? rangeBounds.label
+          : `${LEDGER_START_YEAR} 年至今`;
   const previousLabel =
     scope === "month"
       ? `${previousMonthRef.year} 年 ${previousMonthRef.month} 月`
@@ -257,11 +374,12 @@ export function ReportsPage() {
         <p className="text-sm text-[var(--muted)]">載入本機資料…</p>
       ) : (
         <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-1">
+          <div className="grid grid-cols-4 gap-1 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-1">
             {(
               [
                 { id: "month", label: "月報表" },
                 { id: "year", label: "年報表" },
+                { id: "range", label: "區間" },
                 { id: "all", label: "全部" },
               ] as const
             ).map((option) => (
@@ -270,7 +388,7 @@ export function ReportsPage() {
                 type="button"
                 onClick={() => setScope(option.id)}
                 className={[
-                  "min-h-11 rounded-xl px-3 py-2 text-sm font-medium transition",
+                  "min-h-11 rounded-xl px-2 py-2 text-xs sm:text-sm font-medium transition",
                   scope === option.id
                     ? "bg-[var(--ink)] text-[var(--paper)]"
                     : "text-[var(--muted)]",
@@ -290,6 +408,108 @@ export function ReportsPage() {
                 <p className="text-[11px] text-[var(--muted)]">從開始記帳到今天</p>
                 {laterCount > 0 ? (
                   <p className="text-[11px] text-[var(--muted)]">
+                    不含今天之後先入帳的 {laterCount} 筆
+                  </p>
+                ) : null}
+              </div>
+            ) : scope === "range" ? (
+              <div className="mb-3 text-center">
+                <button
+                  type="button"
+                  onClick={() => setRangePickerOpen(true)}
+                  aria-label="調整報表區間"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3.5 py-1.5 text-sm font-semibold tracking-wide text-[var(--ink)] shadow-xs active:bg-[var(--surface)]"
+                >
+                  <span>{periodLabel}</span>
+                  <span className="text-[11px] text-[var(--accent)] font-medium">調整區間 ▾</span>
+                </button>
+                <div className="mt-2.5 flex flex-wrap items-center justify-center gap-1.5 px-1">
+                  {[
+                    {
+                      label: "1–4 月",
+                      range: {
+                        mode: "month" as const,
+                        startYear: nowYear,
+                        startMonth: 1,
+                        endYear: nowYear,
+                        endMonth: 4,
+                        dateFrom: `${nowYear}-01-01`,
+                        dateTo: `${nowYear}-04-30`,
+                      },
+                    },
+                    {
+                      label: "上半年",
+                      range: {
+                        mode: "month" as const,
+                        startYear: nowYear,
+                        startMonth: 1,
+                        endYear: nowYear,
+                        endMonth: 6,
+                        dateFrom: `${nowYear}-01-01`,
+                        dateTo: `${nowYear}-06-30`,
+                      },
+                    },
+                    {
+                      label: "下半年",
+                      range: {
+                        mode: "month" as const,
+                        startYear: nowYear,
+                        startMonth: 7,
+                        endYear: nowYear,
+                        endMonth: 12,
+                        dateFrom: `${nowYear}-07-01`,
+                        dateTo: `${nowYear}-12-31`,
+                      },
+                    },
+                    {
+                      label: "近 3 個月",
+                      range: {
+                        mode: "month" as const,
+                        startYear: nowMonth >= 3 ? nowYear : nowYear - 1,
+                        startMonth: nowMonth >= 3 ? nowMonth - 2 : 12 + (nowMonth - 2),
+                        endYear: nowYear,
+                        endMonth: nowMonth,
+                        dateFrom: "",
+                        dateTo: "",
+                      },
+                    },
+                    {
+                      label: "2021–2023",
+                      range: {
+                        mode: "year" as const,
+                        startYear: 2021,
+                        startMonth: 1,
+                        endYear: 2023,
+                        endMonth: 12,
+                        dateFrom: "",
+                        dateTo: "",
+                      },
+                    },
+                    {
+                      label: "近 3 年",
+                      range: {
+                        mode: "year" as const,
+                        startYear: Math.max(LEDGER_START_YEAR, nowYear - 2),
+                        startMonth: 1,
+                        endYear: nowYear,
+                        endMonth: 12,
+                        dateFrom: "",
+                        dateTo: "",
+                      },
+                    },
+                  ].map((chip) => (
+                    <button
+                      key={chip.label}
+                      type="button"
+                      onClick={() => setCustomRange(chip.range)}
+                      className="rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2 py-0.5 text-[11px] font-medium text-[var(--ink)] active:bg-[var(--surface)]"
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
+                {laterCount > 0 ? (
+                  <p className="mt-1 text-[11px] text-[var(--muted)]">
                     不含今天之後先入帳的 {laterCount} 筆
                   </p>
                 ) : null}
@@ -493,6 +713,60 @@ export function ReportsPage() {
             </section>
           ) : null}
 
+          {scope === "range" && customRange.mode === "month" && rangeMonths.length > 1 ? (
+            <section className="space-y-2">
+              <h2 className="text-sm font-medium text-[var(--ink)]">各月收支</h2>
+              <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-2 py-3 sm:px-3">
+                <YearBarChart months={rangeMonths} currency={currency} />
+                <div className="mt-3 flex flex-wrap gap-1.5 px-1">
+                  {rangeMonths.map((row) => (
+                    <Link
+                      key={`${row.year}-${row.month}`}
+                      href={`/?y=${row.year}&m=${row.month}`}
+                      className="flex min-h-9 items-center justify-center rounded-lg border border-[var(--line)] px-2.5 text-xs font-medium text-[var(--ink)] active:bg-[var(--paper)]"
+                    >
+                      {row.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {scope === "range" && customRange.mode === "year" ? (
+            <section className="space-y-2">
+              <h2 className="text-sm font-medium text-[var(--ink)]">各年收支</h2>
+              <ul className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">
+                {[...rangeYears].reverse().map((row) => (
+                  <li key={row.year} className="border-t border-[var(--line)] first:border-t-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setYear(row.year);
+                        setScope("year");
+                      }}
+                      aria-label={`查看 ${row.year} 年報表`}
+                      className="flex min-h-12 w-full items-center gap-3 px-4 py-2 text-left active:bg-[var(--paper)]"
+                    >
+                      <span className="w-14 shrink-0 text-sm font-medium tabular-nums text-[var(--ink)]">
+                        {row.year}
+                      </span>
+                      <span className="min-w-0 flex-1 text-right text-sm tabular-nums text-rose-700">
+                        {formatMoney(row.expense, currency)}
+                      </span>
+                      <span className="min-w-0 flex-1 text-right text-sm tabular-nums text-emerald-800">
+                        {formatMoney(row.income, currency)}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <p className="px-1 text-[11px] text-[var(--muted)]">
+                左紅是支出，右綠是收入。點一年可看該年的年報表。
+              </p>
+            </section>
+          ) : null}
+
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-sm font-medium text-[var(--ink)]">分類占比</h2>
@@ -611,6 +885,13 @@ export function ReportsPage() {
           onClose={() => setDetail(null)}
         />
       ) : null}
+
+      <RangePickerSheet
+        open={rangePickerOpen}
+        range={customRange}
+        onClose={() => setRangePickerOpen(false)}
+        onChange={(next) => setCustomRange(next)}
+      />
     </AppShell>
   );
 }

@@ -16,6 +16,7 @@ export type MonthlyTotal = {
   month: number;
   income: number;
   expense: number;
+  label?: string;
 };
 
 export function YearBarChart({
@@ -41,7 +42,7 @@ export function YearBarChart({
 
   const data = months.map((row) => ({
     ...row,
-    label: `${row.month}月`,
+    label: row.label ?? `${row.month}月`,
   }));
 
   return (
