@@ -2,12 +2,23 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { BottomSheet } from "@/components/BottomSheet";
 import { useBook } from "@/components/BookProvider";
+import { CategoryPickerGrid } from "@/components/CategoryPickerGrid";
+import { useConfirm } from "@/components/ConfirmProvider";
+import { useToast } from "@/components/ToastProvider";
 import { TransactionEditor } from "@/components/TransactionEditor";
 import { TransactionList } from "@/components/TransactionList";
 import { formatMoney } from "@/lib/format";
 import { searchBounds } from "@/lib/period-jump";
-import { SEARCH_MATCH_CAP } from "@/lib/db/crud";
+import {
+  SEARCH_MATCH_CAP,
+  restoreDeletedPair,
+  softDeleteTransaction,
+  updateTransaction,
+  type SoftDeleteResult,
+} from "@/lib/db/crud";
+import { runSync } from "@/lib/sync/engine";
 import { expenseDisplayAmount } from "@/lib/reimbursement";
 import {
   compareMonthTransactions,
@@ -66,6 +77,23 @@ export function SearchPage() {
   const [amountMax, setAmountMax] = useState("");
   const [sort, setSort] = useState<SortKey>("date-desc");
   const [editing, setEditing] = useState<Transaction | null>(null);
+
+  const confirm = useConfirm();
+  const { show } = useToast();
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [categorySheetOpen, setCategorySheetOpen] = useState(false);
+  const [batchTargetCategory, setBatchTargetCategory] = useState<string>("");
+  const [batchUpdating, setBatchUpdating] = useState(false);
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -177,6 +205,84 @@ export function SearchPage() {
     setDateTo("");
     setAmountMin("");
     setAmountMax("");
+  }
+
+  function handleSelectAll() {
+    if (selectedIds.size === results.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(results.map((r) => r.id)));
+    }
+  }
+
+  async function handleBatchDelete() {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    const ok = await confirm({
+      title: `刪除選取的 ${count} 筆紀錄？`,
+      message: "刪除後幾秒內可按「復原」，之後會同步到其他裝置。",
+      confirmLabel: "刪除",
+      destructive: true,
+    });
+    if (!ok) return;
+
+    try {
+      const deletedPairs: SoftDeleteResult[] = [];
+      for (const id of selectedIds) {
+        const deleted = await softDeleteTransaction(id);
+        deletedPairs.push(deleted);
+      }
+      void runSync();
+      setSelectedIds(new Set());
+      setSelecting(false);
+      show(`已刪除 ${count} 筆紀錄`, {
+        variant: "info",
+        duration: 5000,
+        action: {
+          label: "復原",
+          onClick: () => {
+            void Promise.all(
+              deletedPairs.map((pair) => restoreDeletedPair(pair)),
+            )
+              .then(() => runSync())
+              .catch((err: unknown) => {
+                show(err instanceof Error ? err.message : "復原失敗", {
+                  variant: "error",
+                });
+              });
+          },
+        },
+      });
+    } catch (err) {
+      show(err instanceof Error ? err.message : "刪除失敗", {
+        variant: "error",
+      });
+    }
+  }
+
+  async function handleBatchCategoryChange(categoryId: string) {
+    if (selectedIds.size === 0 || !categoryId) return;
+    const targetCat = categories.find((c) => c.id === categoryId);
+    setBatchUpdating(true);
+    try {
+      for (const id of selectedIds) {
+        await updateTransaction(id, { category_id: categoryId });
+      }
+      void runSync();
+      const count = selectedIds.size;
+      setSelectedIds(new Set());
+      setSelecting(false);
+      setCategorySheetOpen(false);
+      show(`已將 ${count} 筆紀錄修改為「${targetCat?.name ?? "新分類"}」`, {
+        variant: "success",
+      });
+    } catch (err) {
+      show(err instanceof Error ? err.message : "修改分類失敗", {
+        variant: "error",
+      });
+    } finally {
+      setBatchUpdating(false);
+    }
   }
 
   const searching = Boolean(query) || hasFilters;
@@ -426,10 +532,45 @@ export function SearchPage() {
           </div>
 
           <section className="space-y-2">
-            <div className="flex items-baseline justify-between gap-3">
+            <div className="flex items-center justify-between gap-3">
               <h2 className="text-sm font-medium text-[var(--ink)]">
                 {searching ? `結果（${results.length}）` : "搜尋結果"}
               </h2>
+              {searching && results.length > 0 ? (
+                <div className="flex items-center gap-1.5">
+                  {selecting ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleSelectAll}
+                        className="rounded-lg px-2 py-1 text-xs text-[var(--accent)] hover:bg-[var(--accent)]/10"
+                      >
+                        {selectedIds.size === results.length
+                          ? "取消全選"
+                          : "全選"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelecting(false);
+                          setSelectedIds(new Set());
+                        }}
+                        className="rounded-lg border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-xs text-[var(--muted)] hover:text-[var(--ink)]"
+                      >
+                        取消
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setSelecting(true)}
+                      className="rounded-lg border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-xs text-[var(--ink)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                    >
+                      選取
+                    </button>
+                  )}
+                </div>
+              ) : null}
             </div>
 
             {searching && results.length > 0 ? (
@@ -477,6 +618,9 @@ export function SearchPage() {
                 accounts={accounts}
                 categories={categories}
                 onEdit={setEditing}
+                selectable={selecting}
+                selectedIds={selectedIds}
+                onToggleSelect={toggleSelect}
                 emptyMessage="找不到符合的紀錄"
               />
             )}
@@ -491,6 +635,59 @@ export function SearchPage() {
           onClose={() => setEditing(null)}
         />
       ) : null}
+
+      {selecting && selectedIds.size > 0 ? (
+        <div className="fixed inset-x-0 bottom-16 z-40 mx-auto max-w-lg px-4">
+          <div className="flex items-center justify-between gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface)]/95 p-2.5 shadow-xl backdrop-blur-md">
+            <span className="pl-1.5 text-xs font-medium text-[var(--ink)]">
+              已選{" "}
+              <strong className="tabular-nums text-[var(--accent)]">
+                {selectedIds.size}
+              </strong>{" "}
+              筆
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCategorySheetOpen(true)}
+                className="inline-flex min-h-9 items-center rounded-xl bg-[var(--accent)] px-3 text-xs font-medium text-white shadow-sm transition active:scale-95"
+              >
+                批次改分類
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleBatchDelete()}
+                className="inline-flex min-h-9 items-center rounded-xl border border-rose-200 bg-rose-50 px-3 text-xs font-medium text-rose-700 transition hover:bg-rose-100 active:scale-95"
+              >
+                批次刪除
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <BottomSheet
+        open={categorySheetOpen}
+        onClose={() => setCategorySheetOpen(false)}
+        title={`批次修改分類（${selectedIds.size} 筆）`}
+      >
+        <div className="space-y-3 pb-2">
+          <p className="text-xs text-[var(--muted)]">
+            請點選要套用給這 {selectedIds.size} 筆紀錄的新分類：
+          </p>
+          <CategoryPickerGrid
+            categories={categories}
+            value={batchTargetCategory}
+            onChange={(catId) => {
+              setBatchTargetCategory(catId);
+              void handleBatchCategoryChange(catId);
+            }}
+          />
+          {batchUpdating ? (
+            <p className="text-center text-xs text-[var(--muted)]">更新中…</p>
+          ) : null}
+        </div>
+      </BottomSheet>
     </AppShell>
   );
 }

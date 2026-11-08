@@ -138,6 +138,9 @@ export function TransactionList({
   groupByDay = false,
   /** One shared card with dividers (use for a single-day panel). */
   framed = false,
+  selectable = false,
+  selectedIds,
+  onToggleSelect,
 }: {
   transactions: Transaction[];
   accounts: Account[];
@@ -148,6 +151,9 @@ export function TransactionList({
   emptyMessage?: string;
   groupByDay?: boolean;
   framed?: boolean;
+  selectable?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
 }) {
   const { book } = useBook();
   const currency = book?.currency;
@@ -481,8 +487,39 @@ export function TransactionList({
                   splitsSummary(tx.amount, tx.splits ?? null),
                 ].filter(Boolean);
 
+                const isSelected = selectedIds?.has(tx.id) ?? false;
                 const row = (
-                  <div className="flex items-center gap-2 px-3 py-2">
+                  <div
+                    className={[
+                      "flex items-center gap-2 px-3 py-2 transition-colors",
+                      selectable ? "cursor-pointer" : "",
+                      isSelected ? "bg-[var(--accent)]/10" : "",
+                    ].join(" ")}
+                    onClick={selectable ? () => onToggleSelect?.(tx.id) : undefined}
+                  >
+                    {selectable ? (
+                      <span
+                        className={[
+                          "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors",
+                          isSelected
+                            ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                            : "border-[var(--line)] bg-[var(--paper)] text-transparent",
+                        ].join(" ")}
+                        aria-hidden
+                      >
+                        <svg
+                          className="h-3 w-3 stroke-current stroke-[2.5]"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                      </span>
+                    ) : null}
                     {tx.type === "transfer" ? (
                       <span
                         className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--paper)] text-[10px] font-medium text-[var(--muted)]"
@@ -512,8 +549,14 @@ export function TransactionList({
                     <button
                       type="button"
                       className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_6.75rem] items-center gap-x-2 gap-y-0.5 text-left"
-                      onClick={() => onEdit?.(tx)}
-                      disabled={!onEdit}
+                      onClick={() => {
+                        if (selectable) {
+                          onToggleSelect?.(tx.id);
+                        } else {
+                          onEdit?.(tx);
+                        }
+                      }}
+                      disabled={!selectable && !onEdit}
                     >
                       <span className="flex min-w-0 items-center gap-1">
                         <span className="min-w-0 truncate text-sm text-[var(--ink)]">
@@ -544,100 +587,102 @@ export function TransactionList({
                         </span>
                       ) : null}
                     </button>
-                    <div className="flex shrink-0 items-center">
-                      {isHold && !holdReleased ? (
-                        <button
-                          type="button"
-                          className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-amber-900 active:bg-amber-50"
-                          aria-label="已退回"
-                          title="已退回"
-                          onClick={() => void onRelease(tx)}
-                        >
-                          退回
-                        </button>
-                      ) : null}
-                      {reimbPending ? (
-                        <button
-                          type="button"
-                          className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-sky-900 active:bg-sky-50"
-                          aria-label="銷帳"
-                          title="銷帳"
-                          onClick={() => void onMarkReimbursed(tx)}
-                        >
-                          銷帳
-                        </button>
-                      ) : null}
-                      {reimbReceived ? (
-                        <button
-                          type="button"
-                          className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-[var(--muted)] active:bg-[var(--paper)]"
-                          aria-label="取消銷帳"
-                          title="取消銷帳"
-                          onClick={() => void onUndoReimbursed(tx)}
-                        >
-                          撤銷
-                        </button>
-                      ) : null}
-                      <div className="relative" data-row-menu>
-                        <button
-                          type="button"
-                          className={`${actionBtn} hover:text-[var(--ink)]`}
-                          aria-label="更多動作"
-                          aria-haspopup="menu"
-                          aria-expanded={menuId === tx.id}
-                          title="更多"
-                          onClick={() =>
-                            setMenuId((current) => (current === tx.id ? null : tx.id))
-                          }
-                        >
-                          <IconMore className="h-4 w-4" />
-                        </button>
-                        {menuId === tx.id ? (
-                          <div
-                            role="menu"
-                            className={[
-                              "absolute right-0 z-[60] min-w-36 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-lg",
-                              menuOpensUp ? "bottom-full mb-1" : "top-full mt-1",
-                            ].join(" ")}
+                    {!selectable ? (
+                      <div className="flex shrink-0 items-center">
+                        {isHold && !holdReleased ? (
+                          <button
+                            type="button"
+                            className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-amber-900 active:bg-amber-50"
+                            aria-label="已退回"
+                            title="已退回"
+                            onClick={() => void onRelease(tx)}
                           >
-                            {onEdit ? (
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-[var(--ink)] active:bg-[var(--paper)]"
-                                onClick={() => {
-                                  setMenuId(null);
-                                  onEdit(tx);
-                                }}
-                              >
-                                <IconEdit className="h-4 w-4 text-[var(--muted)]" />
-                                編輯
-                              </button>
-                            ) : null}
-                            {tx.type === "invest" ? null : (
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-[var(--ink)] active:bg-[var(--paper)]"
-                                onClick={() => void onDuplicate(tx)}
-                              >
-                                <IconCopyToday className="h-4 w-4 text-[var(--muted)]" />
-                                複製到今天
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              role="menuitem"
-                              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-rose-700 active:bg-rose-50"
-                              onClick={() => void onDelete(tx)}
-                            >
-                              <IconTrash className="h-4 w-4" />
-                              刪除
-                            </button>
-                          </div>
+                            退回
+                          </button>
                         ) : null}
+                        {reimbPending ? (
+                          <button
+                            type="button"
+                            className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-sky-900 active:bg-sky-50"
+                            aria-label="銷帳"
+                            title="銷帳"
+                            onClick={() => void onMarkReimbursed(tx)}
+                          >
+                            銷帳
+                          </button>
+                        ) : null}
+                        {reimbReceived ? (
+                          <button
+                            type="button"
+                            className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-[var(--muted)] active:bg-[var(--paper)]"
+                            aria-label="取消銷帳"
+                            title="取消銷帳"
+                            onClick={() => void onUndoReimbursed(tx)}
+                          >
+                            撤銷
+                          </button>
+                        ) : null}
+                        <div className="relative" data-row-menu>
+                          <button
+                            type="button"
+                            className={`${actionBtn} hover:text-[var(--ink)]`}
+                            aria-label="更多動作"
+                            aria-haspopup="menu"
+                            aria-expanded={menuId === tx.id}
+                            title="更多"
+                            onClick={() =>
+                              setMenuId((current) => (current === tx.id ? null : tx.id))
+                            }
+                          >
+                            <IconMore className="h-4 w-4" />
+                          </button>
+                          {menuId === tx.id ? (
+                            <div
+                              role="menu"
+                              className={[
+                                "absolute right-0 z-[60] min-w-36 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-lg",
+                                menuOpensUp ? "bottom-full mb-1" : "top-full mt-1",
+                              ].join(" ")}
+                            >
+                              {onEdit ? (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-[var(--ink)] active:bg-[var(--paper)]"
+                                  onClick={() => {
+                                    setMenuId(null);
+                                    onEdit(tx);
+                                  }}
+                                >
+                                  <IconEdit className="h-4 w-4 text-[var(--muted)]" />
+                                  編輯
+                                </button>
+                              ) : null}
+                              {tx.type === "invest" ? null : (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-[var(--ink)] active:bg-[var(--paper)]"
+                                  onClick={() => void onDuplicate(tx)}
+                                >
+                                  <IconCopyToday className="h-4 w-4 text-[var(--muted)]" />
+                                  複製到今天
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-rose-700 active:bg-rose-50"
+                                onClick={() => void onDelete(tx)}
+                              >
+                                <IconTrash className="h-4 w-4" />
+                                刪除
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
-                    </div>
+                    ) : null}
                   </div>
                 );
 

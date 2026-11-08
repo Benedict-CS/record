@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { BottomSheet } from "@/components/BottomSheet";
 import { MonthBudgetHint } from "@/components/MonthBudgetHint";
@@ -223,12 +222,6 @@ export function HomePage() {
                     今天
                   </button>
                 ) : null}
-                <Link
-                  href="/search"
-                  className="inline-flex min-h-11 items-center rounded-xl px-2 text-xs font-medium text-[var(--accent)]"
-                >
-                  搜尋
-                </Link>
                 <span className="text-xs tabular-nums text-[var(--muted)]">
                   {visibleTransactions.length} 筆
                 </span>
