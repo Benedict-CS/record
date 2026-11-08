@@ -25,7 +25,8 @@ export function parseSplits(value: unknown): SplitShare[] | null {
     const name = normalizeSplitName((row as SplitShare).name);
     const amount = roundMoney(Number((row as SplitShare).amount));
     if (!name || !(amount > 0)) continue;
-    rows.push({ name, amount });
+    const settled = Boolean((row as SplitShare).settled);
+    rows.push(settled ? { name, amount, settled: true } : { name, amount });
     if (rows.length >= SPLIT_MAX_PEOPLE) break;
   }
   return rows.length > 0 ? rows : null;
@@ -34,6 +35,22 @@ export function parseSplits(value: unknown): SplitShare[] | null {
 export function splitTotal(splits: SplitShare[] | null | undefined): number {
   if (!splits?.length) return 0;
   return roundMoney(splits.reduce((sum, row) => sum + row.amount, 0));
+}
+
+/** Total amount of shares marked as settled (paid back). */
+export function splitSettledTotal(splits: SplitShare[] | null | undefined): number {
+  if (!splits?.length) return 0;
+  return roundMoney(
+    splits.reduce((sum, row) => sum + (row.settled ? row.amount : 0), 0),
+  );
+}
+
+/** Total amount of shares still pending repayment. */
+export function splitPendingTotal(splits: SplitShare[] | null | undefined): number {
+  if (!splits?.length) return 0;
+  return roundMoney(
+    splits.reduce((sum, row) => sum + (row.settled ? 0 : row.amount), 0),
+  );
 }
 
 /** What you still cover after others' shares. */
@@ -56,7 +73,17 @@ export function splitsSummary(
   splits: SplitShare[] | null | undefined,
 ): string | null {
   if (!splits?.length) return null;
-  const names = splits.map((row) => row.name).join("、");
   const self = splitSelfPay(amount, splits);
-  return `分帳 ${splits.length} 人 · 自己 ${self} · ${names}`;
+  const pending = splits.filter((row) => !row.settled);
+  const settled = splits.filter((row) => row.settled);
+
+  if (pending.length === 0) {
+    return `分帳已全還 · 自己 ${self}`;
+  }
+  if (settled.length === 0) {
+    const names = pending.map((row) => row.name).join("、");
+    return `分帳待還 ${splitPendingTotal(splits)} (${names}) · 自己 ${self}`;
+  }
+  const pendingNames = pending.map((row) => row.name).join("、");
+  return `待還 ${splitPendingTotal(splits)} (${pendingNames}) · 已還 ${splitSettledTotal(splits)} · 自己 ${self}`;
 }

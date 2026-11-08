@@ -16,6 +16,7 @@ type DraftRow = {
   id: number;
   name: string;
   amount: string;
+  settled: boolean;
 };
 
 let nextDraftId = 0;
@@ -31,6 +32,7 @@ function draftsFromValue(value: SplitShare[] | null): DraftRow[] {
     id: allocDraftId(),
     name: row.name,
     amount: String(row.amount),
+    settled: Boolean(row.settled),
   }));
 }
 
@@ -39,6 +41,7 @@ function emptyDraft(index?: number): DraftRow {
     id: allocDraftId(),
     name: index ? `朋友 ${index}` : "",
     amount: "",
+    settled: false,
   };
 }
 
@@ -47,6 +50,7 @@ function emitSplits(rows: DraftRow[]): SplitShare[] | null {
     rows.map((row) => ({
       name: normalizeSplitName(row.name),
       amount: Number(row.amount),
+      settled: row.settled,
     })),
   );
 }
@@ -107,10 +111,18 @@ export function SplitField({
         id: existing ? existing.id : allocDraftId(),
         name: existing?.name?.trim() ? existing.name : `朋友 ${i + 1}`,
         amount: bill > 0 ? String(each) : "",
+        settled: existing ? existing.settled : false,
       });
     }
     commit(next);
   }
+
+  const settledSum = drafts
+    .filter((d) => d.settled)
+    .reduce((s, d) => s + (Number(d.amount) || 0), 0);
+  const pendingSum = drafts
+    .filter((d) => !d.settled)
+    .reduce((s, d) => s + (Number(d.amount) || 0), 0);
 
   return (
     <div>
@@ -170,10 +182,40 @@ export function SplitField({
             </div>
           </div>
 
+          {/* Friends list header with bulk toggle */}
+          {drafts.length > 0 ? (
+            <div className="flex items-center justify-between px-1 text-xs text-[var(--muted)]">
+              <span>分帳名單（{drafts.length} 人）</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = drafts.map((d) => ({ ...d, settled: true }));
+                    commit(next);
+                  }}
+                  className="font-medium text-emerald-700 hover:underline"
+                >
+                  全部已還
+                </button>
+                <span className="text-[var(--line)]">|</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = drafts.map((d) => ({ ...d, settled: false }));
+                    commit(next);
+                  }}
+                  className="font-medium text-amber-800 hover:underline"
+                >
+                  全部待還
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           {/* Individual friends rows */}
           <div className="space-y-1.5">
             {drafts.map((row, index) => (
-              <div key={row.id} className="flex items-center gap-2">
+              <div key={row.id} className="flex items-center gap-1.5">
                 <input
                   value={row.name}
                   onChange={(event) => {
@@ -199,15 +241,32 @@ export function SplitField({
                   }}
                   placeholder="金額"
                   aria-label="分帳金額"
-                  className="min-h-11 w-28 shrink-0 rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 text-sm tabular-nums text-[var(--ink)] outline-none focus:border-[var(--accent)]"
+                  className="min-h-11 w-24 shrink-0 rounded-xl border border-[var(--line)] bg-[var(--paper)] px-2.5 text-sm tabular-nums text-[var(--ink)] outline-none focus:border-[var(--accent)]"
                 />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = drafts.slice();
+                    next[index] = { ...row, settled: !row.settled };
+                    commit(next);
+                  }}
+                  className={[
+                    "min-h-11 shrink-0 rounded-xl border px-2 text-xs font-medium transition-colors",
+                    row.settled
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-800 active:bg-emerald-100"
+                      : "border-amber-300 bg-amber-50 text-amber-900 active:bg-amber-100",
+                  ].join(" ")}
+                  title={row.settled ? "已還款（點擊切換為待還）" : "待還款（點擊切換為已還）"}
+                >
+                  {row.settled ? "已還 ✓" : "待還"}
+                </button>
                 <button
                   type="button"
                   onClick={() => commit(drafts.filter((item) => item.id !== row.id))}
                   className="min-h-11 shrink-0 rounded-xl px-2 text-xs text-[var(--muted)] hover:text-rose-600"
                   aria-label={row.name.trim() ? `刪除 ${row.name}` : "刪除這個人"}
                 >
-                  刪除
+                  ✕
                 </button>
               </div>
             ))}
@@ -225,11 +284,36 @@ export function SplitField({
             + 加一個人
           </button>
 
-          <div className="flex items-center justify-between rounded-xl bg-[var(--surface)] px-3 py-2 text-sm">
-            <span className="text-[var(--muted)]">自己應付（扣除他人後）</span>
-            <span className="font-semibold tabular-nums text-[var(--ink)]">
-              {formatMoney(selfPay, currency)}
-            </span>
+          {/* Breakdown summary card */}
+          <div className="space-y-1.5 rounded-xl bg-[var(--surface)] p-3 text-xs">
+            <div className="flex items-center justify-between text-[var(--muted)]">
+              <span>原總金額</span>
+              <span className="tabular-nums font-medium text-[var(--ink)]">
+                {formatMoney(bill, currency)}
+              </span>
+            </div>
+            {settledSum > 0 ? (
+              <div className="flex items-center justify-between text-emerald-700">
+                <span>已收回／扣除</span>
+                <span className="tabular-nums font-medium">
+                  -{formatMoney(settledSum, currency)}
+                </span>
+              </div>
+            ) : null}
+            {pendingSum > 0 ? (
+              <div className="flex items-center justify-between text-amber-800">
+                <span>待還款（將列入待處理）</span>
+                <span className="tabular-nums font-medium">
+                  {formatMoney(pendingSum, currency)}
+                </span>
+              </div>
+            ) : null}
+            <div className="flex items-center justify-between border-t border-[var(--line)] pt-1.5 text-sm">
+              <span className="font-medium text-[var(--ink)]">自己應付（扣除他人後）</span>
+              <span className="font-semibold tabular-nums text-[var(--ink)]">
+                {formatMoney(selfPay, currency)}
+              </span>
+            </div>
           </div>
 
           {overBill ? (

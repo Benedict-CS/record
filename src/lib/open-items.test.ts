@@ -1,4 +1,9 @@
-import { groupOpenItems, isOpenItem, isUnreleasedHold } from "./open-items";
+import {
+  groupOpenItems,
+  isOpenItem,
+  isSplitPending,
+  isUnreleasedHold,
+} from "./open-items";
 
 function assert(condition: unknown, label: string): asserts condition {
   if (!condition) throw new Error(label);
@@ -49,6 +54,31 @@ assert(
   "an unreleased hold stays on the list",
 );
 
+assert(
+  isSplitPending({
+    type: "expense",
+    splits: [{ name: "Bob", amount: 300, settled: false }],
+  }),
+  "unsettled split is pending",
+);
+assert(
+  !isSplitPending({
+    type: "expense",
+    splits: [{ name: "Bob", amount: 300, settled: true }],
+  }),
+  "settled split is not pending",
+);
+assert(
+  isOpenItem({
+    type: "expense",
+    hold_status: null,
+    reimbursable_amount: null,
+    reimbursement_status: null,
+    splits: [{ name: "Bob", amount: 300, settled: false }],
+  }),
+  "pending split stays on open items list",
+);
+
 const grouped = groupOpenItems([
   {
     id: "h1",
@@ -94,8 +124,28 @@ const grouped = groupOpenItems([
     reimbursable_amount: null,
     reimbursement_status: null,
   },
+  {
+    id: "sp1",
+    type: "expense",
+    date: "2026-10-20",
+    note: "火鍋",
+    amount: 1000,
+    category_id: null,
+    hold_status: null,
+    reimbursable_amount: null,
+    reimbursement_status: null,
+    splits: [
+      { name: "小明", amount: 300, settled: false },
+      { name: "小華", amount: 300, settled: true },
+    ],
+  },
 ]);
-assert(grouped.length === 2, "same hold name across months is one group, plus the gym");
+assert(grouped.length === 3, "hold, gym, and split group");
+const splitGroup = grouped.find((g) => g.kind === "split");
+assert(
+  splitGroup?.title === "小明 待還款" && splitGroup?.amount === 300,
+  "only unsettled share is in open items",
+);
 assert(grouped[0].title === "健身房" && grouped[0].amount === 400, "gym stays its own reimbursement");
 assert(
   grouped[1].title === "扣住：電費預繳" &&

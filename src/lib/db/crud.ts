@@ -1010,6 +1010,48 @@ export async function undoReimbursementReceived(id: string): Promise<void> {
   });
 }
 
+/** Mark one friend's share in a split expense as settled (paid back). */
+export async function settleSplitShare(
+  txId: string,
+  personName: string,
+): Promise<void> {
+  const existing = await db.transactions.get(txId);
+  if (!existing || !existing.splits?.length) return;
+  const nextSplits = existing.splits.map((s) =>
+    s.name === personName ? { ...s, settled: true } : s,
+  );
+  await updateTransaction(txId, { splits: nextSplits });
+}
+
+/** Revert one friend's share in a split expense back to unsettled. */
+export async function unsettleSplitShare(
+  txId: string,
+  personName: string,
+): Promise<void> {
+  const existing = await db.transactions.get(txId);
+  if (!existing || !existing.splits?.length) return;
+  const nextSplits = existing.splits.map((s) =>
+    s.name === personName ? { ...s, settled: false } : s,
+  );
+  await updateTransaction(txId, { splits: nextSplits });
+}
+
+/** Mark all friends' shares in a split expense as settled. */
+export async function settleAllSplits(txId: string): Promise<void> {
+  const existing = await db.transactions.get(txId);
+  if (!existing || !existing.splits?.length) return;
+  const nextSplits = existing.splits.map((s) => ({ ...s, settled: true }));
+  await updateTransaction(txId, { splits: nextSplits });
+}
+
+/** Revert all friends' shares in a split expense back to unsettled. */
+export async function unsettleAllSplits(txId: string): Promise<void> {
+  const existing = await db.transactions.get(txId);
+  if (!existing || !existing.splits?.length) return;
+  const nextSplits = existing.splits.map((s) => ({ ...s, settled: false }));
+  await updateTransaction(txId, { splits: nextSplits });
+}
+
 /** Mark a hold as refunded: creates matching income and links it. */
 export async function releaseHold(
   id: string,
@@ -1543,6 +1585,7 @@ export function monthSummary(transactions: Transaction[]): PeriodSummary {
   let heldOutstanding = 0;
   let reimbursablePending = 0;
   let reimbursableReceived = 0;
+  let splitSettled = 0;
   for (const tx of transactions) {
     if (tx.type === "income") {
       if (isHoldRefundIncome(tx, refundIds)) continue;
@@ -1557,6 +1600,13 @@ export function monthSummary(transactions: Transaction[]): PeriodSummary {
           reimbursableReceived += tx.reimbursable_amount;
         }
       }
+      if (tx.splits?.length) {
+        for (const share of tx.splits) {
+          if (share.settled && share.amount > 0) {
+            splitSettled += share.amount;
+          }
+        }
+      }
     }
     // Count every hold in-period so later「已退回」does not erase that month's 花費.
     if (tx.type === "hold") {
@@ -1564,7 +1614,7 @@ export function monthSummary(transactions: Transaction[]): PeriodSummary {
       if ((tx.hold_status ?? "held") === "held") heldOutstanding += tx.amount;
     }
   }
-  const selfPay = Math.max(0, expense - reimbursableReceived);
+  const selfPay = Math.max(0, expense - reimbursableReceived - splitSettled);
   return {
     income,
     expense,

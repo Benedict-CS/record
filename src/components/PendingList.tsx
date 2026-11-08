@@ -7,7 +7,11 @@ import { useBook } from "@/components/BookProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useToast } from "@/components/ToastProvider";
 import { TransactionEditor } from "@/components/TransactionEditor";
-import { markReimbursementReceived, releaseHold } from "@/lib/db/crud";
+import {
+  markReimbursementReceived,
+  releaseHold,
+  settleSplitShare,
+} from "@/lib/db/crud";
 import { formatDayHeading, formatMoney, todayLocal } from "@/lib/format";
 import { useAccounts, useCategories, useOpenItems } from "@/lib/hooks/useLedgerData";
 import { groupOpenItems, type OpenGroup } from "@/lib/open-items";
@@ -94,10 +98,44 @@ function OpenItemList() {
     });
   }
 
+  async function settleSplitGroup(
+    group: OpenGroup<Transaction>,
+    targetRows?: Transaction[],
+  ) {
+    const person = group.splitPerson;
+    if (!person) return;
+    const rows = targetRows ?? group.items;
+    const total = rows.reduce((sum, tx) => {
+      const share = tx.splits?.find((s) => s.name === person && !s.settled);
+      return sum + (share?.amount ?? 0);
+    }, 0);
+
+    const ok = await confirm({
+      title:
+        rows.length > 1
+          ? `標記「${person}」這 ${rows.length} 筆已還款？`
+          : `標記「${person}」已還款？`,
+      message: `確認已收到 ${person} 的 ${formatMoney(total, currency)}。這筆金額將從原支出中扣除，不再列入待還款。`,
+      confirmLabel: "已還錢",
+    });
+    if (!ok) return;
+
+    for (const tx of rows) {
+      await settleSplitShare(tx.id, person);
+    }
+    void runSync();
+    show(
+      rows.length > 1
+        ? `已標記「${person}」${rows.length} 筆已還款`
+        : `已標記「${person}」已還款`,
+      { variant: "success" },
+    );
+  }
+
   if (groups.length === 0) {
     return (
       <p className="rounded-2xl border border-dashed border-[var(--line)] px-4 py-8 text-center text-sm text-[var(--muted)]">
-        目前沒有待銷帳或待退回。
+        目前沒有待銷帳、退回或待還款。
       </p>
     );
   }
@@ -108,7 +146,7 @@ function OpenItemList() {
         {groups.length} 件
         {items.length === groups.length ? "" : ` · ${items.length} 筆`}
         {" "}
-        還沒銷帳或退回
+        待處理（待銷帳、退回或待還款）
       </p>
       <ul className="space-y-2">
         {groups.map((group) => (
@@ -123,8 +161,10 @@ function OpenItemList() {
             onView={(tx) => setEditingTx(tx)}
             onRelease={() => void releaseAll(group.items)}
             onReimburse={() => void reimburseAll(group.items)}
+            onSettleSplit={() => void settleSplitGroup(group)}
             onReleaseOne={(tx) => void releaseAll([tx])}
             onReimburseOne={(tx) => void reimburseAll([tx])}
+            onSettleSplitOne={(tx) => void settleSplitGroup(group, [tx])}
           />
         ))}
       </ul>
@@ -149,8 +189,10 @@ function GroupCard({
   onView,
   onRelease,
   onReimburse,
+  onSettleSplit,
   onReleaseOne,
   onReimburseOne,
+  onSettleSplitOne,
 }: {
   group: OpenGroup<Transaction>;
   currency: string | undefined;
@@ -159,15 +201,62 @@ function GroupCard({
   onView: (tx: Transaction) => void;
   onRelease: () => void;
   onReimburse: () => void;
+  onSettleSplit?: () => void;
   onReleaseOne: (tx: Transaction) => void;
   onReimburseOne: (tx: Transaction) => void;
+  onSettleSplitOne?: (tx: Transaction) => void;
 }) {
   const many = group.items.length > 1;
-  const actionLabel = group.kind === "hold" ? "退回" : "銷帳";
+  const actionLabel =
+    group.kind === "hold" ? "退回" : group.kind === "split" ? "已還錢" : "銷帳";
+  const actionColor =
+    group.kind === "hold"
+      ? "bg-amber-100 text-amber-950"
+      : group.kind === "split"
+        ? "bg-emerald-100 text-emerald-950"
+        : "bg-sky-100 text-sky-950";
+
   const months = new Set(group.items.map((tx) => tx.date.slice(0, 7))).size;
   const span = months > 1 ? `${months} 個月` : `${group.items.length} 筆`;
   const detail =
-    group.kind === "hold" ? `${span} · 暫時扣住` : `${span} · 待核銷`;
+    group.kind === "hold"
+      ? `${span} · 暫時扣住`
+      : group.kind === "split"
+        ? `${span} · 待還款`
+        : `${span} · 待核銷`;
+
+  const singleTx = group.items[0];
+  const singleNote = singleTx?.note?.trim();
+  const singleSubtitle = singleTx
+    ? [
+        singleNote || null,
+        formatDayHeading(singleTx.date),
+        formatMoney(group.amount, currency),
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : formatMoney(group.amount, currency);
+
+  function itemAmount(tx: Transaction): number {
+    if (group.kind === "hold") return tx.amount;
+    if (group.kind === "reimbursement") return tx.reimbursable_amount ?? tx.amount;
+    const share = tx.splits?.find(
+      (s) => s.name === group.splitPerson && !s.settled,
+    );
+    return share?.amount ?? 0;
+  }
+
+  function handleAction() {
+    if (group.kind === "hold") onRelease();
+    else if (group.kind === "split") onSettleSplit?.();
+    else onReimburse();
+  }
+
+  function handleActionOne(tx: Transaction) {
+    if (group.kind === "hold") onReleaseOne(tx);
+    else if (group.kind === "split") onSettleSplitOne?.(tx);
+    else onReimburseOne(tx);
+  }
 
   return (
     <li className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">
@@ -180,9 +269,15 @@ function GroupCard({
         >
           <p className="truncate text-sm font-medium text-[var(--ink)]">{group.title}</p>
           <p className="mt-0.5 text-[11px] text-[var(--muted)]">
-            {many ? detail : formatDayHeading(group.items[0].date)}
-            {" · "}
-            <span className="tabular-nums">{formatMoney(group.amount, currency)}</span>
+            {many ? (
+              <>
+                {detail}
+                {" · "}
+                <span className="tabular-nums">{formatMoney(group.amount, currency)}</span>
+              </>
+            ) : (
+              singleSubtitle
+            )}
           </p>
         </button>
         {!many ? (
@@ -196,13 +291,8 @@ function GroupCard({
         ) : null}
         <button
           type="button"
-          onClick={group.kind === "hold" ? onRelease : onReimburse}
-          className={[
-            "inline-flex min-h-10 shrink-0 items-center rounded-xl px-3 text-xs font-medium",
-            group.kind === "hold"
-              ? "bg-amber-100 text-amber-950"
-              : "bg-sky-100 text-sky-950",
-          ].join(" ")}
+          onClick={handleAction}
+          className={`inline-flex min-h-10 shrink-0 items-center rounded-xl px-3 text-xs font-medium ${actionColor}`}
         >
           {many ? `全部${actionLabel}` : actionLabel}
         </button>
@@ -216,20 +306,16 @@ function GroupCard({
                 onClick={() => onView(tx)}
                 className="min-w-0 flex-1 text-left text-[11px] text-[var(--muted)] underline-offset-2 hover:underline"
               >
+                {tx.note?.trim() ? `${tx.note.trim()} · ` : ""}
                 {formatDayHeading(tx.date)}
                 {" · "}
                 <span className="tabular-nums">
-                  {formatMoney(
-                    group.kind === "hold" ? tx.amount : (tx.reimbursable_amount ?? tx.amount),
-                    currency,
-                  )}
+                  {formatMoney(itemAmount(tx), currency)}
                 </span>
               </button>
               <button
                 type="button"
-                onClick={() =>
-                  group.kind === "hold" ? onReleaseOne(tx) : onReimburseOne(tx)
-                }
+                onClick={() => handleActionOne(tx)}
                 className="inline-flex min-h-10 shrink-0 items-center rounded-xl px-3 text-xs font-medium text-[var(--muted)]"
               >
                 {actionLabel}

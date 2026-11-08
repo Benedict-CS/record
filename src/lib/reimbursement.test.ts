@@ -50,6 +50,38 @@ const gymReceived = {
 assert(expenseDisplayAmount(gymPending) === 1088, "pending display = cash");
 assert(expenseDisplayAmount(gymReceived) === 688, "received display = self-pay");
 
+// Split expense: full cash until friends repay, then deducts each repaid share.
+const dinnerPending = tx({
+  type: "expense",
+  amount: 1000,
+  date: "2026-09-02",
+  splits: [
+    { name: "Bob", amount: 300, settled: false },
+    { name: "Alice", amount: 300, settled: false },
+  ],
+});
+const dinnerPartial = tx({
+  type: "expense",
+  amount: 1000,
+  date: "2026-09-02",
+  splits: [
+    { name: "Bob", amount: 300, settled: true },
+    { name: "Alice", amount: 300, settled: false },
+  ],
+});
+const dinnerAllRepaid = tx({
+  type: "expense",
+  amount: 1000,
+  date: "2026-09-02",
+  splits: [
+    { name: "Bob", amount: 300, settled: true },
+    { name: "Alice", amount: 300, settled: true },
+  ],
+});
+assert(expenseDisplayAmount(dinnerPending) === 1000, "all pending splits = full cash");
+assert(expenseDisplayAmount(dinnerPartial) === 700, "one repaid split = deduct 300");
+assert(expenseDisplayAmount(dinnerAllRepaid) === 400, "all repaid splits = self pay 400");
+
 // Dehumidifier day header: 花 must sum display amounts.
 const dayRows = [
   tx({ type: "expense", amount: 78, date: "2026-08-08", category_id: "c-bf" }),

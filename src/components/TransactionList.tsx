@@ -10,8 +10,11 @@ import {
   markReimbursementReceived,
   releaseHold,
   restoreDeletedPair,
+  settleAllSplits,
+  settleSplitShare,
   softDeleteTransaction,
   undoReimbursementReceived,
+  unsettleAllSplits,
 } from "@/lib/db/crud";
 import { compareSameDayTransactions } from "@/lib/day-order";
 import { formatDayHeading, formatMoney, todayLocal } from "@/lib/format";
@@ -23,7 +26,11 @@ import {
 } from "@/lib/reimbursement";
 import { useHoldings } from "@/lib/hooks/useLedgerData";
 import { ReceiptThumb } from "@/components/ReceiptThumb";
-import { splitsSummary } from "@/lib/split";
+import {
+  splitPendingTotal,
+  splitSettledTotal,
+  splitsSummary,
+} from "@/lib/split";
 import { TREAT_TAG } from "@/lib/transaction-tag";
 import { runSync } from "@/lib/sync/engine";
 import type { Account, Category, Transaction } from "@/lib/types";
@@ -294,6 +301,56 @@ export function TransactionList({
     }
   }
 
+  async function onSettleSplit(tx: Transaction, personName: string) {
+    const share = tx.splits?.find((s) => s.name === personName);
+    const ok = await confirm({
+      title: `標記「${personName}」已還款？`,
+      message: `確認已收到 ${personName} 的 ${formatMoney(share?.amount ?? 0, currency)}。將從原支出中扣除。`,
+      confirmLabel: "已還錢",
+    });
+    if (!ok) return;
+    try {
+      await settleSplitShare(tx.id, personName);
+      void runSync();
+      show(`已標記「${personName}」已還款`, { variant: "success" });
+    } catch (err) {
+      show(err instanceof Error ? err.message : "標記失敗", { variant: "error" });
+    }
+  }
+
+  async function onSettleAllSplits(tx: Transaction) {
+    const pendingTotal = splitPendingTotal(tx.splits);
+    const ok = await confirm({
+      title: "全部標記已還款？",
+      message: `確認已收到所有朋友款項共 ${formatMoney(pendingTotal, currency)}。將從原支出中扣除。`,
+      confirmLabel: "全部已還",
+    });
+    if (!ok) return;
+    try {
+      await settleAllSplits(tx.id);
+      void runSync();
+      show("已全部標記已還款", { variant: "success" });
+    } catch (err) {
+      show(err instanceof Error ? err.message : "標記失敗", { variant: "error" });
+    }
+  }
+
+  async function onResetAllSplits(tx: Transaction) {
+    const ok = await confirm({
+      title: "重設分帳為待還？",
+      message: "所有朋友將重新標記為待還款，並列入待處理項目。",
+      confirmLabel: "重設為待還",
+    });
+    if (!ok) return;
+    try {
+      await unsettleAllSplits(tx.id);
+      void runSync();
+      show("已重設為待還款", { variant: "info" });
+    } catch (err) {
+      show(err instanceof Error ? err.message : "重設失敗", { variant: "error" });
+    }
+  }
+
   async function onDelete(tx: Transaction) {
     const isRefund =
       tx.type === "income" && tx.note.startsWith(HOLD_REFUND_NOTE_PREFIX);
@@ -432,7 +489,12 @@ export function TransactionList({
                   reimbAmount != null
                     ? Math.max(0, tx.amount - reimbAmount)
                     : null;
-                // Pending: full cash. After 銷帳: self-pay.
+                const isSplit = tx.type === "expense" && Boolean(tx.splits?.length);
+                const splitSettled = isSplit ? splitSettledTotal(tx.splits) : 0;
+                const splitPendingRows = isSplit
+                  ? tx.splits!.filter((s) => !s.settled && s.amount > 0)
+                  : [];
+                // Pending: full cash. After 銷帳 / 分帳還款: self-pay.
                 const displayAmount = expenseDisplayAmount(tx);
                 const sign =
                   tx.type === "income"
@@ -579,6 +641,10 @@ export function TransactionList({
                           <span className="text-[10px] font-normal tabular-nums text-[var(--muted)] no-underline">
                             實付 {formatMoney(tx.amount, currency)}
                           </span>
+                        ) : splitSettled > 0 ? (
+                          <span className="text-[10px] font-normal tabular-nums text-[var(--muted)] no-underline">
+                            原付 {formatMoney(tx.amount, currency)}
+                          </span>
                         ) : null}
                       </span>
                       {subtitleParts.length > 0 ? (
@@ -622,6 +688,37 @@ export function TransactionList({
                             撤銷
                           </button>
                         ) : null}
+                        {splitPendingRows.length === 1 ? (
+                          <button
+                            type="button"
+                            className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-emerald-800 active:bg-emerald-50"
+                            aria-label={`${splitPendingRows[0].name} 已還`}
+                            title={`標記 ${splitPendingRows[0].name} 已還款`}
+                            onClick={() => void onSettleSplit(tx, splitPendingRows[0].name)}
+                          >
+                            已還
+                          </button>
+                        ) : splitPendingRows.length > 1 ? (
+                          <button
+                            type="button"
+                            className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-emerald-800 active:bg-emerald-50"
+                            aria-label="分帳全還"
+                            title="全部標記已還款"
+                            onClick={() => void onSettleAllSplits(tx)}
+                          >
+                            全還
+                          </button>
+                        ) : isSplit && splitSettled > 0 ? (
+                          <button
+                            type="button"
+                            className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-[var(--muted)] active:bg-[var(--paper)]"
+                            aria-label="重設分帳為待還"
+                            title="重設分帳為待還"
+                            onClick={() => void onResetAllSplits(tx)}
+                          >
+                            撤銷
+                          </button>
+                        ) : null}
                         <div className="relative" data-row-menu>
                           <button
                             type="button"
@@ -656,6 +753,32 @@ export function TransactionList({
                                 >
                                   <IconEdit className="h-4 w-4 text-[var(--muted)]" />
                                   編輯
+                                </button>
+                              ) : null}
+                              {splitPendingRows.length > 0 ? (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-emerald-800 active:bg-emerald-50"
+                                  onClick={() => {
+                                    setMenuId(null);
+                                    void onSettleAllSplits(tx);
+                                  }}
+                                >
+                                  全部標記已還款
+                                </button>
+                              ) : null}
+                              {isSplit && splitSettled > 0 ? (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-[var(--muted)] active:bg-[var(--paper)]"
+                                  onClick={() => {
+                                    setMenuId(null);
+                                    void onResetAllSplits(tx);
+                                  }}
+                                >
+                                  重設分帳為待還
                                 </button>
                               ) : null}
                               {tx.type === "invest" ? null : (

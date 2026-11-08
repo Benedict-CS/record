@@ -1,24 +1,33 @@
-import type { Transaction } from "@/lib/types";
+import type { SplitShare, Transaction } from "@/lib/types";
 
 /**
  * Amount shown on expense rows and in "花" day totals.
- * Full cash out until 銷帳; after received, show self-pay (amount − reimbursable).
+ * Full cash out until 銷帳/還款; after received, deduct company reimbursements
+ * and friends' repaid split shares (報帳/分帳扣除).
  * Account balances and month net always use the full transaction.amount.
  */
 export function expenseDisplayAmount(tx: Pick<
   Transaction,
   "type" | "amount" | "reimbursable_amount" | "reimbursement_status"
->): number {
+> & { splits?: SplitShare[] | null }): number {
   if (tx.type !== "expense") return tx.amount;
+  let deduct = 0;
   const reimb = tx.reimbursable_amount;
   if (
     reimb != null &&
     reimb > 0 &&
     tx.reimbursement_status === "received"
   ) {
-    return Math.max(0, tx.amount - reimb);
+    deduct += reimb;
   }
-  return tx.amount;
+  if (tx.splits?.length) {
+    for (const share of tx.splits) {
+      if (share.settled && share.amount > 0) {
+        deduct += share.amount;
+      }
+    }
+  }
+  return Math.max(0, tx.amount - deduct);
 }
 
 /** Note prefix releaseHold() writes on the refund income. */

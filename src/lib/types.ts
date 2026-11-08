@@ -90,6 +90,8 @@ export interface Transaction extends SyncMeta {
 export type SplitShare = {
   name: string;
   amount: number;
+  /** True once this friend has repaid their share. Deducts from transaction expense display. */
+  settled?: boolean;
 };
 
 export interface ReceiptBlob {
