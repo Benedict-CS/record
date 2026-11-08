@@ -7,7 +7,6 @@ import { BackupNudge } from "@/components/BackupNudge";
 import { BottomSheet } from "@/components/BottomSheet";
 import { MonthBudgetHint } from "@/components/MonthBudgetHint";
 import { PendingHomeLink } from "@/components/PendingList";
-import { ReminderNudge } from "@/components/ReminderNudge";
 import { UpcomingRecurring } from "@/components/UpcomingRecurring";
 import { useBook } from "@/components/BookProvider";
 import { MonthSummary } from "@/components/MonthSummary";
@@ -191,7 +190,6 @@ export function HomePage() {
         <p className="text-sm text-[var(--muted)]">載入本機資料…</p>
       ) : (
         <div className="space-y-3">
-          <ReminderNudge />
           <MonthSummary
             year={year}
             month={month}

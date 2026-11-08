@@ -7,7 +7,6 @@ import { BookSwitcher } from "@/components/BookSwitcher";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { PwaUpdatePrompt } from "@/components/PwaUpdatePrompt";
 import { QuickAddFab } from "@/components/QuickAddFab";
-import { ReminderWatcher } from "@/components/ReminderWatcher";
 import { SyncBadge, SyncBootBanner } from "@/components/SyncBadge";
 import { accountLabel } from "@/lib/account-name";
 import { useAuth } from "@/components/AuthProvider";
@@ -113,7 +112,6 @@ export function AppShell({
         {children}
       </main>
 
-      <ReminderWatcher />
       <QuickAddFab />
 
       <nav

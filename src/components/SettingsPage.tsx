@@ -1,63 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type FormEvent,
-} from "react";
+import { useId, useState, type FormEvent } from "react";
 import { accountLabel } from "@/lib/account-name";
 import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/components/AuthProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
-import { ReminderNudge } from "@/components/ReminderNudge";
 import { useToast } from "@/components/ToastProvider";
-import {
-  getNotificationPermission,
-  getNotificationPermissionServerSnapshot,
-  getReminderSettingsServerSnapshot,
-  getReminderSettingsSnapshot,
-  requestNotificationPermission,
-  setReminderSettings,
-  showReminderNotification,
-  subscribeNotificationPermission,
-  subscribeReminderSettings,
-  type NotificationOutcome,
-  type ReminderSettings,
-} from "@/lib/reminder";
-import { webPushConfigured } from "@/lib/push/cloud";
-
-/** The time picker fires on every digit, so hold the toast back a moment. */
-const SAVE_TOAST_DELAY = 700;
-
-const LINKS: { href: string; title: string; description: string }[] = [
-  { href: "/books", title: "帳本", description: "新增、切換與管理帳本" },
-  { href: "/accounts", title: "帳戶", description: "現金、銀行與信用卡" },
-  {
-    href: "/holdings",
-    title: "存款／資產",
-    description: "現金、定存、基金、電子錢包",
-  },
-  { href: "/categories", title: "分類", description: "收入與支出分類與排序" },
-  { href: "/templates", title: "範本", description: "常用記帳一鍵套用" },
-  {
-    href: "/recurring",
-    title: "每月固定",
-    description: "薪水、固定支出與定期定額",
-  },
-  { href: "/budgets", title: "預算", description: "設定每月預算上限" },
-];
-
-const PERMISSION_LABEL: Record<NotificationOutcome, string> = {
-  granted: "已允許",
-  denied: "已封鎖",
-  default: "尚未詢問",
-  unsupported: "此瀏覽器不支援",
-};
 
 export function SettingsPage() {
   const { show } = useToast();
@@ -73,66 +22,6 @@ export function SettingsPage() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
   const [settingPassword, setSettingPassword] = useState(false);
-  // Both values live outside React (localStorage / the Notification API), so
-  // they hydrate from the server snapshot and then swap to the real value.
-  const settings = useSyncExternalStore(
-    subscribeReminderSettings,
-    getReminderSettingsSnapshot,
-    getReminderSettingsServerSnapshot,
-  );
-  const permission = useSyncExternalStore(
-    subscribeNotificationPermission,
-    getNotificationPermission,
-    getNotificationPermissionServerSnapshot,
-  );
-  const [requesting, setRequesting] = useState(false);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(
-    () => () => {
-      if (toastTimer.current) clearTimeout(toastTimer.current);
-    },
-    [],
-  );
-
-  const save = useCallback(
-    (next: ReminderSettings, message: string) => {
-      setReminderSettings(next);
-      if (toastTimer.current) clearTimeout(toastTimer.current);
-      toastTimer.current = setTimeout(() => {
-        show(message, { variant: "success" });
-      }, SAVE_TOAST_DELAY);
-    },
-    [show],
-  );
-
-  function toggleEnabled() {
-    const next = { ...settings, enabled: !settings.enabled };
-    save(next, next.enabled ? `已開啟提醒（${next.time}）` : "已關閉記帳提醒");
-  }
-
-  function changeTime(time: string) {
-    if (!time) return;
-    save({ ...settings, time }, `提醒時間已改為 ${time}`);
-  }
-
-  async function askNotification() {
-    setRequesting(true);
-    try {
-      const outcome = await requestNotificationPermission();
-      if (outcome === "granted") {
-        show("已開啟瀏覽器通知", { variant: "success" });
-      } else if (outcome === "denied") {
-        show("通知已被封鎖，請到瀏覽器設定開啟", { variant: "error" });
-      } else if (outcome === "unsupported") {
-        show("這個瀏覽器不支援通知", { variant: "error" });
-      } else {
-        show("尚未允許通知", { variant: "info" });
-      }
-    } finally {
-      setRequesting(false);
-    }
-  }
 
   async function onSetPassword(event: FormEvent) {
     event.preventDefault();
@@ -173,8 +62,6 @@ export function SettingsPage() {
   return (
     <AppShell title="設定">
       <div className="space-y-4">
-        <ReminderNudge />
-
         {configured ? (
           <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">
             <div className="border-b border-[var(--line)] px-4 py-3">
@@ -259,132 +146,6 @@ export function SettingsPage() {
             )}
           </section>
         ) : null}
-
-        <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">
-          <div className="border-b border-[var(--line)] px-4 py-3">
-            <h2 className="text-sm font-medium text-[var(--ink)]">記帳提醒</h2>
-            <p className="mt-0.5 text-xs leading-relaxed text-[var(--muted)]">
-              每天固定時間還沒記帳，首頁會跳出「今天記了沒」。允許通知後也會推一則系統通知。
-            </p>
-          </div>
-
-          <div className="flex min-h-14 items-center justify-between gap-3 px-4 py-3">
-            <span
-              id="reminder-toggle-label"
-              className="text-sm text-[var(--ink)]"
-            >
-              每天提醒我
-            </span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={settings.enabled}
-              aria-labelledby="reminder-toggle-label"
-              onClick={toggleEnabled}
-              className={[
-                "relative h-11 w-[4.5rem] shrink-0 rounded-full border transition-colors",
-                settings.enabled
-                  ? "border-[var(--accent)] bg-[var(--accent)]"
-                  : "border-[var(--line)] bg-[var(--paper)]",
-              ].join(" ")}
-            >
-              <span
-                aria-hidden
-                className={[
-                  "absolute top-1 h-9 w-9 rounded-full bg-[var(--surface)] shadow-sm transition-[left]",
-                  settings.enabled ? "left-8" : "left-1",
-                ].join(" ")}
-              />
-            </button>
-          </div>
-
-          <div className="flex min-h-14 items-center justify-between gap-3 border-t border-[var(--line)] px-4 py-3">
-            <label
-              htmlFor="reminder-time"
-              className="text-sm text-[var(--ink)]"
-            >
-              提醒時間
-            </label>
-            <input
-              id="reminder-time"
-              type="time"
-              value={settings.time}
-              disabled={!settings.enabled}
-              onChange={(event) => changeTime(event.target.value)}
-              className="min-h-11 rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 text-base text-[var(--ink)] disabled:opacity-50"
-            />
-          </div>
-
-          <div className="space-y-2 border-t border-[var(--line)] px-4 py-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-sm text-[var(--ink)]">瀏覽器通知</span>
-              <span className="text-xs text-[var(--muted)]">
-                {PERMISSION_LABEL[permission]}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={askNotification}
-              disabled={requesting || permission !== "default"}
-              className="min-h-11 w-full rounded-xl bg-[var(--ink)] px-4 text-sm font-medium text-[var(--paper)] disabled:opacity-50"
-            >
-              啟用瀏覽器通知
-            </button>
-            {permission === "granted" ? (
-              <button
-                type="button"
-                onClick={() => {
-                  if (showReminderNotification()) {
-                    show("已送出「今天記了沒」", { variant: "success" });
-                  } else {
-                    show("現在無法送出通知", { variant: "error" });
-                  }
-                }}
-                className="min-h-11 w-full rounded-xl border border-[var(--line)] px-4 text-sm font-medium text-[var(--ink)]"
-              >
-                試送一則「今天記了沒」
-              </button>
-            ) : null}
-            <p className="text-xs leading-relaxed text-[var(--muted)]">
-              {user && webPushConfigured()
-                ? "登入後，關掉 App 也會依雲端有沒有今天的帳推一則「今天記了沒」（iPhone 要先加入主畫面）。通知會寫今天幾筆；預算用到 80% 也會寫上去。"
-                : "開啟 App 時會檢查。登入並設定雲端推播後，關掉 App 也能收到。"}
-              {" "}
-              即使不開通知，頁面上的卡片仍會顯示。
-            </p>
-          </div>
-        </section>
-
-        <section>
-          <h2 className="px-1 pb-2 text-sm font-medium text-[var(--ink)]">
-            管理
-          </h2>
-          <ul className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">
-            {LINKS.map((item, index) => (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className={[
-                    "flex min-h-14 items-center justify-between gap-3 px-4 py-3 active:bg-[rgba(28,43,36,0.04)]",
-                    index > 0 ? "border-t border-[var(--line)]" : "",
-                  ].join(" ")}
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-[var(--ink)]">
-                      {item.title}
-                    </p>
-                    <p className="mt-0.5 text-xs text-[var(--muted)]">
-                      {item.description}
-                    </p>
-                  </div>
-                  <span className="text-[var(--muted)]" aria-hidden>
-                    ›
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
 
         <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3">
           <h2 className="text-sm font-medium text-[var(--ink)]">安裝成 App</h2>

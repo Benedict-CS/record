@@ -24,12 +24,10 @@ import {
   dailyTrend,
   monthSummary,
   monthlyTotalsForYear,
-  transactionsToCsv,
   yearlyTotals,
 } from "@/lib/db/crud";
 import {
   calendarDateInYear,
-  downloadCsv,
   formatMoney,
   shiftYearMonth,
   throughToday,
@@ -38,7 +36,6 @@ import {
 } from "@/lib/format";
 import { clampLedgerPeriod, LEDGER_START_YEAR } from "@/lib/period-jump";
 import {
-  useAccounts,
   useCategories,
   useLedgerEndYear,
   useMonthTransactions,
@@ -78,7 +75,6 @@ export function ReportsPage() {
   >(null);
 
   const categories = useCategories();
-  const accounts = useAccounts();
   const endYear = useLedgerEndYear();
   const rangeBounds = useMemo(
     () => getRangeBounds(customRange),
@@ -366,13 +362,6 @@ export function ReportsPage() {
       return;
     }
     setYear((value) => clampLedgerPeriod(value + delta, 1, endYear).year);
-  }
-
-  function handleExportCsv() {
-    if (activeTransactions.length === 0) return;
-    const csv = transactionsToCsv(activeTransactions, accounts, categories);
-    const safeLabel = periodLabel.replace(/[\s/\\:]+/g, "-");
-    downloadCsv(`記帳-${safeLabel}.csv`, csv);
   }
 
   const hasPreviousPeriod =
@@ -917,34 +906,6 @@ export function ReportsPage() {
                 ))}
               </ul>
             )}
-          </section>
-
-          <section className="pt-1">
-            <button
-              type="button"
-              onClick={handleExportCsv}
-              disabled={activeTransactions.length === 0}
-              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 text-xs sm:text-sm font-medium text-[var(--ink)] shadow-2xs transition active:bg-[var(--paper)] disabled:opacity-40"
-            >
-              <svg
-                className="h-4 w-4 text-[var(--muted)]"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-                aria-hidden
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                />
-              </svg>
-              <span>匯出此期交易明細 (CSV)</span>
-              <span className="text-[11px] text-[var(--muted)] tabular-nums">
-                · {activeTransactions.length} 筆
-              </span>
-            </button>
           </section>
         </div>
       )}

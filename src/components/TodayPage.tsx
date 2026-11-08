@@ -4,7 +4,6 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { useBook } from "@/components/BookProvider";
-import { ReminderNudge } from "@/components/ReminderNudge";
 import { monthSummary } from "@/lib/db/crud";
 import { formatDayHeading, formatMoney, todayLocal } from "@/lib/format";
 import {
@@ -45,8 +44,6 @@ export function TodayPage() {
         <p className="text-sm text-[var(--muted)]">載入本機資料…</p>
       ) : (
         <div className="space-y-3">
-          <ReminderNudge />
-
           <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3">
             <h2 className="text-sm font-medium text-[var(--ink)]">
               {formatDayHeading(today)}
