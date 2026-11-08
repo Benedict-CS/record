@@ -174,8 +174,13 @@ function normalise(
   clientId: string,
   ownerId: string | null,
 ) {
+  const note =
+    typeof row.note === "string" && /^mrt\s*(top[- ]?up|儲值)$/i.test(row.note.trim())
+      ? "悠遊卡儲值"
+      : row.note;
   return {
     ...row,
+    note,
     id: row.id,
     updated_at: row.updated_at,
     user_id: ownerId,

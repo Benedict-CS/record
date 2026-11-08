@@ -404,7 +404,7 @@ async function dedupeSeedDuplicates() {
   }
 }
 
-const REPAIR_FLAG = "ledger_seed_repairs_v2";
+const REPAIR_FLAG = "ledger_seed_repairs_v3";
 
 function repairsDone(ownerId: string | null): boolean {
   if (typeof localStorage === "undefined") return true;
@@ -426,6 +426,25 @@ async function runLegacyRepairs(
   defaultBookId: string | undefined,
 ) {
   await dedupeSeedDuplicates();
+
+  // Unify MRT top-up note variations ("MRT儲值", "mrt 儲值", "MRT top up", etc.) to "悠遊卡儲值"
+  const mrtTransactions = await db.transactions
+    .filter(
+      (row) =>
+        !row.deleted_at &&
+        sameOwner(row.user_id, ownerId) &&
+        typeof row.note === "string" &&
+        /^mrt\s*(top[- ]?up|儲值)$/i.test(row.note.trim()),
+    )
+    .toArray();
+  for (const tx of mrtTransactions) {
+    await db.transactions.update(tx.id, {
+      note: "悠遊卡儲值",
+      updated_at: nowIso(),
+      client_id: getClientId(),
+      sync_status: "pending",
+    });
+  }
 
   const missingColor = await db.categories
     .filter((row) => !row.color)
