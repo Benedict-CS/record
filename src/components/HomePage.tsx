@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { BottomSheet } from "@/components/BottomSheet";
-import { MonthBudgetHint } from "@/components/MonthBudgetHint";
 import { PendingHomeLink } from "@/components/PendingList";
 import { UpcomingRecurring } from "@/components/UpcomingRecurring";
 import { useBook } from "@/components/BookProvider";
@@ -200,11 +199,6 @@ export function HomePage() {
           <div className="flex gap-2 empty:hidden">
             <PendingHomeLink />
           </div>
-          <MonthBudgetHint
-            year={year}
-            month={month}
-            transactions={transactions}
-          />
           <UpcomingRecurring />
           <QuickTemplateBar />
           <section className="space-y-2">
