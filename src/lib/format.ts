@@ -75,3 +75,17 @@ export function shiftYearMonth(year: number, month: number, delta: number) {
     month: date.getMonth() + 1,
   };
 }
+
+/** Trigger browser download for UTF-8 CSV string with BOM for Excel compatibility. */
+export function downloadCsv(filename: string, csv: string) {
+  if (typeof window === "undefined") return;
+  const blob = new Blob(["\uFEFF" + csv], {
+    type: "text/csv;charset=utf-8;",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}

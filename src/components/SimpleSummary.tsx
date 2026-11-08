@@ -74,7 +74,13 @@ export function SimpleSummary({
           label="結餘"
           amount={balance}
           currency={currency}
-          tone="text-[var(--ink)]"
+          tone={
+            balance > 0.005
+              ? "text-emerald-700"
+              : balance < -0.005
+                ? "text-rose-700"
+                : "text-[var(--ink)]"
+          }
         />
       </div>
       {showSplit ? (

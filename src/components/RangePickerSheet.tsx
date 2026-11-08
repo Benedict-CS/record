@@ -176,6 +176,17 @@ export function RangePickerSheet({
               <div className="flex flex-wrap gap-1.5">
                 {[
                   {
+                    label: "今年至今",
+                    action: () =>
+                      setDraft((p) => ({
+                        ...p,
+                        startYear: nowYear,
+                        startMonth: 1,
+                        endYear: nowYear,
+                        endMonth: nowMonth,
+                      })),
+                  },
+                  {
                     label: "上半年 (1–6月)",
                     action: () =>
                       setDraft((p) => ({

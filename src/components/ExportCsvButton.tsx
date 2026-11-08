@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { transactionsToCsv } from "@/lib/db/crud";
+import { downloadCsv } from "@/lib/format";
 import {
   useAccounts,
   useCategories,
@@ -10,18 +11,6 @@ import {
 } from "@/lib/hooks/useLedgerData";
 
 type ExportScope = "month" | "year";
-
-function downloadCsv(filename: string, csv: string) {
-  const blob = new Blob(["\uFEFF" + csv], {
-    type: "text/csv;charset=utf-8;",
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
 
 export function ExportCsvButton({
   year,

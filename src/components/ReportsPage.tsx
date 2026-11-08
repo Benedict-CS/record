@@ -24,10 +24,12 @@ import {
   dailyTrend,
   monthSummary,
   monthlyTotalsForYear,
+  transactionsToCsv,
   yearlyTotals,
 } from "@/lib/db/crud";
 import {
   calendarDateInYear,
+  downloadCsv,
   formatMoney,
   shiftYearMonth,
   throughToday,
@@ -36,6 +38,7 @@ import {
 } from "@/lib/format";
 import { clampLedgerPeriod, LEDGER_START_YEAR } from "@/lib/period-jump";
 import {
+  useAccounts,
   useCategories,
   useLedgerEndYear,
   useMonthTransactions,
@@ -75,6 +78,7 @@ export function ReportsPage() {
   >(null);
 
   const categories = useCategories();
+  const accounts = useAccounts();
   const endYear = useLedgerEndYear();
   const rangeBounds = useMemo(
     () => getRangeBounds(customRange),
@@ -302,6 +306,24 @@ export function ReportsPage() {
       cur.expense += point.expense;
       byMonth.set(mKey, cur);
     }
+    if (byMonth.size > 24) {
+      const byYear = new Map<number, { income: number; expense: number }>();
+      for (const [date, point] of byDate.entries()) {
+        const yKey = Number(date.slice(0, 4));
+        const cur = byYear.get(yKey) ?? { income: 0, expense: 0 };
+        cur.income += point.income;
+        cur.expense += point.expense;
+        byYear.set(yKey, cur);
+      }
+      return Array.from(byYear.entries())
+        .sort(([a], [b]) => a - b)
+        .map(([yKey, val]) => ({
+          label: String(yKey),
+          fullLabel: `${yKey} 年`,
+          income: val.income,
+          expense: val.expense,
+        }));
+    }
     return Array.from(byMonth.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([mKey, val]) => ({
@@ -344,6 +366,13 @@ export function ReportsPage() {
       return;
     }
     setYear((value) => clampLedgerPeriod(value + delta, 1, endYear).year);
+  }
+
+  function handleExportCsv() {
+    if (activeTransactions.length === 0) return;
+    const csv = transactionsToCsv(activeTransactions, accounts, categories);
+    const safeLabel = periodLabel.replace(/[\s/\\:]+/g, "-");
+    downloadCsv(`記帳-${safeLabel}.csv`, csv);
   }
 
   const hasPreviousPeriod =
@@ -426,6 +455,18 @@ export function ReportsPage() {
                 <div className="mt-2.5 flex flex-wrap items-center justify-center gap-1.5 px-1">
                   {[
                     {
+                      label: "今年至今",
+                      range: {
+                        mode: "date" as const,
+                        startYear: nowYear,
+                        startMonth: 1,
+                        endYear: nowYear,
+                        endMonth: nowMonth,
+                        dateFrom: `${nowYear}-01-01`,
+                        dateTo: today,
+                      },
+                    },
+                    {
                       label: "上半年",
                       range: {
                         mode: "month" as const,
@@ -491,10 +532,13 @@ export function ReportsPage() {
                       (chip.range.mode === "year"
                         ? customRange.startYear === chip.range.startYear &&
                           customRange.endYear === chip.range.endYear
-                        : customRange.startYear === chip.range.startYear &&
-                          customRange.startMonth === chip.range.startMonth &&
-                          customRange.endYear === chip.range.endYear &&
-                          customRange.endMonth === chip.range.endMonth);
+                        : chip.range.mode === "date"
+                          ? customRange.dateFrom === chip.range.dateFrom &&
+                            customRange.dateTo === chip.range.dateTo
+                          : customRange.startYear === chip.range.startYear &&
+                            customRange.startMonth === chip.range.startMonth &&
+                            customRange.endYear === chip.range.endYear &&
+                            customRange.endMonth === chip.range.endMonth);
                     return (
                       <button
                         key={chip.label}
@@ -873,6 +917,34 @@ export function ReportsPage() {
                 ))}
               </ul>
             )}
+          </section>
+
+          <section className="pt-1">
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              disabled={activeTransactions.length === 0}
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 text-xs sm:text-sm font-medium text-[var(--ink)] shadow-2xs transition active:bg-[var(--paper)] disabled:opacity-40"
+            >
+              <svg
+                className="h-4 w-4 text-[var(--muted)]"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+                aria-hidden
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                />
+              </svg>
+              <span>匯出此期交易明細 (CSV)</span>
+              <span className="text-[11px] text-[var(--muted)] tabular-nums">
+                · {activeTransactions.length} 筆
+              </span>
+            </button>
           </section>
         </div>
       )}

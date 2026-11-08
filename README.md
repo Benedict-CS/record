@@ -51,7 +51,7 @@ npm install
 cp .env.example .env.local
 ```
 
-3. In the [Supabase SQL Editor](https://supabase.com/dashboard), run migrations **in order** `001` → `016` (see [SETUP.md](SETUP.md)).
+3. In the [Supabase SQL Editor](https://supabase.com/dashboard), run migrations **in order** `001` → `021` (see [SETUP.md](SETUP.md)).
 
 4. Enable **Email** auth in Supabase. Add redirect URL:
 
