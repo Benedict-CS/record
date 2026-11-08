@@ -469,13 +469,12 @@ async function migrateHaircutAndLaundryCategories(ownerId: string | null) {
     .filter((row) => !row.deleted_at && owned(row));
 
   for (const book of liveBooks) {
-    let haircutCat = await db.categories
+    const haircutCat = await db.categories
       .where({ book_id: book.id, name: "剪頭髮" })
       .first();
     if (!haircutCat) {
-      const id = crypto.randomUUID();
       await db.categories.add({
-        id,
+        id: crypto.randomUUID(),
         book_id: book.id,
         user_id: book.user_id,
         name: "剪頭髮",
@@ -488,16 +487,14 @@ async function migrateHaircutAndLaundryCategories(ownerId: string | null) {
         client_id: getClientId(),
         sync_status: "pending",
       });
-      haircutCat = await db.categories.get(id);
     }
 
-    let laundryCat = await db.categories
+    const laundryCat = await db.categories
       .where({ book_id: book.id, name: "洗衣" })
       .first();
     if (!laundryCat) {
-      const id = crypto.randomUUID();
       await db.categories.add({
-        id,
+        id: crypto.randomUUID(),
         book_id: book.id,
         user_id: book.user_id,
         name: "洗衣",
@@ -510,53 +507,6 @@ async function migrateHaircutAndLaundryCategories(ownerId: string | null) {
         client_id: getClientId(),
         sync_status: "pending",
       });
-      laundryCat = await db.categories.get(id);
-    }
-
-    if (haircutCat) {
-      const haircutTxRows = await db.transactions
-        .filter((row) => row.book_id === book.id && row.type === "expense" && row.category_id !== haircutCat.id && (
-          (row.note != null && (
-            row.note.includes("頭髮") ||
-            row.note.includes("剪髮") ||
-            row.note.includes("理髮") ||
-            row.note.includes("染髮") ||
-            row.note.includes("燙髮")
-          )) ||
-          row.tag === "haircut" || row.tag === "剪頭髮"
-        ))
-        .toArray();
-      for (const row of haircutTxRows) {
-        await db.transactions.update(row.id, {
-          category_id: haircutCat.id,
-          tag: null,
-          updated_at: nowIso(),
-          client_id: getClientId(),
-          sync_status: "pending",
-        });
-      }
-    }
-
-    if (laundryCat) {
-      const laundryTxRows = await db.transactions
-        .filter((row) => row.book_id === book.id && row.type === "expense" && row.category_id !== laundryCat.id && (
-          (row.note != null && (
-            row.note.includes("洗衣") ||
-            row.note.includes("洗衣服") ||
-            row.note.includes("衣服")
-          )) ||
-          row.tag === "laundry" || row.tag === "洗衣"
-        ))
-        .toArray();
-      for (const row of laundryTxRows) {
-        await db.transactions.update(row.id, {
-          category_id: laundryCat.id,
-          tag: null,
-          updated_at: nowIso(),
-          client_id: getClientId(),
-          sync_status: "pending",
-        });
-      }
     }
   }
 }

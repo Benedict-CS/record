@@ -614,6 +614,7 @@ export function ReportsPage() {
               summary={summary}
               currency={currency}
               heldMode={scope === "month" ? "period" : "outstanding"}
+              periodLabel={scope === "month" ? "本月" : scope === "year" ? "本年" : "此期"}
             />
           </section>
 

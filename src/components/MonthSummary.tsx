@@ -134,7 +134,7 @@ export function MonthSummary({
         </HoldStepButton>
       </div>
 
-      <SimpleSummary summary={summary} currency={currency} />
+      <SimpleSummary summary={summary} currency={currency} showAssetsLink />
       {showDelta ? (
         <p className="mt-2 text-[11px] tabular-nums text-[var(--muted)]">
           {Math.abs(spendDelta) < 0.005

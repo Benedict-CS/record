@@ -196,8 +196,10 @@ export function TransactionList({
           [],
         )
       : [{ date: "", items: [...transactions] }];
-    for (const group of result) {
-      group.items.sort((a, b) => compareSameDayTransactions(a, b, categoryNameOf));
+    if (groupByDay) {
+      for (const group of result) {
+        group.items.sort((a, b) => compareSameDayTransactions(a, b, categoryNameOf));
+      }
     }
     return result;
   }, [transactions, groupByDay, categoryMap]);

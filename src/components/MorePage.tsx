@@ -21,11 +21,6 @@ const LINKS: MoreLinkItem[] = [
     description: "還沒銷帳的核銷，和還沒退回的扣住",
   },
   {
-    href: "/search",
-    title: "搜尋",
-    description: "依備註、分類、金額或日期找紀錄",
-  },
-  {
     href: "/books",
     title: "帳本",
     description: "新增、切換與管理帳本",
