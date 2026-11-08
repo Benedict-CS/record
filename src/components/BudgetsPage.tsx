@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useBook } from "@/components/BookProvider";
-import { ExportCsvButton } from "@/components/ExportCsvButton";
 import { HoldStepButton } from "@/components/HoldStepButton";
 import { PeriodJump } from "@/components/PeriodJump";
 import { CardSkeleton, ListSkeleton } from "@/components/Skeleton";
@@ -357,8 +356,6 @@ export function BudgetsPage() {
               </p>
             ) : null}
           </section>
-
-          <ExportCsvButton year={year} month={month} />
         </div>
       )}
     </AppShell>

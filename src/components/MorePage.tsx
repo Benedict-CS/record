@@ -47,8 +47,8 @@ const LINKS: MoreLinkItem[] = [
   },
   {
     href: "/settings",
-    title: "帳號與設定",
-    description: "帳號同步、密碼修改與 App 資訊",
+    title: "帳號設定",
+    description: "帳號同步、密碼修改與登出",
   },
 ];
 
@@ -69,13 +69,13 @@ export function MorePage() {
             const isSettings = item.href === "/settings";
             const displayTitle =
               isSettings && user
-                ? "帳號與設定"
+                ? "帳號設定"
                 : isSettings
-                  ? "登入與設定"
+                  ? "登入設定"
                   : item.title;
             const displayDesc =
               isSettings && user
-                ? `已登入 ${accountLabel(user)} · 密碼與 App 資訊`
+                ? `已登入 ${accountLabel(user)} · 修改密碼與登出`
                 : item.description;
 
             return (

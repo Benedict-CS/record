@@ -173,7 +173,7 @@ export function AmountKeypad({
   const canConfirm = toAmountValue(expression) !== null;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end">
+    <div className="fixed inset-0 z-[70] flex flex-col justify-end">
       <button
         type="button"
         aria-label="關閉金額鍵盤"

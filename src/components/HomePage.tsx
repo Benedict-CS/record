@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
-import { BackupNudge } from "@/components/BackupNudge";
 import { BottomSheet } from "@/components/BottomSheet";
 import { MonthBudgetHint } from "@/components/MonthBudgetHint";
 import { PendingHomeLink } from "@/components/PendingList";
@@ -200,7 +199,6 @@ export function HomePage() {
             onGoCurrent={!isCurrentMonth ? goToCurrentMonth : undefined}
           />
           <div className="flex gap-2 empty:hidden">
-            <BackupNudge />
             <PendingHomeLink />
           </div>
           <MonthBudgetHint

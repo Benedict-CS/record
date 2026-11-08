@@ -43,8 +43,7 @@ export function SettingsPage() {
   async function onSignOut() {
     const ok = await confirm({
       title: "登出這個帳號？",
-      message:
-        "登出後看到的是這台裝置自己的帳，可以繼續離線記。那些紀錄不會同步到雲端，也不會在下次登入別的帳號時被上傳。",
+      message: "確定要登出嗎？登出後可隨時重新登入同步紀錄。",
       confirmLabel: "登出",
     });
     if (!ok) return;
@@ -60,28 +59,31 @@ export function SettingsPage() {
   }
 
   return (
-    <AppShell title="設定">
+    <AppShell title="帳號設定">
       <div className="space-y-4">
         {configured ? (
           <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">
-            <div className="border-b border-[var(--line)] px-4 py-3">
-              <h2 className="text-sm font-medium text-[var(--ink)]">帳號與同步</h2>
-              <p className="mt-0.5 text-xs leading-relaxed text-[var(--muted)]">
-                登入後，只有這個帳號的紀錄會和雲端同步。未登入時記的帳留在這台裝置，不會被下一個登入的帳號帶走。
-              </p>
-            </div>
             {user ? (
-              <div className="space-y-3 px-4 py-3">
-                <p className="break-all text-sm text-[var(--ink)]">
-                  已登入：<span className="font-medium">{accountLabel(user)}</span>
-                </p>
+              <div className="space-y-4 px-4 py-4">
+                <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
+                  <div>
+                    <p className="text-xs text-[var(--muted)]">目前帳號</p>
+                    <p className="mt-0.5 break-all text-sm font-semibold text-[var(--ink)]">
+                      {accountLabel(user)}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                    已連線同步
+                  </span>
+                </div>
+
                 <form onSubmit={onSetPassword} className="space-y-3">
                   <div>
                     <label
                       htmlFor={newPasswordId}
-                      className="mb-1 block text-xs text-[var(--muted)]"
+                      className="mb-1 block text-xs font-medium text-[var(--muted)]"
                     >
-                      新密碼（至少 6 碼）
+                      修改新密碼（至少 6 碼）
                     </label>
                     <input
                       id={newPasswordId}
@@ -89,56 +91,57 @@ export function SettingsPage() {
                       required
                       minLength={6}
                       autoComplete="new-password"
+                      placeholder="請輸入新密碼"
                       value={newPassword}
                       onChange={(event) => setNewPassword(event.target.value)}
-                      className="min-h-11 w-full rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 outline-none focus:border-[var(--accent)]"
+                      className="min-h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                     />
                   </div>
                   {passwordError ? (
-                    <p className="text-sm text-rose-600" role="alert">
+                    <p className="text-xs text-rose-600" role="alert">
                       {passwordError}
                     </p>
                   ) : null}
                   {passwordMessage ? (
-                    <p className="text-sm text-emerald-700" role="status">
+                    <p className="text-xs text-emerald-700" role="status">
                       {passwordMessage}
                     </p>
                   ) : null}
                   <button
                     type="submit"
                     disabled={settingPassword}
-                    className="min-h-11 rounded-md border border-[var(--line)] px-4 text-sm font-medium text-[var(--ink)] disabled:opacity-60"
+                    className="min-h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--paper)] px-4 text-sm font-medium text-[var(--ink)] transition active:bg-[rgba(28,43,36,0.04)] disabled:opacity-60"
                   >
                     {settingPassword ? "設定中…" : "更新密碼"}
                   </button>
                 </form>
+
                 <div className="border-t border-[var(--line)] pt-3">
-                  <p className="text-xs leading-relaxed text-[var(--muted)]">
-                    登出後回到這台自己的帳。上一個帳號的紀錄留在那個帳號，不會在你改登別的帳號時被上傳。
-                  </p>
                   <button
                     type="button"
                     onClick={() => void onSignOut()}
-                    className="mt-3 min-h-11 w-full rounded-md border border-rose-200 bg-rose-50 px-4 text-sm font-medium text-rose-800"
+                    className="min-h-11 w-full rounded-xl border border-rose-200 bg-rose-50 px-4 text-sm font-medium text-rose-800 transition active:bg-rose-100"
                   >
                     登出 {accountLabel(user)}
                   </button>
-                  <Link
-                    href="/delete-account"
-                    className="mt-2 inline-flex min-h-11 items-center text-sm text-rose-800 underline-offset-2 hover:underline"
-                  >
-                    刪除帳號
-                  </Link>
+                  <div className="mt-2 text-center">
+                    <Link
+                      href="/delete-account"
+                      className="inline-flex min-h-11 items-center text-xs text-rose-700/80 underline-offset-2 hover:underline"
+                    >
+                      刪除帳號
+                    </Link>
+                  </div>
                 </div>
               </div>
             ) : (
-              <div className="px-4 py-3">
+              <div className="px-4 py-4">
                 <p className="text-sm text-[var(--muted)]">
                   尚未登入，無法同步到雲端。
                 </p>
                 <Link
                   href="/login"
-                  className="mt-3 inline-flex min-h-11 items-center justify-center rounded-md bg-[var(--ink)] px-4 text-sm font-medium text-[var(--paper)]"
+                  className="mt-3 inline-flex min-h-11 items-center justify-center rounded-xl bg-[var(--ink)] px-4 text-sm font-medium text-[var(--paper)]"
                 >
                   去登入
                 </Link>
@@ -146,32 +149,6 @@ export function SettingsPage() {
             )}
           </section>
         ) : null}
-
-        <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3">
-          <h2 className="text-sm font-medium text-[var(--ink)]">安裝成 App</h2>
-          <ul className="mt-1.5 space-y-1.5 text-xs leading-relaxed text-[var(--muted)]">
-            <li>Chrome / Edge：網址列右側「安裝」或頁面上的「加入主畫面」。</li>
-            <li>iPhone Safari：分享 → 加入主畫面。從主畫面開啟才是完整 PWA。</li>
-            <li>安裝後可離線記帳；新版本會自動套用，下次開啟即可看到。</li>
-          </ul>
-        </section>
-
-        <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3">
-          <h2 className="text-sm font-medium text-[var(--ink)]">關於</h2>
-          <ul className="mt-1.5 space-y-1.5 text-xs leading-relaxed text-[var(--muted)]">
-            <li>資料存在本機（IndexedDB），離線也能記帳。</li>
-            <li>登入後才會同步到雲端，未登入時只留在這台裝置。</li>
-            <li>
-              <Link
-                href="/privacy"
-                className="text-[var(--accent)] underline-offset-2 hover:underline"
-              >
-                隱私權說明
-              </Link>
-            </li>
-            <li>深色模式已停用，介面固定使用淺色。</li>
-          </ul>
-        </section>
       </div>
     </AppShell>
   );

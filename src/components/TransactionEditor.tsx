@@ -11,8 +11,11 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import { useToast } from "@/components/ToastProvider";
 import { formatCalcNumber } from "@/lib/calculator";
 import {
+  duplicateTransaction,
   markReimbursementReceived,
   releaseHold,
+  restoreDeletedPair,
+  softDeleteTransaction,
   undoReimbursementReceived,
   listRecentNotes,
   updateTransaction,
@@ -20,6 +23,7 @@ import {
 import { formatMoney, isIsoDate, todayLocal } from "@/lib/format";
 import { rememberAccount, rememberHolding, rememberTxType } from "@/lib/last-account";
 import { preferredCategoryId, rememberCategory } from "@/lib/last-category";
+import { HOLD_REFUND_NOTE_PREFIX } from "@/lib/reimbursement";
 import { TREAT_TAG } from "@/lib/transaction-tag";
 import { useHoldings } from "@/lib/hooks/useLedgerData";
 import { runSync } from "@/lib/sync/engine";
@@ -71,6 +75,8 @@ export function TransactionEditor({
   const [saving, setSaving] = useState(false);
   const [releasing, setReleasing] = useState(false);
   const [marking, setMarking] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [seededFrom, setSeededFrom] = useState(transaction);
@@ -214,6 +220,73 @@ export function TransactionEditor({
     }
   }
 
+  async function onDelete() {
+    const isRefund =
+      transaction.type === "income" &&
+      transaction.note.startsWith(HOLD_REFUND_NOTE_PREFIX);
+    const ok = await confirm({
+      title: "刪除這筆紀錄？",
+      message:
+        transaction.type === "hold" && transaction.release_transaction_id
+          ? "這筆扣住的退回收入會一起刪除。刪除後幾秒內可按「復原」。"
+          : isRefund
+            ? "刪除退回後，原本的扣住會回到「暫時扣住」。刪除後幾秒內可按「復原」。"
+            : "刪除後幾秒內可按「復原」，之後會同步到其他裝置。",
+      confirmLabel: "刪除",
+      destructive: true,
+    });
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      const deleted = await softDeleteTransaction(transaction.id);
+      void runSync();
+      onClose();
+      show("已刪除", {
+        variant: "info",
+        duration: 5000,
+        action: {
+          label: "復原",
+          onClick: () => {
+            void restoreDeletedPair(deleted)
+              .then(() => runSync())
+              .catch((err: unknown) => {
+                show(err instanceof Error ? err.message : "復原失敗", {
+                  variant: "error",
+                });
+              });
+          },
+        },
+      });
+    } catch (err) {
+      show(err instanceof Error ? err.message : "刪除失敗", {
+        variant: "error",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function onDuplicate() {
+    if (transaction.type === "invest") return;
+    setDuplicating(true);
+    try {
+      const copy = await duplicateTransaction(transaction.id, todayLocal());
+      if (!copy) {
+        show("無法複製這筆紀錄", { variant: "error" });
+        return;
+      }
+      void runSync();
+      onClose();
+      show("已複製到今天", { variant: "success" });
+    } catch (err) {
+      show(err instanceof Error ? err.message : "複製失敗", {
+        variant: "error",
+      });
+    } finally {
+      setDuplicating(false);
+    }
+  }
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
@@ -307,7 +380,7 @@ export function TransactionEditor({
 
   if (transaction.type === "invest") {
     return (
-      <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+      <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center">
         <button
           type="button"
           aria-label="關閉"
@@ -321,13 +394,23 @@ export function TransactionEditor({
             {formatMoney(transaction.amount, book?.currency)}{" "}
             已從銀行換成持股，沒有算進支出。之後每個月請到每月固定調整。
           </p>
-          <button
-            type="button"
-            onClick={onClose}
-            className="mt-4 min-h-11 w-full rounded-xl bg-[var(--ink)] text-sm font-medium text-[var(--paper)]"
-          >
-            關閉
-          </button>
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() => void onDelete()}
+              className="min-h-11 flex-1 rounded-xl border border-rose-200 bg-rose-50 text-sm font-medium text-rose-800 transition active:bg-rose-100 disabled:opacity-50"
+            >
+              {deleting ? "刪除中…" : "刪除這筆紀錄"}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="min-h-11 flex-1 rounded-xl bg-[var(--ink)] text-sm font-medium text-[var(--paper)]"
+            >
+              關閉
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -335,7 +418,7 @@ export function TransactionEditor({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+      <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center">
         <button
           type="button"
           aria-label="關閉"
@@ -575,11 +658,64 @@ export function TransactionEditor({
 
             <button
               type="submit"
-              disabled={saving || isReleasedHold}
-              className="min-h-12 w-full rounded-xl bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-[var(--paper)] disabled:opacity-60"
+              disabled={saving || isReleasedHold || deleting || duplicating}
+              className="min-h-12 w-full rounded-xl bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-[var(--paper)] transition active:scale-[0.99] disabled:opacity-60"
             >
               {saving ? "儲存中…" : isReleasedHold ? "僅供查看" : "儲存變更"}
             </button>
+
+            <div className="flex items-center gap-2 pt-1">
+              {!isReleasedHold ? (
+                <button
+                  type="button"
+                  disabled={duplicating || saving || deleting}
+                  onClick={() => void onDuplicate()}
+                  className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-xs font-medium text-[var(--ink)] transition active:bg-[rgba(28,43,36,0.04)] disabled:opacity-50"
+                >
+                  <svg
+                    className="h-4 w-4 text-[var(--muted)]"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    aria-hidden
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                    />
+                  </svg>
+                  <span>{duplicating ? "複製中…" : "複製這筆"}</span>
+                </button>
+              ) : null}
+
+              <button
+                type="button"
+                disabled={deleting || saving || duplicating}
+                onClick={() => void onDelete()}
+                className={[
+                  "flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-800 transition active:bg-rose-100 disabled:opacity-50",
+                  !isReleasedHold ? "flex-1" : "w-full",
+                ].join(" ")}
+              >
+                <svg
+                  className="h-4 w-4 text-rose-700"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  aria-hidden
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                  />
+                </svg>
+                <span>{deleting ? "刪除中…" : "刪除這筆紀錄"}</span>
+              </button>
+            </div>
           </div>
         </form>
       </div>

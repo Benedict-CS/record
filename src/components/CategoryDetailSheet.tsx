@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useId, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useId, useMemo, useState } from "react";
+import { TransactionEditor } from "@/components/TransactionEditor";
 import { compareSameDayTransactions } from "@/lib/day-order";
 import { formatMoney, type MoneyCurrency } from "@/lib/format";
 import {
@@ -9,6 +9,7 @@ import {
   holdRefundIncomeIds,
   isHoldRefundIncome,
 } from "@/lib/reimbursement";
+import { useAccounts, useCategories } from "@/lib/hooks/useLedgerData";
 import { TREAT_TAG } from "@/lib/transaction-tag";
 import type { CategoryKind, Transaction } from "@/lib/types";
 
@@ -40,7 +41,9 @@ export function CategoryDetailSheet({
   onClose,
 }: Props) {
   const titleId = useId();
-  const router = useRouter();
+  const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const accounts = useAccounts();
+  const categories = useCategories();
 
   useEffect(() => {
     const previous = document.body.style.overflow;
@@ -52,11 +55,11 @@ export function CategoryDetailSheet({
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape" && !editingTx) onClose();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  }, [onClose, editingTx]);
 
   const rows = useMemo(() => {
     const refundIds =
@@ -170,13 +173,9 @@ export function CategoryDetailSheet({
                 <li key={tx.id}>
                   <button
                     type="button"
-                    onClick={() =>
-                      router.push(
-                        `/calendar?date=${encodeURIComponent(tx.date)}&tx=${encodeURIComponent(tx.id)}`,
-                      )
-                    }
+                    onClick={() => setEditingTx(tx)}
                     className="flex w-full items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2.5 text-left active:bg-[var(--surface)]"
-                    aria-label={`到 ${tx.date} 修改${tx.tag === TREAT_TAG ? "，請客" : ""}${tx.note ? `：${tx.note}` : ""}`}
+                    aria-label={`修改${tx.tag === TREAT_TAG ? "，請客" : ""}${tx.note ? `：${tx.note}` : ""}`}
                   >
                     <div className="min-w-0">
                       <p className="flex items-center gap-1.5 text-sm font-medium tabular-nums text-[var(--ink)]">
@@ -210,6 +209,15 @@ export function CategoryDetailSheet({
           )}
         </div>
       </div>
+
+      {editingTx ? (
+        <TransactionEditor
+          transaction={editingTx}
+          accounts={accounts}
+          categories={categories}
+          onClose={() => setEditingTx(null)}
+        />
+      ) : null}
     </div>
   );
 }
