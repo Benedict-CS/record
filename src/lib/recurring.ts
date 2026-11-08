@@ -12,10 +12,24 @@ export function dueDate(year: number, month: number, dayOfMonth: number): string
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-function monthIndex(value: string): number | null {
+export function monthIndex(value: string): number | null {
   const [year, month] = value.split("-").map(Number);
   if (!year || !month || month < 1 || month > 12) return null;
   return year * 12 + month;
+}
+
+/** Inclusive list of months from startMonth to endMonth (e.g. 2026-07 to 2026-10). */
+export function monthSpan(startMonth: string, endMonth: string): string[] {
+  const start = monthIndex(startMonth);
+  const end = monthIndex(endMonth);
+  if (start == null || end == null || end < start) return [];
+  const list: string[] = [];
+  for (let cursor = start; cursor <= end; cursor++) {
+    const year = Math.floor((cursor - 1) / 12);
+    const month = cursor - year * 12;
+    list.push(`${year}-${String(month).padStart(2, "0")}`);
+  }
+  return list;
 }
 
 /** Inclusive month count, or null when either side is not YYYY-MM. */
@@ -28,10 +42,8 @@ export function scheduledMonthCount(startMonth: string, endMonth: string): numbe
 
 /**
  * Months that should get a row, oldest first.
- * With no end month, the current month is included only after its due day,
- * and at most 12 missed months are filled.
- * With an end month, every month from the start through the end is included
- * now, even if that due day has not arrived yet.
+ * A month is only included once its due day has arrived (today >= due date).
+ * With an end month, months after endMonth are skipped.
  * Months before startMonth, and months already in lastPosted, are skipped.
  */
 export function periodsDue(input: {
@@ -46,25 +58,28 @@ export function periodsDue(input: {
   const start = monthIndex(input.startMonth);
   if (start == null) return [];
 
-  let end = start;
+  const [ty, tm, td] = input.today.split("-").map(Number);
+  if (!ty || !tm || !td) return [];
+
+  let endYear = ty;
+  let endMonth = tm;
+  if (td < Math.min(input.dayOfMonth, daysInMonth(ty, tm))) {
+    endMonth -= 1;
+    if (endMonth < 1) {
+      endMonth = 12;
+      endYear -= 1;
+    }
+  }
+  let end = endYear * 12 + endMonth;
+
   if (input.endMonth) {
     const scheduledEnd = monthIndex(input.endMonth);
-    if (scheduledEnd == null || scheduledEnd < start) return [];
-    end = scheduledEnd;
-  } else {
-    const [ty, tm, td] = input.today.split("-").map(Number);
-    if (!ty || !tm || !td) return [];
-    let endYear = ty;
-    let endMonth = tm;
-    if (td < Math.min(input.dayOfMonth, daysInMonth(ty, tm))) {
-      endMonth -= 1;
-      if (endMonth < 1) {
-        endMonth = 12;
-        endYear -= 1;
-      }
+    if (scheduledEnd != null) {
+      end = Math.min(end, scheduledEnd);
     }
-    end = endYear * 12 + endMonth;
   }
+
+  if (end < start) return [];
 
   const cap =
     input.cap ?? (input.endMonth ? MAX_SCHEDULED_MONTHS : MAX_CATCH_UP);

@@ -7,7 +7,12 @@ import {
   softDeleteTransaction,
   updateTransaction,
 } from "@/lib/db/crud";
-import { dueDate, periodsDue, recurringTransactionId } from "@/lib/recurring";
+import {
+  dueDate,
+  monthSpan,
+  periodsDue,
+  recurringTransactionId,
+} from "@/lib/recurring";
 import type { RecurringRule } from "@/lib/types";
 
 function todayIso() {
@@ -55,18 +60,15 @@ function splitCharge(rule: RecurringRule) {
 }
 
 /** Months already generated for this rule, oldest first. */
-function generatedPeriods(rule: Pick<RecurringRule, "start_month" | "end_month" | "last_posted">) {
-  const end = rule.end_month ?? rule.last_posted;
-  if (!end) return [];
-  return periodsDue({
-    startMonth: rule.start_month,
-    endMonth: end,
-    dayOfMonth: 1,
-    lastPosted: null,
-    today: "2000-01-01",
-    // Align every posted month, not just the first 24.
-    cap: Number.POSITIVE_INFINITY,
-  });
+function generatedPeriods(
+  rule: Pick<RecurringRule, "start_month" | "end_month" | "last_posted">,
+) {
+  if (!rule.last_posted) return [];
+  const end =
+    rule.end_month && rule.end_month < rule.last_posted
+      ? rule.end_month
+      : rule.last_posted;
+  return monthSpan(rule.start_month, end);
 }
 
 async function writeGenerated(

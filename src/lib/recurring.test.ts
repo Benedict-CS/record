@@ -1,5 +1,6 @@
 import {
   dueDate,
+  monthSpan,
   nextUpcomingCharge,
   periodsDue,
   recurringTransactionId,
@@ -49,7 +50,7 @@ const future = periodsDue({
 });
 assert(future.length === 0, "a future start month posts nothing yet");
 
-const spanned = periodsDue({
+const spannedWaiting = periodsDue({
   startMonth: "2026-10",
   endMonth: "2026-12",
   dayOfMonth: 15,
@@ -57,8 +58,25 @@ const spanned = periodsDue({
   today: "2026-10-01",
 });
 assert(
-  spanned.join(",") === "2026-10,2026-11,2026-12",
-  "an end month posts the whole span before the due day",
+  spannedWaiting.length === 0,
+  "an end month still waits for each month's due day before posting",
+);
+
+const spannedDue = periodsDue({
+  startMonth: "2026-10",
+  endMonth: "2026-12",
+  dayOfMonth: 15,
+  lastPosted: null,
+  today: "2026-10-15",
+});
+assert(
+  spannedDue.join(",") === "2026-10",
+  "only the month whose due day has arrived is posted",
+);
+
+assert(
+  monthSpan("2026-07", "2026-10").join(",") === "2026-07,2026-08,2026-09,2026-10",
+  "monthSpan returns inclusive range",
 );
 
 const stopped = periodsDue({

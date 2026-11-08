@@ -27,6 +27,8 @@ export function UpcomingRecurring() {
         return { rule, next };
       })
       .filter((row): row is NonNullable<typeof row> => row != null)
+      // Only show when the charge date has actually arrived (today or overdue).
+      .filter(({ next }) => next.daysUntil <= 0)
       .sort((a, b) => a.next.daysUntil - b.next.daysUntil)
       .slice(0, 4);
   }, [rules, today]);
@@ -39,7 +41,7 @@ export function UpcomingRecurring() {
       className="block rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5"
     >
       <div className="flex items-baseline justify-between gap-2">
-        <p className="text-xs font-medium text-[var(--ink)]">即將入帳</p>
+        <p className="text-xs font-medium text-[var(--ink)]">今日固定扣款</p>
         <p className="text-[11px] text-[var(--accent)]">每月固定 ›</p>
       </div>
       <ul className="mt-1.5 space-y-0.5">

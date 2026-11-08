@@ -1,6 +1,8 @@
 import { getClientId } from "@/lib/client-id";
 import { sameOwner } from "@/lib/db/owner";
 import { sortCategories } from "@/lib/category-order";
+import { todayLocal } from "@/lib/format";
+import { daysInMonth } from "@/lib/recurring";
 import { db } from "@/lib/db/schema";
 import type { Account, Book, BookCurrency, Category } from "@/lib/types";
 
@@ -404,7 +406,7 @@ async function dedupeSeedDuplicates() {
   }
 }
 
-const REPAIR_FLAG = "ledger_seed_repairs_v3";
+const REPAIR_FLAG = "ledger_seed_repairs_v4";
 
 function repairsDone(ownerId: string | null): boolean {
   if (typeof localStorage === "undefined") return true;
@@ -444,6 +446,53 @@ async function runLegacyRepairs(
       client_id: getClientId(),
       sync_status: "pending",
     });
+  }
+
+  // Remove recurring transactions that were prematurely posted ahead of today
+  const today = todayLocal();
+  const futureRecurring = await db.transactions
+    .filter(
+      (tx) =>
+        !tx.deleted_at &&
+        sameOwner(tx.user_id, ownerId) &&
+        tx.date > today &&
+        (tx.note === "房租" || tx.note === "電費預繳" || tx.note === "健身房"),
+    )
+    .toArray();
+  for (const tx of futureRecurring) {
+    await db.transactions.update(tx.id, {
+      deleted_at: nowIso(),
+      updated_at: nowIso(),
+      client_id: getClientId(),
+      sync_status: "pending",
+    });
+  }
+
+  // Reset recurring rules whose last_posted was pushed into future months
+  const rules = await db.recurring_rules
+    .filter((r) => !r.deleted_at && sameOwner(r.user_id, ownerId))
+    .toArray();
+  for (const rule of rules) {
+    if (!rule.last_posted) continue;
+    const [ty, tm, td] = today.split("-").map(Number);
+    let dueYear = ty;
+    let dueMonth = tm;
+    if (td < Math.min(rule.day_of_month, daysInMonth(ty, tm))) {
+      dueMonth -= 1;
+      if (dueMonth < 1) {
+        dueMonth = 12;
+        dueYear -= 1;
+      }
+    }
+    const maxDuePeriod = `${dueYear}-${String(dueMonth).padStart(2, "0")}`;
+    if (rule.last_posted > maxDuePeriod) {
+      await db.recurring_rules.update(rule.id, {
+        last_posted: maxDuePeriod < rule.start_month ? null : maxDuePeriod,
+        updated_at: nowIso(),
+        client_id: getClientId(),
+        sync_status: "pending",
+      });
+    }
   }
 
   const missingColor = await db.categories
