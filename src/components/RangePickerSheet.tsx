@@ -170,17 +170,6 @@ export function RangePickerSheet({
               <div className="flex flex-wrap gap-1.5">
                 {[
                   {
-                    label: "今年 1–4 月",
-                    action: () =>
-                      setDraft((p) => ({
-                        ...p,
-                        startYear: nowYear,
-                        startMonth: 1,
-                        endYear: nowYear,
-                        endMonth: 4,
-                      })),
-                  },
-                  {
                     label: "上半年 (1–6月)",
                     action: () =>
                       setDraft((p) => ({
@@ -342,15 +331,6 @@ export function RangePickerSheet({
               <p className="text-xs text-[var(--muted)] mb-1.5">常用快捷</p>
               <div className="flex flex-wrap gap-1.5">
                 {[
-                  {
-                    label: "2021–2023 年",
-                    action: () =>
-                      setDraft((p) => ({
-                        ...p,
-                        startYear: 2021,
-                        endYear: 2023,
-                      })),
-                  },
                   {
                     label: "近 3 年",
                     action: () =>

@@ -426,18 +426,6 @@ export function ReportsPage() {
                 <div className="mt-2.5 flex flex-wrap items-center justify-center gap-1.5 px-1">
                   {[
                     {
-                      label: "1–4 月",
-                      range: {
-                        mode: "month" as const,
-                        startYear: nowYear,
-                        startMonth: 1,
-                        endYear: nowYear,
-                        endMonth: 4,
-                        dateFrom: `${nowYear}-01-01`,
-                        dateTo: `${nowYear}-04-30`,
-                      },
-                    },
-                    {
                       label: "上半年",
                       range: {
                         mode: "month" as const,
@@ -474,13 +462,13 @@ export function ReportsPage() {
                       },
                     },
                     {
-                      label: "2021–2023",
+                      label: "近 6 個月",
                       range: {
-                        mode: "year" as const,
-                        startYear: 2021,
-                        startMonth: 1,
-                        endYear: 2023,
-                        endMonth: 12,
+                        mode: "month" as const,
+                        startYear: nowMonth >= 6 ? nowYear : nowYear - 1,
+                        startMonth: nowMonth >= 6 ? nowMonth - 5 : 12 + (nowMonth - 5),
+                        endYear: nowYear,
+                        endMonth: nowMonth,
                         dateFrom: "",
                         dateTo: "",
                       },
