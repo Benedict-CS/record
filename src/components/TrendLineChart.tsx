@@ -107,7 +107,7 @@ export function TrendLineChart({
             name="expense"
             stroke="#e11d48"
             strokeWidth={2}
-            dot={false}
+            dot={points.length === 1 ? { r: 4 } : false}
             activeDot={{ r: 3.5 }}
           />
           {showIncome ? (
@@ -117,7 +117,7 @@ export function TrendLineChart({
               name="income"
               stroke="#0f9d76"
               strokeWidth={2}
-              dot={false}
+              dot={points.length === 1 ? { r: 4 } : false}
               activeDot={{ r: 3.5 }}
             />
           ) : null}

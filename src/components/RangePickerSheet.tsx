@@ -33,7 +33,13 @@ export function RangePickerSheet({
   onClose: () => void;
   onChange: (next: CustomRange) => void;
 }) {
+  const [prevRange, setPrevRange] = useState(range);
   const [draft, setDraft] = useState<CustomRange>(range);
+
+  if (range !== prevRange) {
+    setPrevRange(range);
+    setDraft(range);
+  }
   const nowYear = new Date().getFullYear();
   const nowMonth = new Date().getMonth() + 1;
   const todayStr = `${nowYear}-${pad2(nowMonth)}-${pad2(new Date().getDate())}`;

@@ -35,6 +35,16 @@ function mockTx(
   };
 }
 
+// 0. defaultCustomRange
+{
+  const def = defaultCustomRange(new Date("2026-05-15T00:00:00Z"));
+  assert.equal(def.mode, "month");
+  assert.equal(def.startYear, 2026);
+  assert.equal(def.startMonth, 1);
+  assert.equal(def.endYear, 2026);
+  assert.equal(def.endMonth, 5);
+}
+
 // 1. normalizeRange
 {
   const invertedMonth = normalizeRange({

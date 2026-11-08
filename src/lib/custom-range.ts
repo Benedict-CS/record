@@ -135,12 +135,23 @@ export function monthlyTotalsForRange(
   endYear: number,
   endMonth: number,
 ): RangeMonthTotal[] {
-  const isMultiYear = startYear !== endYear;
-  const list: RangeMonthTotal[] = [];
-  let curY = startYear;
-  let curM = startMonth;
+  let sY = startYear;
+  let sM = startMonth;
+  let eY = endYear;
+  let eM = endMonth;
+  if (sY * 12 + sM > eY * 12 + eM) {
+    sY = endYear;
+    sM = endMonth;
+    eY = startYear;
+    eM = startMonth;
+  }
 
-  while (curY < endYear || (curY === endYear && curM <= endMonth)) {
+  const isMultiYear = sY !== eY;
+  const list: RangeMonthTotal[] = [];
+  let curY = sY;
+  let curM = sM;
+
+  while (curY < eY || (curY === eY && curM <= eM)) {
     const label = isMultiYear ? `${curY}/${curM}月` : `${curM}月`;
     list.push({
       year: curY,

@@ -16,6 +16,8 @@ const eslintConfig = defineConfig([
     "public/sw.js",
     "public/workbox-*.js",
     "public/fallback-*.js",
+    "public/worker-*.js",
+    "public/swe-worker-*.js",
   ]),
   {
     // One-off Node maintenance scripts run with plain `node`, so CommonJS
