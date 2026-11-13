@@ -7,6 +7,7 @@ import { HoldStepButton } from "@/components/HoldStepButton";
 import { PeriodJump } from "@/components/PeriodJump";
 import { CardSkeleton, ListSkeleton } from "@/components/Skeleton";
 import { useToast } from "@/components/ToastProvider";
+import { budgetPacing, yearTimeProgress } from "@/lib/budget-pacing";
 import {
   categoryBreakdown,
   monthSummary,
@@ -34,16 +35,18 @@ function errorMessage(error: unknown, fallback: string) {
 function ProgressBar({
   spent,
   budget,
+  timeRatio,
 }: {
   spent: number;
   budget: number;
+  timeRatio?: number;
 }) {
   const ratio = budget > 0 ? Math.min(spent / budget, 1.25) : 0;
   const over = budget > 0 && spent > budget;
   const width = `${Math.min(ratio * 100, 100)}%`;
 
   return (
-    <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--paper)]">
+    <div className="relative mt-2 h-2.5 overflow-hidden rounded-full bg-[var(--paper)]">
       <div
         className={[
           "h-full rounded-full transition-[width]",
@@ -51,6 +54,13 @@ function ProgressBar({
         ].join(" ")}
         style={{ width }}
       />
+      {timeRatio !== undefined && timeRatio > 0 && timeRatio < 1 ? (
+        <div
+          className="absolute top-0 bottom-0 w-1 -ml-0.5 rounded-full bg-amber-300 shadow-xs"
+          style={{ left: `${Math.min(timeRatio * 100, 100)}%` }}
+          title={`時間進度 ${Math.round(timeRatio * 100)}%`}
+        />
+      ) : null}
     </div>
   );
 }
@@ -61,8 +71,9 @@ export function BudgetsPage() {
   const ready = useSeedReady();
   const { show } = useToast();
   const today = todayLocal();
+  const currentYear = Number(today.slice(0, 4));
   const [scope, setScope] = useState<BudgetScope>("month");
-  const [year, setYear] = useState(() => Number(today.slice(0, 4)));
+  const [year, setYear] = useState(() => currentYear);
   const [month, setMonth] = useState(() => Number(today.slice(5, 7)));
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -74,6 +85,11 @@ export function BudgetsPage() {
   const monthTransactions = useMonthTransactions(year, month, scope === "month");
   const yearTransactions = useYearTransactions(year, scope === "year");
   const transactions = scope === "year" ? yearTransactions : monthTransactions;
+
+  const timeProgress = useMemo(
+    () => yearTimeProgress(year, today),
+    [year, today],
+  );
 
   const summary = useMemo(() => monthSummary(transactions), [transactions]);
   const breakdown = useMemo(
@@ -109,6 +125,27 @@ export function BudgetsPage() {
       ),
     [budgets],
   );
+
+  const overallPacing = useMemo(() => {
+    if (scope !== "year" || !overallBudget || overallBudget.amount <= 0) {
+      return null;
+    }
+    return budgetPacing(
+      summary.selfPay,
+      overallBudget.amount,
+      timeProgress.timeRatio,
+      currency,
+      year < currentYear,
+    );
+  }, [
+    scope,
+    overallBudget,
+    summary.selfPay,
+    timeProgress.timeRatio,
+    currency,
+    year,
+    currentYear,
+  ]);
 
   function draftKey(categoryId: string | null) {
     return categoryId ?? "__overall__";
@@ -297,7 +334,58 @@ export function BudgetsPage() {
               <ProgressBar
                 spent={summary.selfPay}
                 budget={overallBudget.amount}
+                timeRatio={
+                  scope === "year" && year === currentYear
+                    ? timeProgress.timeRatio
+                    : undefined
+                }
               />
+            ) : null}
+            {scope === "year" && overallPacing ? (
+              <div className="mt-2.5 rounded-xl bg-black/25 px-3 py-2 text-[11px]">
+                <div className="flex flex-wrap items-baseline justify-between gap-1">
+                  <span className="opacity-80">
+                    {year === currentYear ? (
+                      <>
+                        時間已過{" "}
+                        <span className="font-semibold text-amber-200 tabular-nums">
+                          {overallPacing.timePct}%
+                        </span>
+                        {" · 預算已用 "}
+                        <span className="font-semibold tabular-nums">
+                          {overallPacing.spentPct}%
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        全年度預算已用{" "}
+                        <span className="font-semibold tabular-nums">
+                          {overallPacing.spentPct}%
+                        </span>
+                      </>
+                    )}
+                  </span>
+                  <span
+                    className={[
+                      "font-semibold tabular-nums",
+                      overallPacing.isAhead
+                        ? "text-emerald-300"
+                        : "text-amber-200",
+                    ].join(" ")}
+                  >
+                    {overallPacing.statusText}
+                  </span>
+                </div>
+                {year === currentYear ? (
+                  <div className="mt-1 flex items-center justify-between opacity-70 text-[10px]">
+                    <span>黃色標記為今日時間線</span>
+                    <span>
+                      當前預估支出{" "}
+                      {formatMoney(overallPacing.expectedSpend, currency)}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
             ) : null}
           </section>
 
@@ -350,6 +438,17 @@ export function BudgetsPage() {
                 const spent = spentByCategory[category.id] ?? 0;
                 const treat = treatByCategory[category.id] ?? 0;
                 const key = draftKey(category.id);
+
+                const categoryPacing =
+                  scope === "year" && budget && budget.amount > 0 && year === currentYear
+                    ? budgetPacing(
+                        spent,
+                        budget.amount,
+                        timeProgress.timeRatio,
+                        currency,
+                      )
+                    : null;
+
                 return (
                   <li
                     key={category.id}
@@ -371,10 +470,30 @@ export function BudgetsPage() {
                             含請客 {formatMoney(treat, currency)}
                           </p>
                         ) : null}
+                        {categoryPacing ? (
+                          <p
+                            className={[
+                              "mt-0.5 text-[11px] font-medium tabular-nums",
+                              categoryPacing.isAhead
+                                ? "text-emerald-700"
+                                : "text-amber-800",
+                            ].join(" ")}
+                          >
+                            {categoryPacing.statusText}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                     {budget ? (
-                      <ProgressBar spent={spent} budget={budget.amount} />
+                      <ProgressBar
+                        spent={spent}
+                        budget={budget.amount}
+                        timeRatio={
+                          scope === "year" && year === currentYear
+                            ? timeProgress.timeRatio
+                            : undefined
+                        }
+                      />
                     ) : null}
                     <div className="mt-2 flex gap-2">
                       <input

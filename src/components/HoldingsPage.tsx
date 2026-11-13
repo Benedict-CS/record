@@ -10,6 +10,7 @@ import {
   HoldingFormSheet,
   type HoldingFormValues,
 } from "@/components/HoldingFormSheet";
+import { MaturityNoticeCard } from "@/components/MaturityNoticeCard";
 import { ListSkeleton } from "@/components/Skeleton";
 import { useToast } from "@/components/ToastProvider";
 import {
@@ -19,7 +20,11 @@ import {
   softDeleteHolding,
   updateHolding,
 } from "@/lib/db/crud";
-import { formatMoney, formatRate } from "@/lib/format";
+import { formatMoney, formatRate, todayLocal } from "@/lib/format";
+import {
+  getMaturingHoldings,
+  getMaturityBadge,
+} from "@/lib/holding-maturity";
 import {
   COMPOUNDING_OPTIONS,
   HOLDING_KINDS,
@@ -144,6 +149,12 @@ export function HoldingsPage() {
   const summary = useMemo(
     () => holdingsInterestSummary(holdings),
     [holdings],
+  );
+
+  const today = todayLocal();
+  const maturingHoldings = useMemo(
+    () => getMaturingHoldings(holdings, today),
+    [holdings, today],
   );
 
   const allocation = useMemo((): CategoryBreakdownItem[] => {
@@ -307,6 +318,12 @@ export function HoldingsPage() {
             記錄現金、銀行活存／定存、基金與電子錢包。可自訂種類與年利率，看每月與每年預估利息。
           </p>
 
+          <MaturityNoticeCard
+            items={maturingHoldings}
+            currency={currency}
+            onSelectHolding={openEdit}
+          />
+
           <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3.5">
             <p className="text-xs text-[var(--muted)]">
               {book?.name ?? "帳本"}存款總額
@@ -420,6 +437,8 @@ export function HoldingsPage() {
             <ul className="space-y-2">
               {visible.map((holding) => {
                 const interest = holdingInterest(holding);
+                const maturityBadge = getMaturityBadge(holding.maturity_date, today);
+
                 return (
                   <li
                     key={holding.id}
@@ -449,6 +468,24 @@ export function HoldingsPage() {
                             ? ` · ${formatRate(holding.annual_rate)}`
                             : ""}
                         </span>
+                        {maturityBadge ? (
+                          <span className="mt-1 block">
+                            <span
+                              className={[
+                                "inline-block rounded-md px-1.5 py-0.5 text-[10px] tabular-nums",
+                                maturityBadge.isUrgent
+                                  ? maturityBadge.status === "overdue"
+                                    ? "bg-rose-100 font-semibold text-rose-800"
+                                    : maturityBadge.status === "today"
+                                      ? "bg-amber-500 font-semibold text-white"
+                                      : "bg-amber-100 font-medium text-amber-900 border border-amber-200"
+                                  : "border border-[var(--line)] bg-[var(--paper)] text-[var(--muted)]",
+                              ].join(" ")}
+                            >
+                              ⏳ {maturityBadge.label}
+                            </span>
+                          </span>
+                        ) : null}
                       </span>
                       <span className="shrink-0 text-right">
                         <span className="block text-sm font-semibold tabular-nums text-[var(--ink)]">

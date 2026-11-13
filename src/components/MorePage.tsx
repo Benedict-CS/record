@@ -1,9 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 import { accountLabel } from "@/lib/account-name";
 import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/components/AuthProvider";
+import { todayLocal } from "@/lib/format";
+import { getMaturingHoldings } from "@/lib/holding-maturity";
+import { useHoldings } from "@/lib/hooks/useLedgerData";
 
 interface MoreLinkItem {
   href: string;
@@ -20,7 +24,7 @@ const LINKS: MoreLinkItem[] = [
   {
     href: "/budgets",
     title: "預算",
-    description: "設定每月預算上限",
+    description: "設定每月與每年預算上限",
   },
   {
     href: "/recurring",
@@ -36,6 +40,13 @@ const LINKS: MoreLinkItem[] = [
 
 export function MorePage() {
   const { user } = useAuth();
+  const holdings = useHoldings();
+  const today = todayLocal();
+
+  const maturingHoldings = useMemo(
+    () => getMaturingHoldings(holdings, today),
+    [holdings, today],
+  );
 
   return (
     <AppShell title="更多">
@@ -43,6 +54,30 @@ export function MorePage() {
         <p className="text-sm text-[var(--muted)]">
           管理分類、預算、固定項目與帳號設定。
         </p>
+
+        {maturingHoldings.length > 0 ? (
+          <Link
+            href="/holdings"
+            className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-left transition active:bg-amber-100"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="text-base shrink-0" aria-hidden>
+                ⏳
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-amber-950">
+                  定存／合約到期提醒（{maturingHoldings.length} 筆）
+                </p>
+                <p className="truncate text-[11px] text-amber-800/90">
+                  {maturingHoldings[0].holding.name} {maturingHoldings[0].label}
+                </p>
+              </div>
+            </div>
+            <span className="shrink-0 text-xs font-medium text-amber-900">
+              前往存款 ›
+            </span>
+          </Link>
+        ) : null}
 
         <ul className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">
           {LINKS.map((item, index) => {
