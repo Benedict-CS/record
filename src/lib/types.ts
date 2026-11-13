@@ -146,6 +146,7 @@ export interface RecurringRule extends SyncMeta {
 export interface Budget extends SyncMeta {
   book_id: string;
   year: number;
+  /** 1-12 for monthly budget; 0 for annual budget. */
   month: number;
   category_id: string | null;
   amount: number;

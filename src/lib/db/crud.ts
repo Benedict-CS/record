@@ -1186,6 +1186,13 @@ export async function listBudgets(
     .toArray();
 }
 
+export async function listYearBudgets(
+  bookId: string,
+  year: number,
+): Promise<Budget[]> {
+  return listBudgets(bookId, year, 0);
+}
+
 export async function upsertBudget(
   bookId: string,
   input: {

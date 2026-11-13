@@ -12,6 +12,7 @@ import {
   findLatestBookedYear,
   listAccounts,
   listBudgets,
+  listYearBudgets,
   listCategories,
   listTemplates,
   listTransactionsForDate,
@@ -193,6 +194,15 @@ export function useBudgets(year: number, month: number) {
     () =>
       bookId ? listBudgets(bookId, year, month) : Promise.resolve([]),
     [bookId, year, month],
+  );
+}
+
+export function useYearBudgets(year: number) {
+  const { bookId } = useBook();
+  return useLiveList(
+    () =>
+      bookId ? listYearBudgets(bookId, year) : Promise.resolve([]),
+    [bookId, year],
   );
 }
 

@@ -21,8 +21,11 @@ import {
   useLedgerEndYear,
   useMonthTransactions,
   useSeedReady,
+  useYearTransactions,
 } from "@/lib/hooks/useLedgerData";
 import { runSync } from "@/lib/sync/engine";
+
+type BudgetScope = "month" | "year";
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
@@ -58,15 +61,19 @@ export function BudgetsPage() {
   const ready = useSeedReady();
   const { show } = useToast();
   const today = todayLocal();
+  const [scope, setScope] = useState<BudgetScope>("month");
   const [year, setYear] = useState(() => Number(today.slice(0, 4)));
   const [month, setMonth] = useState(() => Number(today.slice(5, 7)));
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
-  const budgets = useBudgets(year, month);
+  const targetMonth = scope === "year" ? 0 : month;
+  const budgets = useBudgets(year, targetMonth);
   const endYear = useLedgerEndYear();
   const categories = useCategories("expense");
-  const transactions = useMonthTransactions(year, month);
+  const monthTransactions = useMonthTransactions(year, month, scope === "month");
+  const yearTransactions = useYearTransactions(year, scope === "year");
+  const transactions = scope === "year" ? yearTransactions : monthTransactions;
 
   const summary = useMemo(() => monthSummary(transactions), [transactions]);
   const breakdown = useMemo(
@@ -117,15 +124,21 @@ export function BudgetsPage() {
     setDrafts((prev) => ({ ...prev, [draftKey(categoryId)]: value }));
   }
 
+  function changeScope(nextScope: BudgetScope) {
+    setScope(nextScope);
+    setDrafts({});
+  }
+
   async function saveBudget(categoryId: string | null) {
     if (!bookId) {
       show("尚未選擇帳本，無法儲存預算", { variant: "error" });
       return;
     }
     const key = draftKey(categoryId);
+    const labelPrefix = scope === "year" ? "年度" : "";
     const name = categoryId
       ? (categories.find((item) => item.id === categoryId)?.name ?? "分類")
-      : "總預算";
+      : `${labelPrefix}總預算`;
     const raw = currentDraft(
       categoryId,
       categoryId
@@ -157,7 +170,7 @@ export function BudgetsPage() {
 
       await upsertBudget(bookId, {
         year,
-        month,
+        month: targetMonth,
         category_id: categoryId,
         amount: parsed,
       });
@@ -180,13 +193,19 @@ export function BudgetsPage() {
   function jumpTo(nextYear: number, nextMonth: number) {
     const next = clampLedgerPeriod(nextYear, nextMonth, endYear);
     setYear(next.year);
-    setMonth(next.month);
+    if (scope === "month") setMonth(next.month);
     setDrafts({});
   }
 
-  function shiftMonth(delta: number) {
-    const next = shiftYearMonth(year, month, delta);
-    jumpTo(next.year, next.month);
+  function shiftPeriod(delta: number) {
+    if (scope === "year") {
+      const next = clampLedgerPeriod(year + delta, month, endYear);
+      setYear(next.year);
+      setDrafts({});
+    } else {
+      const next = shiftYearMonth(year, month, delta);
+      jumpTo(next.year, next.month);
+    }
   }
 
   return (
@@ -198,34 +217,60 @@ export function BudgetsPage() {
         </div>
       ) : (
         <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-1 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-1">
+            {(
+              [
+                { id: "month", label: "月預算" },
+                { id: "year", label: "年預算" },
+              ] as const
+            ).map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => changeScope(option.id)}
+                className={[
+                  "min-h-11 rounded-xl px-2 py-2 text-sm font-medium transition",
+                  scope === option.id
+                    ? "bg-[var(--ink)] text-[var(--paper)]"
+                    : "text-[var(--muted)]",
+                ].join(" ")}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
           <section className="rounded-2xl bg-[var(--ink)] px-4 py-4 text-[var(--paper)]">
             <div className="mb-3 flex items-center justify-between gap-1">
               <HoldStepButton
-                ariaLabel="上一個月"
-                title="上一個月，長按跳一年"
+                ariaLabel={scope === "year" ? "上一年" : "上一個月"}
+                title={scope === "year" ? "上一年，長按跳五年" : "上一個月，長按跳一年"}
                 className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-lg text-[var(--paper)] opacity-80 hover:opacity-100"
-                onStep={() => shiftMonth(-1)}
-                onHold={() => shiftMonth(-12)}
+                onStep={() => shiftPeriod(-1)}
+                onHold={() => shiftPeriod(scope === "year" ? -5 : -12)}
               >
                 ‹
               </HoldStepButton>
               <PeriodJump
                 year={year}
                 month={month}
+                scope={scope}
                 onChange={jumpTo}
                 className="text-sm font-semibold tracking-wide tabular-nums text-[var(--paper)]"
               />
               <HoldStepButton
-                ariaLabel="下一個月"
-                title="下一個月，長按跳一年"
+                ariaLabel={scope === "year" ? "下一年" : "下一個月"}
+                title={scope === "year" ? "下一年，長按跳五年" : "下一個月，長按跳一年"}
                 className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-lg text-[var(--paper)] opacity-80 hover:opacity-100"
-                onStep={() => shiftMonth(1)}
-                onHold={() => shiftMonth(12)}
+                onStep={() => shiftPeriod(1)}
+                onHold={() => shiftPeriod(scope === "year" ? 5 : 12)}
               >
                 ›
               </HoldStepButton>
             </div>
-            <p className="text-[11px] opacity-70">{month} 月實際花掉（不含扣住）</p>
+            <p className="text-[11px] opacity-70">
+              {scope === "year" ? `${year} 年` : `${month} 月`}實際花掉（不含扣住）
+            </p>
             <p className="mt-1 text-xl font-semibold tabular-nums">
               {formatMoney(summary.selfPay, currency)}
               {overallBudget ? (
@@ -258,15 +303,19 @@ export function BudgetsPage() {
 
           <section className="space-y-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4">
             <div>
-              <h2 className="text-sm font-medium text-[var(--ink)]">總預算</h2>
+              <h2 className="text-sm font-medium text-[var(--ink)]">
+                {scope === "year" ? "年度總預算" : "總預算"}
+              </h2>
               <p className="mt-0.5 text-xs text-[var(--muted)]">
-                設定每月整體支出上限；清空並儲存可移除。
+                {scope === "year"
+                  ? "設定整年度整體支出上限；清空並儲存可移除。"
+                  : "設定每月整體支出上限；清空並儲存可移除。"}
               </p>
             </div>
             <div className="flex gap-2">
               <input
                 inputMode="decimal"
-                aria-label="總預算金額"
+                aria-label={scope === "year" ? "年度總預算金額" : "總預算金額"}
                 value={currentDraft(null, overallBudget?.amount)}
                 onChange={(event) => setDraft(null, event.target.value)}
                 placeholder="0"
@@ -276,7 +325,7 @@ export function BudgetsPage() {
                 type="button"
                 disabled={savingKey === draftKey(null)}
                 onClick={() => void saveBudget(null)}
-                aria-label="儲存總預算"
+                aria-label={scope === "year" ? "儲存年度總預算" : "儲存總預算"}
                 className="touch-target shrink-0 rounded-md bg-[var(--ink)] px-4 text-sm text-[var(--paper)] disabled:opacity-60"
               >
                 {savingKey === draftKey(null) ? "…" : "儲存"}
@@ -287,10 +336,12 @@ export function BudgetsPage() {
           <section className="space-y-3">
             <div>
               <h2 className="text-sm font-medium text-[var(--ink)]">
-                分類預算
+                {scope === "year" ? "年度分類預算" : "分類預算"}
               </h2>
               <p className="mt-0.5 text-xs text-[var(--muted)]">
-                依支出分類設定上限，並對照該月已花金額。
+                {scope === "year"
+                  ? "依支出分類設定全年度上限，並對照該年已花金額。"
+                  : "依支出分類設定上限，並對照該月已花金額。"}
               </p>
             </div>
             <ul className="space-y-2">
@@ -328,7 +379,7 @@ export function BudgetsPage() {
                     <div className="mt-2 flex gap-2">
                       <input
                         inputMode="decimal"
-                        aria-label={`${category.name} 預算金額`}
+                        aria-label={`${category.name} ${scope === "year" ? "年度" : ""}預算金額`}
                         value={currentDraft(category.id, budget?.amount)}
                         onChange={(event) =>
                           setDraft(category.id, event.target.value)
@@ -340,7 +391,7 @@ export function BudgetsPage() {
                         type="button"
                         disabled={savingKey === key}
                         onClick={() => void saveBudget(category.id)}
-                        aria-label={`儲存 ${category.name} 預算`}
+                        aria-label={`儲存 ${category.name} ${scope === "year" ? "年度" : ""}預算`}
                         className="touch-target shrink-0 rounded-md bg-[var(--ink)] px-4 text-sm text-[var(--paper)] disabled:opacity-60"
                       >
                         {savingKey === key ? "…" : "儲存"}
