@@ -14,6 +14,7 @@ import {
   type EffectiveBudget,
 } from "@/lib/budget-calc";
 import { budgetPacing, formatPercentUsed, yearTimeProgress } from "@/lib/budget-pacing";
+import { sortCategories } from "@/lib/category-order";
 import {
   categoryBreakdown,
   monthSummary,
@@ -52,7 +53,7 @@ function ProgressBar({
   const width = `${Math.min(ratio * 100, 100)}%`;
 
   return (
-    <div className="relative mt-2 h-2.5 overflow-hidden rounded-full bg-[var(--paper)]">
+    <div className="relative mt-2 h-2.5 overflow-hidden rounded-full bg-[var(--line)]/60">
       <div
         className={[
           "h-full rounded-full transition-[width]",
@@ -62,7 +63,7 @@ function ProgressBar({
       />
       {timeRatio !== undefined && timeRatio > 0 && timeRatio < 1 ? (
         <div
-          className="absolute top-0 bottom-0 w-1 -ml-0.5 rounded-full bg-amber-300 shadow-xs"
+          className="absolute top-0 bottom-0 w-1 -ml-0.5 rounded-full bg-amber-400 shadow-xs"
           style={{ left: `${Math.min(timeRatio * 100, 100)}%` }}
           title={`時間進度 ${Math.round(timeRatio * 100)}%`}
         />
@@ -88,7 +89,11 @@ export function BudgetsPage() {
   const targetMonth = scope === "year" ? 0 : month;
   const allBudgets = useAllBudgetsForYear(year);
   const endYear = useLedgerEndYear();
-  const categories = useCategories("expense");
+  const rawCategories = useCategories("expense");
+  const categories = useMemo(
+    () => sortCategories(rawCategories),
+    [rawCategories],
+  );
   const monthTransactions = useMonthTransactions(year, month, scope === "month");
   const yearTransactions = useYearTransactions(year, scope === "year");
   const transactions = scope === "year" ? yearTransactions : monthTransactions;
@@ -373,12 +378,12 @@ export function BudgetsPage() {
             ))}
           </div>
 
-          <section className="rounded-2xl bg-[var(--ink)] px-4 py-4 text-[var(--paper)]">
+          <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-4 text-[var(--ink)]">
             <div className="mb-3 flex items-center justify-between gap-1">
               <HoldStepButton
                 ariaLabel={scope === "year" ? "上一年" : "上一個月"}
                 title={scope === "year" ? "上一年，長按跳五年" : "上一個月，長按跳一年"}
-                className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-lg text-[var(--paper)] opacity-80 hover:opacity-100"
+                className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-lg text-[var(--ink)] opacity-70 hover:opacity-100 hover:bg-[var(--paper)]"
                 onStep={() => shiftPeriod(-1)}
                 onHold={() => shiftPeriod(scope === "year" ? -5 : -12)}
               >
@@ -389,43 +394,43 @@ export function BudgetsPage() {
                 month={month}
                 scope={scope}
                 onChange={jumpTo}
-                className="text-sm font-semibold tracking-wide tabular-nums text-[var(--paper)]"
+                className="text-sm font-semibold tracking-wide tabular-nums text-[var(--ink)]"
               />
               <HoldStepButton
                 ariaLabel={scope === "year" ? "下一年" : "下一個月"}
                 title={scope === "year" ? "下一年，長按跳五年" : "下一個月，長按跳一年"}
-                className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-lg text-[var(--paper)] opacity-80 hover:opacity-100"
+                className="touch-target inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-lg text-[var(--ink)] opacity-70 hover:opacity-100 hover:bg-[var(--paper)]"
                 onStep={() => shiftPeriod(1)}
                 onHold={() => shiftPeriod(scope === "year" ? 5 : 12)}
               >
                 ›
               </HoldStepButton>
             </div>
-            <p className="text-[11px] opacity-70">
+            <p className="text-xs text-[var(--muted)]">
               {scope === "year" ? `${year} 年` : `${month} 月`}實際花掉（不含扣住）
             </p>
-            <p className="mt-1 text-xl font-semibold tabular-nums">
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-[var(--ink)]">
               {formatMoney(summary.selfPay, currency)}
               {effectiveOverallBudget.amount > 0 ? (
-                <span className="ml-2 text-sm font-normal opacity-70">
+                <span className="ml-2 text-sm font-normal text-[var(--muted)]">
                   / {formatMoney(effectiveOverallBudget.amount, currency)}
                   {effectiveOverallBudget.badgeText ? (
-                    <span className="ml-1 text-xs opacity-80">
-                      （{effectiveOverallBudget.badgeText}）
+                    <span className="ml-1 inline-flex items-center rounded-md bg-[var(--line)]/60 px-1.5 py-0.5 text-[10px] font-medium text-[var(--muted)]">
+                      {effectiveOverallBudget.badgeText}
                     </span>
                   ) : null}
                 </span>
               ) : null}
             </p>
             {treatTotal > 0 ? (
-              <p className="mt-1 text-[11px] font-medium text-amber-200">
+              <p className="mt-1 text-xs font-medium text-amber-800">
                 含請客 {formatMoney(treatTotal, currency)}
               </p>
             ) : null}
             {summary.held > 0 ? (
-              <p className="mt-1 text-[11px] opacity-80">
+              <p className="mt-1 text-xs text-[var(--muted)]">
                 另有暫時扣住{" "}
-                <span className="font-medium tabular-nums text-amber-200">
+                <span className="font-medium tabular-nums text-amber-800">
                   {formatMoney(summary.held, currency)}
                 </span>
                 ，不計入預算
@@ -443,24 +448,24 @@ export function BudgetsPage() {
               />
             ) : null}
             {effectiveOverallBudget.amount > 0 && overallPacing ? (
-              <div className="mt-2.5 rounded-xl bg-black/25 px-3 py-2 text-[11px]">
+              <div className="mt-3 rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2.5 text-xs">
                 <div className="flex flex-wrap items-baseline justify-between gap-1">
-                  <span className="opacity-80">
+                  <span className="text-[var(--muted)]">
                     {scope === "year" && year === currentYear ? (
                       <>
                         時間已過{" "}
-                        <span className="font-semibold text-amber-200 tabular-nums">
+                        <span className="font-semibold text-amber-700 dark:text-amber-400 tabular-nums">
                           {overallPacing.timePct}%
                         </span>
                         {" · 預算已用 "}
-                        <span className="font-semibold tabular-nums">
+                        <span className="font-semibold text-[var(--ink)] tabular-nums">
                           {overallPacing.spentPctText}
                         </span>
                       </>
                     ) : (
                       <>
                         預算已用{" "}
-                        <span className="font-semibold tabular-nums">
+                        <span className="font-semibold text-[var(--ink)] tabular-nums">
                           {overallPacing.spentPctText}
                         </span>
                       </>
@@ -470,21 +475,21 @@ export function BudgetsPage() {
                     className={[
                       "font-semibold tabular-nums",
                       overallPacing.isOver
-                        ? "text-rose-300"
-                        : "text-emerald-300",
+                        ? "text-rose-600 dark:text-rose-400"
+                        : "text-emerald-700 dark:text-emerald-500",
                     ].join(" ")}
                   >
                     {overallPacing.statusText}
                   </span>
                 </div>
                 {scope === "year" && year === currentYear && overallAllowance ? (
-                  <div className="mt-1 flex items-center justify-between opacity-80 text-[10px] text-amber-100">
-                    <span>{overallAllowance.text}</span>
+                  <div className="mt-1.5 border-t border-[var(--line)]/50 pt-1.5 text-[11px] text-[var(--muted)]">
+                    {overallAllowance.text}
                   </div>
                 ) : null}
                 {scope === "month" && effectiveOverallBudget.noteText ? (
-                  <div className="mt-1 opacity-70 text-[10px]">
-                    <span>{effectiveOverallBudget.noteText}</span>
+                  <div className="mt-1.5 border-t border-[var(--line)]/50 pt-1.5 text-[11px] text-[var(--muted)]">
+                    {effectiveOverallBudget.noteText}
                   </div>
                 ) : null}
               </div>

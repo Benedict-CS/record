@@ -1,5 +1,6 @@
 import {
   compareCategories,
+  getCategoryPreferredRank,
   isPinnedLastCategory,
   sortCategories,
 } from "./category-order";
@@ -39,6 +40,7 @@ assert(
   "水果 not pinned",
 );
 
+// Basic pin last check
 const ordered = sortCategories([
   cat({ name: "其他支出", kind: "expense", sort_order: 0 }),
   cat({ name: "水果", kind: "expense", sort_order: 5 }),
@@ -46,5 +48,33 @@ const ordered = sortCategories([
 ]);
 assert(ordered.map((row) => row.name).join(",") === "早餐,水果,其他支出", "pin last");
 assert(compareCategories(ordered[0], ordered[2]) < 0, "compare");
+
+// User requested order: 早餐 -> 水果 -> 午餐 -> 晚餐 -> 住宿費 -> 交通 -> 機車 -> 電話費
+const fullTest = sortCategories([
+  cat({ name: "其他支出", kind: "expense", sort_order: 18 }),
+  cat({ name: "電話費", kind: "expense", sort_order: 7 }),
+  cat({ name: "午餐", kind: "expense", sort_order: 1 }),
+  cat({ name: "機車", kind: "expense", sort_order: 5 }),
+  cat({ name: "早餐", kind: "expense", sort_order: 0 }),
+  cat({ name: "住宿費", kind: "expense", sort_order: 8 }),
+  cat({ name: "水果", kind: "expense", sort_order: 17 }),
+  cat({ name: "交通", kind: "expense", sort_order: 4 }),
+  cat({ name: "晚餐", kind: "expense", sort_order: 2 }),
+]);
+
+const names = fullTest.map((c) => c.name);
+assert(names[0] === "早餐", "1st is 早餐");
+assert(names[1] === "水果", "2nd is 水果");
+assert(names[2] === "午餐", "3rd is 午餐");
+assert(names[3] === "晚餐", "4th is 晚餐");
+assert(names[4] === "住宿費", "5th is 住宿費");
+assert(names[5] === "交通", "6th is 交通");
+assert(names[6] === "機車", "7th is 機車");
+assert(names[7] === "電話費", "8th is 電話費");
+assert(names[8] === "其他支出", "last is 其他支出");
+
+assert(getCategoryPreferredRank("早餐") === 0, "rank 0");
+assert(getCategoryPreferredRank("水果") === 1, "rank 1");
+assert(getCategoryPreferredRank("自訂分類") === 900, "unknown rank 900");
 
 console.log("category-order tests passed");
