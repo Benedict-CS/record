@@ -7,7 +7,7 @@ import { HoldStepButton } from "@/components/HoldStepButton";
 import { PeriodJump } from "@/components/PeriodJump";
 import { CardSkeleton, ListSkeleton } from "@/components/Skeleton";
 import { useToast } from "@/components/ToastProvider";
-import { budgetPacing, yearTimeProgress } from "@/lib/budget-pacing";
+import { budgetPacing, formatPercentUsed, yearTimeProgress } from "@/lib/budget-pacing";
 import {
   categoryBreakdown,
   monthSummary,
@@ -127,7 +127,7 @@ export function BudgetsPage() {
   );
 
   const overallPacing = useMemo(() => {
-    if (scope !== "year" || !overallBudget || overallBudget.amount <= 0) {
+    if (!overallBudget || overallBudget.amount <= 0) {
       return null;
     }
     return budgetPacing(
@@ -135,17 +135,8 @@ export function BudgetsPage() {
       overallBudget.amount,
       timeProgress.timeRatio,
       currency,
-      year < currentYear,
     );
-  }, [
-    scope,
-    overallBudget,
-    summary.selfPay,
-    timeProgress.timeRatio,
-    currency,
-    year,
-    currentYear,
-  ]);
+  }, [overallBudget, summary.selfPay, timeProgress.timeRatio, currency]);
 
   function draftKey(categoryId: string | null) {
     return categoryId ?? "__overall__";
@@ -341,11 +332,11 @@ export function BudgetsPage() {
                 }
               />
             ) : null}
-            {scope === "year" && overallPacing ? (
+            {overallBudget && overallPacing ? (
               <div className="mt-2.5 rounded-xl bg-black/25 px-3 py-2 text-[11px]">
                 <div className="flex flex-wrap items-baseline justify-between gap-1">
                   <span className="opacity-80">
-                    {year === currentYear ? (
+                    {scope === "year" && year === currentYear ? (
                       <>
                         時間已過{" "}
                         <span className="font-semibold text-amber-200 tabular-nums">
@@ -353,14 +344,14 @@ export function BudgetsPage() {
                         </span>
                         {" · 預算已用 "}
                         <span className="font-semibold tabular-nums">
-                          {overallPacing.spentPct}%
+                          {overallPacing.spentPctText}
                         </span>
                       </>
                     ) : (
                       <>
-                        全年度預算已用{" "}
+                        預算已用{" "}
                         <span className="font-semibold tabular-nums">
-                          {overallPacing.spentPct}%
+                          {overallPacing.spentPctText}
                         </span>
                       </>
                     )}
@@ -368,21 +359,17 @@ export function BudgetsPage() {
                   <span
                     className={[
                       "font-semibold tabular-nums",
-                      overallPacing.isAhead
-                        ? "text-emerald-300"
-                        : "text-amber-200",
+                      overallPacing.isOver
+                        ? "text-rose-300"
+                        : "text-emerald-300",
                     ].join(" ")}
                   >
                     {overallPacing.statusText}
                   </span>
                 </div>
-                {year === currentYear ? (
+                {scope === "year" && year === currentYear ? (
                   <div className="mt-1 flex items-center justify-between opacity-70 text-[10px]">
-                    <span>黃色標記為今日時間線</span>
-                    <span>
-                      當前預估支出{" "}
-                      {formatMoney(overallPacing.expectedSpend, currency)}
-                    </span>
+                    <span>黃色標記為今日時間進度</span>
                   </div>
                 ) : null}
               </div>
@@ -439,16 +426,6 @@ export function BudgetsPage() {
                 const treat = treatByCategory[category.id] ?? 0;
                 const key = draftKey(category.id);
 
-                const categoryPacing =
-                  scope === "year" && budget && budget.amount > 0 && year === currentYear
-                    ? budgetPacing(
-                        spent,
-                        budget.amount,
-                        timeProgress.timeRatio,
-                        currency,
-                      )
-                    : null;
-
                 return (
                   <li
                     key={category.id}
@@ -461,25 +438,28 @@ export function BudgetsPage() {
                         </p>
                         <p className="mt-0.5 text-xs text-[var(--muted)] tabular-nums">
                           已花 {formatMoney(spent, currency)}
-                          {budget
-                            ? ` · 預算 ${formatMoney(budget.amount, currency)}`
-                            : " · 尚未設定"}
+                          {budget ? (
+                            <>
+                              {" · 預算 "}
+                              {formatMoney(budget.amount, currency)}
+                              {" · 已用 "}
+                              <span
+                                className={
+                                  spent > budget.amount
+                                    ? "font-semibold text-rose-600 dark:text-rose-400"
+                                    : ""
+                                }
+                              >
+                                {formatPercentUsed(spent, budget.amount)}
+                              </span>
+                            </>
+                          ) : (
+                            " · 尚未設定"
+                          )}
                         </p>
                         {treat > 0 ? (
                           <p className="mt-0.5 text-xs font-medium text-amber-800">
                             含請客 {formatMoney(treat, currency)}
-                          </p>
-                        ) : null}
-                        {categoryPacing ? (
-                          <p
-                            className={[
-                              "mt-0.5 text-[11px] font-medium tabular-nums",
-                              categoryPacing.isAhead
-                                ? "text-emerald-700"
-                                : "text-amber-800",
-                            ].join(" ")}
-                          >
-                            {categoryPacing.statusText}
                           </p>
                         ) : null}
                       </div>

@@ -10,10 +10,10 @@ export interface YearTimeProgress {
 export interface BudgetPacing {
   timeRatio: number;
   timePct: number;
+  spentPctText: string;
   spentPct: number;
-  expectedSpend: number;
-  diff: number;
-  isAhead: boolean;
+  remaining: number;
+  isOver: boolean;
   statusText: string;
 }
 
@@ -65,52 +65,51 @@ export function yearTimeProgress(
 }
 
 /**
- * Compares current spend against the time-proportional expected budget.
+ * Formats usage percentage intuitively:
+ * - 0% if 0 or no budget
+ * - < 0.1% if tiny but > 0
+ * - 1 decimal place (e.g. 0.5%) if < 10%
+ * - rounded integer (e.g. 15%, 87%, 110%) if >= 10%
+ */
+export function formatPercentUsed(spent: number, budget: number): string {
+  if (budget <= 0) return "0%";
+  if (spent <= 0) return "0%";
+  const pct = (spent / budget) * 100;
+  if (pct < 0.1) return "< 0.1%";
+  if (pct < 10) {
+    const formatted = pct.toFixed(1);
+    return formatted.endsWith(".0") ? `${Math.round(pct)}%` : `${formatted}%`;
+  }
+  return `${Math.round(pct)}%`;
+}
+
+/**
+ * Simple, intuitive budget pacing:
+ * shows spent percentage and actual remaining / over-budget amount.
  */
 export function budgetPacing(
   spent: number,
   budget: number,
   timeRatio: number,
   currency: MoneyCurrency = "TWD",
-  isPastYear = false,
 ): BudgetPacing {
   const timePct = Math.round(timeRatio * 100);
   const spentPct = budget > 0 ? Math.round((spent / budget) * 100) : 0;
+  const spentPctText = formatPercentUsed(spent, budget);
+  const remaining = budget - spent;
+  const isOver = spent > budget;
 
-  if (isPastYear) {
-    const diff = budget - spent;
-    const isAhead = diff >= 0;
-    return {
-      timeRatio: 1,
-      timePct: 100,
-      spentPct,
-      expectedSpend: budget,
-      diff,
-      isAhead,
-      statusText: isAhead
-        ? `全年度未超支（節省 ${formatMoney(diff, currency)}）`
-        : `全年度超支 ${formatMoney(Math.abs(diff), currency)}`,
-    };
-  }
-
-  const expectedSpend = Math.round(budget * timeRatio);
-  const diff = expectedSpend - spent;
-  const isAhead = diff >= 0;
-
-  let statusText = "";
-  if (isAhead) {
-    statusText = `進度良好 · 較預期省下 ${formatMoney(diff, currency)}`;
-  } else {
-    statusText = `支出超前 · 較預期多花 ${formatMoney(Math.abs(diff), currency)}`;
-  }
+  const statusText = isOver
+    ? `超支 ${formatMoney(spent - budget, currency)}`
+    : `還剩 ${formatMoney(remaining, currency)}`;
 
   return {
     timeRatio,
     timePct,
+    spentPctText,
     spentPct,
-    expectedSpend,
-    diff,
-    isAhead,
+    remaining,
+    isOver,
     statusText,
   };
 }
