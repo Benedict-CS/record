@@ -1193,6 +1193,17 @@ export async function listYearBudgets(
   return listBudgets(bookId, year, 0);
 }
 
+export async function listAllBudgetsForYear(
+  bookId: string,
+  year: number,
+): Promise<Budget[]> {
+  return db.budgets
+    .where("[book_id+year+month]")
+    .between([bookId, year, 0], [bookId, year, 12], true, true)
+    .filter((row) => !row.deleted_at)
+    .toArray();
+}
+
 export async function upsertBudget(
   bookId: string,
   input: {

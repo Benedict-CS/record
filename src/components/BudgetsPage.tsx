@@ -7,6 +7,12 @@ import { HoldStepButton } from "@/components/HoldStepButton";
 import { PeriodJump } from "@/components/PeriodJump";
 import { CardSkeleton, ListSkeleton } from "@/components/Skeleton";
 import { useToast } from "@/components/ToastProvider";
+import {
+  calculateMonthlyAllowance,
+  resolveEffectiveMonthBudget,
+  resolveEffectiveYearBudget,
+  type EffectiveBudget,
+} from "@/lib/budget-calc";
 import { budgetPacing, formatPercentUsed, yearTimeProgress } from "@/lib/budget-pacing";
 import {
   categoryBreakdown,
@@ -17,7 +23,7 @@ import {
 import { formatMoney, shiftYearMonth, todayLocal } from "@/lib/format";
 import { clampLedgerPeriod } from "@/lib/period-jump";
 import {
-  useBudgets,
+  useAllBudgetsForYear,
   useCategories,
   useLedgerEndYear,
   useMonthTransactions,
@@ -72,19 +78,114 @@ export function BudgetsPage() {
   const { show } = useToast();
   const today = todayLocal();
   const currentYear = Number(today.slice(0, 4));
+  const currentMonthNum = Number(today.slice(5, 7));
   const [scope, setScope] = useState<BudgetScope>("month");
   const [year, setYear] = useState(() => currentYear);
-  const [month, setMonth] = useState(() => Number(today.slice(5, 7)));
+  const [month, setMonth] = useState(() => currentMonthNum);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
   const targetMonth = scope === "year" ? 0 : month;
-  const budgets = useBudgets(year, targetMonth);
+  const allBudgets = useAllBudgetsForYear(year);
   const endYear = useLedgerEndYear();
   const categories = useCategories("expense");
   const monthTransactions = useMonthTransactions(year, month, scope === "month");
   const yearTransactions = useYearTransactions(year, scope === "year");
   const transactions = scope === "year" ? yearTransactions : monthTransactions;
+
+  const yearBudgets = useMemo(
+    () => allBudgets.filter((b) => b.month === 0),
+    [allBudgets],
+  );
+  const currentMonthBudgets = useMemo(
+    () => allBudgets.filter((b) => b.month === month),
+    [allBudgets, month],
+  );
+  const allMonthBudgets = useMemo(
+    () => allBudgets.filter((b) => b.month > 0),
+    [allBudgets],
+  );
+
+  const explicitBudgetByCategory = useMemo(
+    () =>
+      Object.fromEntries(
+        (scope === "year" ? yearBudgets : currentMonthBudgets)
+          .filter((b) => b.category_id)
+          .map((b) => [b.category_id as string, b]),
+      ),
+    [scope, yearBudgets, currentMonthBudgets],
+  );
+
+  const explicitOverallBudget = useMemo(
+    () =>
+      (scope === "year" ? yearBudgets : currentMonthBudgets).find(
+        (b) => b.category_id === null,
+      ),
+    [scope, yearBudgets, currentMonthBudgets],
+  );
+
+  const effectiveCategoryBudgets = useMemo(() => {
+    const map: Record<string, EffectiveBudget> = {};
+    for (const cat of categories) {
+      if (scope === "month") {
+        map[cat.id] = resolveEffectiveMonthBudget({
+          categoryId: cat.id,
+          monthBudgets: currentMonthBudgets,
+          yearBudgets,
+          currency,
+        });
+      } else {
+        map[cat.id] = resolveEffectiveYearBudget({
+          categoryId: cat.id,
+          yearBudgets,
+          allMonthBudgets,
+          currency,
+        });
+      }
+    }
+    return map;
+  }, [
+    categories,
+    scope,
+    currentMonthBudgets,
+    yearBudgets,
+    allMonthBudgets,
+    currency,
+  ]);
+
+  const categoryBudgetsSum = useMemo(() => {
+    return Object.values(effectiveCategoryBudgets).reduce(
+      (sum, b) => sum + (b.amount > 0 ? b.amount : 0),
+      0,
+    );
+  }, [effectiveCategoryBudgets]);
+
+  const effectiveOverallBudget = useMemo(() => {
+    if (scope === "month") {
+      return resolveEffectiveMonthBudget({
+        categoryId: null,
+        monthBudgets: currentMonthBudgets,
+        yearBudgets,
+        categoryBudgetsSum,
+        currency,
+      });
+    } else {
+      return resolveEffectiveYearBudget({
+        categoryId: null,
+        yearBudgets,
+        allMonthBudgets,
+        categoryBudgetsSum,
+        currency,
+      });
+    }
+  }, [
+    scope,
+    currentMonthBudgets,
+    yearBudgets,
+    allMonthBudgets,
+    categoryBudgetsSum,
+    currency,
+  ]);
 
   const timeProgress = useMemo(
     () => yearTimeProgress(year, today),
@@ -115,28 +216,37 @@ export function BudgetsPage() {
     [breakdown],
   );
 
-  const overallBudget = budgets.find((b) => b.category_id === null);
-  const budgetByCategory = useMemo(
-    () =>
-      Object.fromEntries(
-        budgets
-          .filter((b) => b.category_id)
-          .map((b) => [b.category_id as string, b]),
-      ),
-    [budgets],
-  );
+  const overallAllowance = useMemo(() => {
+    if (scope !== "year" || effectiveOverallBudget.amount <= 0) return null;
+    return calculateMonthlyAllowance({
+      annualBudgetAmount: effectiveOverallBudget.amount,
+      spentSoFar: summary.selfPay,
+      year,
+      currentYear,
+      currentMonth: currentMonthNum,
+      currency,
+    });
+  }, [
+    scope,
+    effectiveOverallBudget.amount,
+    summary.selfPay,
+    year,
+    currentYear,
+    currentMonthNum,
+    currency,
+  ]);
 
   const overallPacing = useMemo(() => {
-    if (!overallBudget || overallBudget.amount <= 0) {
+    if (effectiveOverallBudget.amount <= 0) {
       return null;
     }
     return budgetPacing(
       summary.selfPay,
-      overallBudget.amount,
+      effectiveOverallBudget.amount,
       timeProgress.timeRatio,
       currency,
     );
-  }, [overallBudget, summary.selfPay, timeProgress.timeRatio, currency]);
+  }, [effectiveOverallBudget.amount, summary.selfPay, timeProgress.timeRatio, currency]);
 
   function draftKey(categoryId: string | null) {
     return categoryId ?? "__overall__";
@@ -167,23 +277,18 @@ export function BudgetsPage() {
     const name = categoryId
       ? (categories.find((item) => item.id === categoryId)?.name ?? "分類")
       : `${labelPrefix}總預算`;
-    const raw = currentDraft(
-      categoryId,
-      categoryId
-        ? budgetByCategory[categoryId]?.amount
-        : overallBudget?.amount,
-    );
+    const explicit = categoryId
+      ? explicitBudgetByCategory[categoryId]
+      : explicitOverallBudget;
+    const raw = currentDraft(categoryId, explicit?.amount);
     const parsed = Number(raw);
     setSavingKey(key);
 
     try {
       if (!raw.trim() || !Number.isFinite(parsed) || parsed <= 0) {
-        const existing = categoryId
-          ? budgetByCategory[categoryId]
-          : overallBudget;
-        if (existing) {
-          await softDeleteBudget(existing.id);
-          show(`已移除${name}預算`, { variant: "success" });
+        if (explicit) {
+          await softDeleteBudget(explicit.id);
+          show(`已移除${name}個別設定，恢復自動換算`, { variant: "success" });
           void runSync();
         } else if (raw.trim()) {
           show("請輸入大於 0 的金額", { variant: "error" });
@@ -301,9 +406,14 @@ export function BudgetsPage() {
             </p>
             <p className="mt-1 text-xl font-semibold tabular-nums">
               {formatMoney(summary.selfPay, currency)}
-              {overallBudget ? (
+              {effectiveOverallBudget.amount > 0 ? (
                 <span className="ml-2 text-sm font-normal opacity-70">
-                  / {formatMoney(overallBudget.amount, currency)}
+                  / {formatMoney(effectiveOverallBudget.amount, currency)}
+                  {effectiveOverallBudget.badgeText ? (
+                    <span className="ml-1 text-xs opacity-80">
+                      （{effectiveOverallBudget.badgeText}）
+                    </span>
+                  ) : null}
                 </span>
               ) : null}
             </p>
@@ -321,10 +431,10 @@ export function BudgetsPage() {
                 ，不計入預算
               </p>
             ) : null}
-            {overallBudget ? (
+            {effectiveOverallBudget.amount > 0 ? (
               <ProgressBar
                 spent={summary.selfPay}
-                budget={overallBudget.amount}
+                budget={effectiveOverallBudget.amount}
                 timeRatio={
                   scope === "year" && year === currentYear
                     ? timeProgress.timeRatio
@@ -332,7 +442,7 @@ export function BudgetsPage() {
                 }
               />
             ) : null}
-            {overallBudget && overallPacing ? (
+            {effectiveOverallBudget.amount > 0 && overallPacing ? (
               <div className="mt-2.5 rounded-xl bg-black/25 px-3 py-2 text-[11px]">
                 <div className="flex flex-wrap items-baseline justify-between gap-1">
                   <span className="opacity-80">
@@ -367,9 +477,14 @@ export function BudgetsPage() {
                     {overallPacing.statusText}
                   </span>
                 </div>
-                {scope === "year" && year === currentYear ? (
-                  <div className="mt-1 flex items-center justify-between opacity-70 text-[10px]">
-                    <span>黃色標記為今日時間進度</span>
+                {scope === "year" && year === currentYear && overallAllowance ? (
+                  <div className="mt-1 flex items-center justify-between opacity-80 text-[10px] text-amber-100">
+                    <span>{overallAllowance.text}</span>
+                  </div>
+                ) : null}
+                {scope === "month" && effectiveOverallBudget.noteText ? (
+                  <div className="mt-1 opacity-70 text-[10px]">
+                    <span>{effectiveOverallBudget.noteText}</span>
                   </div>
                 ) : null}
               </div>
@@ -377,23 +492,51 @@ export function BudgetsPage() {
           </section>
 
           <section className="space-y-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4">
-            <div>
-              <h2 className="text-sm font-medium text-[var(--ink)]">
-                {scope === "year" ? "年度總預算" : "總預算"}
-              </h2>
-              <p className="mt-0.5 text-xs text-[var(--muted)]">
-                {scope === "year"
-                  ? "設定整年度整體支出上限；清空並儲存可移除。"
-                  : "設定每月整體支出上限；清空並儲存可移除。"}
-              </p>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-medium text-[var(--ink)]">
+                  {scope === "year" ? "年度總預算" : "總預算"}
+                </h2>
+                <p className="mt-0.5 text-xs text-[var(--muted)]">
+                  {scope === "year"
+                    ? "設定整年度整體支出上限；清空並儲存可移除。"
+                    : "設定每月整體支出上限；清空並儲存可移除。"}
+                </p>
+                {effectiveOverallBudget.isFallback && effectiveOverallBudget.noteText ? (
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    目前狀態：
+                    <span className="font-medium text-[var(--ink)]">
+                      {effectiveOverallBudget.noteText}
+                    </span>
+                  </p>
+                ) : null}
+              </div>
+              {effectiveOverallBudget.isFallback &&
+              effectiveOverallBudget.amount > 0 &&
+              !currentDraft(null, explicitOverallBudget?.amount) ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDraft(null, String(effectiveOverallBudget.amount))
+                  }
+                  className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2.5 py-1 text-xs text-[var(--muted)] hover:text-[var(--ink)]"
+                >
+                  帶入 ${effectiveOverallBudget.amount}
+                </button>
+              ) : null}
             </div>
             <div className="flex gap-2">
               <input
                 inputMode="decimal"
                 aria-label={scope === "year" ? "年度總預算金額" : "總預算金額"}
-                value={currentDraft(null, overallBudget?.amount)}
+                value={currentDraft(null, explicitOverallBudget?.amount)}
                 onChange={(event) => setDraft(null, event.target.value)}
-                placeholder="0"
+                placeholder={
+                  effectiveOverallBudget.isFallback &&
+                  effectiveOverallBudget.amount > 0
+                    ? `${effectiveOverallBudget.amount}（${effectiveOverallBudget.badgeText}）`
+                    : "0"
+                }
                 className="min-h-11 min-w-0 flex-1 rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 outline-none focus:border-[var(--accent)]"
               />
               <button
@@ -421,10 +564,27 @@ export function BudgetsPage() {
             </div>
             <ul className="space-y-2">
               {categories.map((category) => {
-                const budget = budgetByCategory[category.id];
+                const effective = effectiveCategoryBudgets[category.id] ?? {
+                  amount: 0,
+                  source: "none",
+                  isFallback: false,
+                };
+                const explicit = explicitBudgetByCategory[category.id];
                 const spent = spentByCategory[category.id] ?? 0;
                 const treat = treatByCategory[category.id] ?? 0;
                 const key = draftKey(category.id);
+
+                const allowance =
+                  scope === "year" && effective.amount > 0
+                    ? calculateMonthlyAllowance({
+                        annualBudgetAmount: effective.amount,
+                        spentSoFar: spent,
+                        year,
+                        currentYear,
+                        currentMonth: currentMonthNum,
+                        currency,
+                      })
+                    : null;
 
                 return (
                   <li
@@ -432,25 +592,32 @@ export function BudgetsPage() {
                     className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-3"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-[var(--ink)]">
-                          {category.name}
-                        </p>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm font-medium text-[var(--ink)]">
+                            {category.name}
+                          </p>
+                          {effective.badgeText ? (
+                            <span className="inline-flex items-center rounded-md bg-[var(--line)]/60 px-1.5 py-0.5 text-[10px] font-medium text-[var(--muted)]">
+                              {effective.badgeText}
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="mt-0.5 text-xs text-[var(--muted)] tabular-nums">
                           已花 {formatMoney(spent, currency)}
-                          {budget ? (
+                          {effective.amount > 0 ? (
                             <>
                               {" · 預算 "}
-                              {formatMoney(budget.amount, currency)}
+                              {formatMoney(effective.amount, currency)}
                               {" · 已用 "}
                               <span
                                 className={
-                                  spent > budget.amount
+                                  spent > effective.amount
                                     ? "font-semibold text-rose-600 dark:text-rose-400"
                                     : ""
                                 }
                               >
-                                {formatPercentUsed(spent, budget.amount)}
+                                {formatPercentUsed(spent, effective.amount)}
                               </span>
                             </>
                           ) : (
@@ -462,12 +629,35 @@ export function BudgetsPage() {
                             含請客 {formatMoney(treat, currency)}
                           </p>
                         ) : null}
+                        {allowance ? (
+                          <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                            {allowance.text}
+                          </p>
+                        ) : null}
+                        {scope === "month" && effective.noteText ? (
+                          <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                            {effective.noteText}
+                          </p>
+                        ) : null}
                       </div>
+                      {effective.isFallback &&
+                      effective.amount > 0 &&
+                      !currentDraft(category.id, explicit?.amount) ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDraft(category.id, String(effective.amount))
+                          }
+                          className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--ink)]"
+                        >
+                          帶入 ${effective.amount}
+                        </button>
+                      ) : null}
                     </div>
-                    {budget ? (
+                    {effective.amount > 0 ? (
                       <ProgressBar
                         spent={spent}
-                        budget={budget.amount}
+                        budget={effective.amount}
                         timeRatio={
                           scope === "year" && year === currentYear
                             ? timeProgress.timeRatio
@@ -479,11 +669,15 @@ export function BudgetsPage() {
                       <input
                         inputMode="decimal"
                         aria-label={`${category.name} ${scope === "year" ? "年度" : ""}預算金額`}
-                        value={currentDraft(category.id, budget?.amount)}
+                        value={currentDraft(category.id, explicit?.amount)}
                         onChange={(event) =>
                           setDraft(category.id, event.target.value)
                         }
-                        placeholder="預算金額"
+                        placeholder={
+                          effective.isFallback && effective.amount > 0
+                            ? `${effective.amount}（${effective.badgeText}）`
+                            : "預算金額"
+                        }
                         className="min-h-11 min-w-0 flex-1 rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 outline-none focus:border-[var(--accent)]"
                       />
                       <button

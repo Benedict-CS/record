@@ -13,6 +13,7 @@ import {
   listAccounts,
   listBudgets,
   listYearBudgets,
+  listAllBudgetsForYear,
   listCategories,
   listTemplates,
   listTransactionsForDate,
@@ -202,6 +203,15 @@ export function useYearBudgets(year: number) {
   return useLiveList(
     () =>
       bookId ? listYearBudgets(bookId, year) : Promise.resolve([]),
+    [bookId, year],
+  );
+}
+
+export function useAllBudgetsForYear(year: number) {
+  const { bookId } = useBook();
+  return useLiveList(
+    () =>
+      bookId ? listAllBudgetsForYear(bookId, year) : Promise.resolve([]),
     [bookId, year],
   );
 }
