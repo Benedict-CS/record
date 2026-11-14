@@ -96,6 +96,28 @@ assert(categorySumYear.amount === 420000, "category sum is used for overall year
 assert(categorySumYear.source === "category_sum", "source is category_sum");
 assert(categorySumYear.badgeText === "分類加總", "badge text is 分類加總");
 
+// 6b. Year View: category sum takes precedence over annualized monthly overall budget
+const categorySumWinsOverMonthExtrapolation = resolveEffectiveYearBudget({
+  categoryId: null,
+  yearBudgets: [],
+  // Suppose there is a monthly overall budget of 45,000 in November (which would be 540,000 if annualized)
+  allMonthBudgets: [mockBudget({ category_id: null, month: 11, amount: 45000 })],
+  categoryBudgetsSum: 378300,
+  currency: "TWD",
+});
+assert(
+  categorySumWinsOverMonthExtrapolation.amount === 378300,
+  "category sum 378300 must take precedence over month extrapolation 540000",
+);
+assert(
+  categorySumWinsOverMonthExtrapolation.source === "category_sum",
+  "source must be category_sum",
+);
+assert(
+  categorySumWinsOverMonthExtrapolation.badgeText === "分類加總",
+  "badge must be 分類加總",
+);
+
 // 7. Monthly allowance calculation for current year
 const allowanceCurrent = calculateMonthlyAllowance({
   annualBudgetAmount: 50000,

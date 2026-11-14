@@ -114,7 +114,18 @@ export function resolveEffectiveYearBudget(params: {
     };
   }
 
-  // 2. Fallback from monthly budgets in this year
+  // 2. For overall budget (categoryId === null): category sum takes precedence over annualized monthly total
+  if (categoryId === null && categoryBudgetsSum && categoryBudgetsSum > 0) {
+    return {
+      amount: categoryBudgetsSum,
+      source: "category_sum",
+      isFallback: true,
+      badgeText: "分類加總",
+      noteText: `由各分類年預算加總`,
+    };
+  }
+
+  // 3. Fallback from monthly budgets in this year
   const catMonthBudgets = allMonthBudgets.filter(
     (b) => b.category_id === categoryId && b.amount > 0,
   );
@@ -131,17 +142,6 @@ export function resolveEffectiveYearBudget(params: {
       sourceAmount: avgMonthly,
       badgeText: "月推算",
       noteText: `由月預算推算（平均 ${formatMoney(avgMonthly, currency)}/月 × 12）`,
-    };
-  }
-
-  // 3. Fallback for overall: category sum
-  if (categoryId === null && categoryBudgetsSum && categoryBudgetsSum > 0) {
-    return {
-      amount: categoryBudgetsSum,
-      source: "category_sum",
-      isFallback: true,
-      badgeText: "分類加總",
-      noteText: `由各分類年預算加總`,
     };
   }
 
