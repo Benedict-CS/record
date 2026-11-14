@@ -56,13 +56,14 @@ export function compareCategories(a: Category, b: Category): number {
   const bPinned = isPinnedLastCategory(b);
   if (aPinned !== bPinned) return aPinned ? 1 : -1;
 
+  if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+
   if (a.kind === "expense" && b.kind === "expense") {
     const aRank = getCategoryPreferredRank(a.name);
     const bRank = getCategoryPreferredRank(b.name);
     if (aRank !== bRank) return aRank - bRank;
   }
 
-  if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
   return a.name.localeCompare(b.name, "zh-Hant");
 }
 

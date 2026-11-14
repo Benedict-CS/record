@@ -14,7 +14,8 @@ const withPWA = withPWAInit({
   workboxOptions: {
     disableDevLogs: true,
     // Activate new builds immediately so UI fixes are not stuck behind a
-    // waiting service worker / "有新版本" prompt the user never taps.
+    // waiting service worker. The client detects controllerchange and shows
+    // an "有新版本已就緒" banner allowing the user to reload gracefully.
     skipWaiting: true,
     clientsClaim: true,
   },

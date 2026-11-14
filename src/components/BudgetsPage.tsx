@@ -257,7 +257,7 @@ export function BudgetsPage() {
     return categoryId ?? "__overall__";
   }
 
-  function currentDraft(categoryId: string | null, fallback: number | undefined) {
+  function currentDraft(categoryId: string | null, fallback?: number) {
     const key = draftKey(categoryId);
     if (key in drafts) return drafts[key];
     return fallback !== undefined && fallback > 0 ? String(fallback) : "";
@@ -272,7 +272,7 @@ export function BudgetsPage() {
     setDrafts({});
   }
 
-  async function saveBudget(categoryId: string | null) {
+  async function saveBudget(categoryId: string | null, overrideValue?: string) {
     if (!bookId) {
       show("尚未選擇帳本，無法儲存預算", { variant: "error" });
       return;
@@ -285,7 +285,10 @@ export function BudgetsPage() {
     const explicit = categoryId
       ? explicitBudgetByCategory[categoryId]
       : explicitOverallBudget;
-    const raw = currentDraft(categoryId, explicit?.amount);
+    const raw =
+      overrideValue !== undefined
+        ? overrideValue
+        : currentDraft(categoryId, explicit?.amount);
     const parsed = Number(raw);
     setSavingKey(key);
 
@@ -516,26 +519,47 @@ export function BudgetsPage() {
                   </p>
                 ) : null}
               </div>
-              {effectiveOverallBudget.isFallback &&
-              effectiveOverallBudget.amount > 0 &&
-              !currentDraft(null, explicitOverallBudget?.amount) ? (
+              {explicitOverallBudget ? (
                 <button
                   type="button"
-                  onClick={() =>
-                    setDraft(null, String(effectiveOverallBudget.amount))
-                  }
+                  disabled={savingKey === draftKey(null)}
+                  onClick={() => void saveBudget(null, "")}
+                  aria-label={scope === "year" ? "恢復自動計算年度總預算" : "恢復自動計算總預算"}
+                  className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2.5 py-1 text-xs text-[var(--muted)] hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-300 transition-colors"
+                  title="移除個別設定，恢復自動換算"
+                >
+                  {savingKey === draftKey(null) ? "…" : "恢復自動"}
+                </button>
+              ) : effectiveOverallBudget.isFallback &&
+              effectiveOverallBudget.amount > 0 &&
+              !currentDraft(null) ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraft(null, String(effectiveOverallBudget.amount));
+                    requestAnimationFrame(() => {
+                      document.getElementById("save-budget-overall")?.focus();
+                    });
+                  }}
                   className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2.5 py-1 text-xs text-[var(--muted)] hover:text-[var(--ink)]"
                 >
-                  帶入 ${effectiveOverallBudget.amount}
+                  帶入 {formatMoney(effectiveOverallBudget.amount, currency)}
                 </button>
               ) : null}
             </div>
             <div className="flex gap-2">
               <input
+                id="budget-input-overall"
                 inputMode="decimal"
                 aria-label={scope === "year" ? "年度總預算金額" : "總預算金額"}
                 value={currentDraft(null, explicitOverallBudget?.amount)}
                 onChange={(event) => setDraft(null, event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void saveBudget(null);
+                  }
+                }}
                 placeholder={
                   effectiveOverallBudget.isFallback &&
                   effectiveOverallBudget.amount > 0
@@ -545,11 +569,12 @@ export function BudgetsPage() {
                 className="min-h-11 min-w-0 flex-1 rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 outline-none focus:border-[var(--accent)]"
               />
               <button
+                id="save-budget-overall"
                 type="button"
                 disabled={savingKey === draftKey(null)}
                 onClick={() => void saveBudget(null)}
                 aria-label={scope === "year" ? "儲存年度總預算" : "儲存總預算"}
-                className="touch-target shrink-0 rounded-md bg-[var(--ink)] px-4 text-sm text-[var(--paper)] disabled:opacity-60"
+                className="touch-target shrink-0 rounded-md bg-[var(--ink)] px-4 text-sm text-[var(--paper)] disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
               >
                 {savingKey === draftKey(null) ? "…" : "儲存"}
               </button>
@@ -645,17 +670,31 @@ export function BudgetsPage() {
                           </p>
                         ) : null}
                       </div>
-                      {effective.isFallback &&
-                      effective.amount > 0 &&
-                      !currentDraft(category.id, explicit?.amount) ? (
+                      {explicit ? (
                         <button
                           type="button"
-                          onClick={() =>
-                            setDraft(category.id, String(effective.amount))
-                          }
+                          disabled={savingKey === key}
+                          onClick={() => void saveBudget(category.id, "")}
+                          aria-label={`恢復自動計算 ${category.name} 預算`}
+                          className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2 py-1 text-xs text-[var(--muted)] hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-300 transition-colors"
+                          title="移除個別設定，恢復自動換算"
+                        >
+                          {savingKey === key ? "…" : "恢復自動"}
+                        </button>
+                      ) : effective.isFallback &&
+                      effective.amount > 0 &&
+                      !currentDraft(category.id) ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDraft(category.id, String(effective.amount));
+                            requestAnimationFrame(() => {
+                              document.getElementById(`save-budget-${category.id}`)?.focus();
+                            });
+                          }}
                           className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--ink)]"
                         >
-                          帶入 ${effective.amount}
+                          帶入 {formatMoney(effective.amount, currency)}
                         </button>
                       ) : null}
                     </div>
@@ -672,12 +711,19 @@ export function BudgetsPage() {
                     ) : null}
                     <div className="mt-2 flex gap-2">
                       <input
+                        id={`budget-input-${category.id}`}
                         inputMode="decimal"
                         aria-label={`${category.name} ${scope === "year" ? "年度" : ""}預算金額`}
                         value={currentDraft(category.id, explicit?.amount)}
                         onChange={(event) =>
                           setDraft(category.id, event.target.value)
                         }
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            void saveBudget(category.id);
+                          }
+                        }}
                         placeholder={
                           effective.isFallback && effective.amount > 0
                             ? `${effective.amount}（${effective.badgeText}）`
@@ -686,11 +732,12 @@ export function BudgetsPage() {
                         className="min-h-11 min-w-0 flex-1 rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 outline-none focus:border-[var(--accent)]"
                       />
                       <button
+                        id={`save-budget-${category.id}`}
                         type="button"
                         disabled={savingKey === key}
                         onClick={() => void saveBudget(category.id)}
                         aria-label={`儲存 ${category.name} ${scope === "year" ? "年度" : ""}預算`}
-                        className="touch-target shrink-0 rounded-md bg-[var(--ink)] px-4 text-sm text-[var(--paper)] disabled:opacity-60"
+                        className="touch-target shrink-0 rounded-md bg-[var(--ink)] px-4 text-sm text-[var(--paper)] disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
                       >
                         {savingKey === key ? "…" : "儲存"}
                       </button>

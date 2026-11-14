@@ -65,7 +65,7 @@ export function resolveEffectiveMonthBudget(params: {
       isFallback: true,
       sourceAmount: annual.amount,
       badgeText: "年折算",
-      noteText: `由年預算 ${formatMoney(annual.amount, currency)} 折算（平均 $${formatMoney(derived, currency)}/月）`,
+      noteText: `由年預算 ${formatMoney(annual.amount, currency)} 折算（平均 ${formatMoney(derived, currency)}/月）`,
     };
   }
 

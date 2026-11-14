@@ -127,7 +127,7 @@ export function TodayPage() {
             </ul>
           )}
 
-          <p className="text-xs text-muted text-[var(--muted)]">
+          <p className="text-xs text-[var(--muted)]">
             把這頁加到主畫面就有一個今天小工具。iPhone 沒有真的桌面 widget。
           </p>
         </div>

@@ -49,6 +49,10 @@ assert(fallbackMonth.amount === 4167, "50000 / 12 = 4167");
 assert(fallbackMonth.source === "derived_from_year", "source is derived_from_year");
 assert(fallbackMonth.isFallback === true, "isFallback is true");
 assert(fallbackMonth.badgeText === "年折算", "badge text is 年折算");
+assert(
+  fallbackMonth.noteText === "由年預算 $50,000 折算（平均 $4,167/月）",
+  "noteText formats correctly without double dollar sign",
+);
 
 // 3. Month View: overall budget fallback from category sum
 const categorySumMonth = resolveEffectiveMonthBudget({
