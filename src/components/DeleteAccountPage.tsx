@@ -146,7 +146,7 @@ export function DeleteAccountPage() {
               type="button"
               onClick={() => void onDelete()}
               disabled={!matches || deleting}
-              className="mt-3 min-h-11 w-full rounded-md border border-rose-200 bg-rose-50 px-4 text-sm font-medium text-rose-800 disabled:opacity-50"
+              className="mt-3 min-h-11 w-full rounded-md border border-rose-200 bg-rose-50 px-4 text-sm font-medium text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300 disabled:opacity-50"
             >
               {deleting ? "刪除中…" : "刪除帳號"}
             </button>

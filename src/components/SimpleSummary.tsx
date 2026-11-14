@@ -70,7 +70,7 @@ export function SimpleSummary({
           />
           <div className="min-w-0">
             <p className="text-[11px] text-[var(--muted)]">{periodLabel}收入</p>
-            <p className="truncate text-sm font-semibold tabular-nums text-emerald-800">
+            <p className="truncate text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
               {formatMoney(summary.income, currency)}
             </p>
           </div>

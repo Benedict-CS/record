@@ -475,7 +475,7 @@ export function HoldingsPage() {
                                 "inline-block rounded-md px-1.5 py-0.5 text-[10px] tabular-nums",
                                 maturityBadge.isUrgent
                                   ? maturityBadge.status === "overdue"
-                                    ? "bg-rose-100 font-semibold text-rose-800"
+                                    ? "bg-rose-100 font-semibold text-rose-800 dark:bg-rose-950/40 dark:text-rose-300"
                                     : maturityBadge.status === "today"
                                       ? "bg-amber-500 font-semibold text-white"
                                       : "bg-amber-100 font-medium text-amber-900 border border-amber-200"

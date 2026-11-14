@@ -120,7 +120,7 @@ export function SettingsPage() {
                   <button
                     type="button"
                     onClick={() => void onSignOut()}
-                    className="min-h-11 w-full rounded-xl border border-rose-200 bg-rose-50 px-4 text-sm font-medium text-rose-800 transition active:bg-rose-100"
+                    className="min-h-11 w-full rounded-xl border border-rose-200 bg-rose-50 px-4 text-sm font-medium text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300 transition active:bg-rose-100"
                   >
                     登出 {accountLabel(user)}
                   </button>

@@ -29,7 +29,7 @@ export function MaturityNoticeCard({
             {items.length}
           </span>
         </div>
-        <p className="text-[11px] text-amber-800/80">點選可查看明細</p>
+        <p className="text-[11px] text-amber-800/80 dark:text-amber-300/90">點選可查看明細</p>
       </div>
 
       <ul className="mt-2.5 space-y-1.5">
@@ -63,7 +63,7 @@ export function MaturityNoticeCard({
                     className={[
                       "inline-block rounded-md px-2 py-0.5 text-[11px] font-medium tabular-nums",
                       isOverdue
-                        ? "bg-rose-100 text-rose-800 font-semibold"
+                        ? "bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300 font-semibold"
                         : isToday
                           ? "bg-amber-500 text-white font-semibold"
                           : "bg-amber-100/80 text-amber-900",

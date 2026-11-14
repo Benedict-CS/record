@@ -68,7 +68,7 @@ export function MorePage() {
                 <p className="text-xs font-semibold text-amber-950">
                   定存／合約到期提醒（{maturingHoldings.length} 筆）
                 </p>
-                <p className="truncate text-[11px] text-amber-800/90">
+                <p className="truncate text-[11px] text-amber-800/90 dark:text-amber-300/90">
                   {maturingHoldings[0].holding.name} {maturingHoldings[0].label}
                 </p>
               </div>

@@ -411,7 +411,7 @@ export function TransactionEditor({
               type="button"
               disabled={deleting}
               onClick={() => void onDelete()}
-              className="min-h-11 flex-1 rounded-xl border border-rose-200 bg-rose-50 text-sm font-medium text-rose-800 transition active:bg-rose-100 disabled:opacity-50"
+              className="min-h-11 flex-1 rounded-xl border border-rose-200 bg-rose-50 text-sm font-medium text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300 transition active:bg-rose-100 disabled:opacity-50"
             >
               {deleting ? "刪除中…" : "刪除這筆紀錄"}
             </button>
@@ -713,7 +713,7 @@ export function TransactionEditor({
                 disabled={deleting || saving || duplicating}
                 onClick={() => void onDelete()}
                 className={[
-                  "flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-800 transition active:bg-rose-100 disabled:opacity-50",
+                  "flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300 transition active:bg-rose-100 disabled:opacity-50",
                   !isReleasedHold ? "flex-1" : "w-full",
                 ].join(" ")}
               >

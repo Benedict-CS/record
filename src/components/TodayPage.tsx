@@ -57,7 +57,7 @@ export function TodayPage() {
               </div>
               <div className="min-w-0 rounded-xl bg-[var(--paper)] px-2 py-2">
                 <p className="text-[11px] text-[var(--muted)]">收入</p>
-                <p className="mt-0.5 truncate text-sm font-semibold tabular-nums text-emerald-800">
+                <p className="mt-0.5 truncate text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
                   {formatMoney(summary.income, currency)}
                 </p>
               </div>
@@ -112,9 +112,9 @@ export function TodayPage() {
                       className={[
                         "shrink-0 text-sm font-semibold tabular-nums",
                         income
-                          ? "text-emerald-800"
+                          ? "text-emerald-700 dark:text-emerald-400"
                           : hold
-                            ? "text-amber-800"
+                            ? "text-amber-800 dark:text-amber-300"
                             : "text-rose-700",
                       ].join(" ")}
                     >

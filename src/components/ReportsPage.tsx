@@ -667,7 +667,7 @@ export function ReportsPage() {
                     占支出 {topExpense.percent.toFixed(1)}%
                   </p>
                   {topExpense.treatAmount ? (
-                    <p className="mt-1 text-xs font-medium text-amber-800">
+                    <p className="mt-1 text-xs font-medium text-amber-800 dark:text-amber-300">
                       含請客 {formatMoney(topExpense.treatAmount, currency)}
                     </p>
                   ) : null}
@@ -717,7 +717,7 @@ export function ReportsPage() {
                       <span className="min-w-0 flex-1 text-right text-sm tabular-nums text-rose-700">
                         {formatMoney(row.expense, currency)}
                       </span>
-                      <span className="min-w-0 flex-1 text-right text-sm tabular-nums text-emerald-800">
+                      <span className="min-w-0 flex-1 text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-400">
                         {formatMoney(row.income, currency)}
                       </span>
                     </button>
@@ -803,7 +803,7 @@ export function ReportsPage() {
                       <span className="min-w-0 flex-1 text-right text-sm tabular-nums text-rose-700">
                         {formatMoney(row.expense, currency)}
                       </span>
-                      <span className="min-w-0 flex-1 text-right text-sm tabular-nums text-emerald-800">
+                      <span className="min-w-0 flex-1 text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-400">
                         {formatMoney(row.income, currency)}
                       </span>
                     </button>
@@ -889,7 +889,7 @@ export function ReportsPage() {
                               {item.name}
                             </span>
                             {item.treatAmount ? (
-                              <span className="block truncate text-[10px] font-medium text-amber-800">
+                              <span className="block truncate text-[10px] font-medium text-amber-800 dark:text-amber-300">
                                 含請客 {formatMoney(item.treatAmount, currency)}
                               </span>
                             ) : null}

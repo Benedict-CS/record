@@ -314,19 +314,23 @@ export function BudgetsPage() {
     setSavingKey(key);
 
     try {
-      if (!raw.trim() || !Number.isFinite(parsed) || parsed <= 0) {
+      const trimmed = raw.trim();
+      if (!trimmed || overrideValue === "") {
         if (explicit) {
           await softDeleteBudget(explicit.id);
           show(`已移除${name}個別設定，恢復自動換算`, { variant: "success" });
           void runSync();
-        } else if (raw.trim()) {
-          show("請輸入大於 0 的金額", { variant: "error" });
         }
         setDrafts((prev) => {
           const next = { ...prev };
           delete next[key];
           return next;
         });
+        return;
+      }
+
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        show("請輸入大於 0 的金額", { variant: "error" });
         return;
       }
 
@@ -431,7 +435,12 @@ export function BudgetsPage() {
               </HoldStepButton>
             </div>
             <p className="text-xs text-[var(--muted)]">
-              {scope === "year" ? `${year} 年` : `${month} 月`}實際花掉（不含扣住）
+              {scope === "year"
+                ? `${year} 年`
+                : year === currentYear
+                  ? `${month} 月`
+                  : `${year} 年 ${month} 月`}
+              實際花掉（不含扣住）
             </p>
             <p className="mt-1 text-2xl font-semibold tabular-nums text-[var(--ink)]">
               {formatMoney(summary.selfPay, currency)}
@@ -447,14 +456,14 @@ export function BudgetsPage() {
               ) : null}
             </p>
             {treatTotal > 0 ? (
-              <p className="mt-1 text-xs font-medium text-amber-800">
+              <p className="mt-1 text-xs font-medium text-amber-800 dark:text-amber-300">
                 含請客 {formatMoney(treatTotal, currency)}
               </p>
             ) : null}
             {summary.held > 0 ? (
               <p className="mt-1 text-xs text-[var(--muted)]">
                 另有暫時扣住{" "}
-                <span className="font-medium tabular-nums text-amber-800">
+                <span className="font-medium tabular-nums text-amber-800 dark:text-amber-300">
                   {formatMoney(summary.held, currency)}
                 </span>
                 ，不計入預算
@@ -542,7 +551,7 @@ export function BudgetsPage() {
                   disabled={savingKey === draftKey(null)}
                   onClick={() => void saveBudget(null, "")}
                   aria-label={scope === "year" ? "恢復自動計算年度總預算" : "恢復自動計算總預算"}
-                  className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2.5 py-1 text-xs text-[var(--muted)] hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-300 transition-colors"
+                  className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2.5 py-1 text-xs text-[var(--muted)] hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-300 transition-colors active:scale-95"
                   title="移除個別設定，恢復自動換算"
                 >
                   {savingKey === draftKey(null) ? "…" : "恢復自動"}
@@ -558,7 +567,7 @@ export function BudgetsPage() {
                       document.getElementById("save-budget-overall")?.focus();
                     });
                   }}
-                  className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2.5 py-1 text-xs text-[var(--muted)] hover:text-[var(--ink)]"
+                  className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2.5 py-1 text-xs text-[var(--muted)] hover:text-[var(--ink)] active:scale-95"
                 >
                   帶入 {formatMoney(effectiveOverallBudget.amount, currency)}
                 </button>
@@ -580,7 +589,7 @@ export function BudgetsPage() {
                 placeholder={
                   effectiveOverallBudget.isFallback &&
                   effectiveOverallBudget.amount > 0
-                    ? `${effectiveOverallBudget.amount}（${effectiveOverallBudget.badgeText}）`
+                    ? `${formatMoney(effectiveOverallBudget.amount, currency)}（${effectiveOverallBudget.badgeText}）`
                     : "0"
                 }
                 className="min-h-11 min-w-0 flex-1 rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30"
@@ -666,13 +675,22 @@ export function BudgetsPage() {
                               >
                                 {formatPercentUsed(spent, effective.amount)}
                               </span>
+                              {spent > effective.amount ? (
+                                <span className="ml-1 font-semibold text-rose-600 dark:text-rose-400">
+                                  （超支 {formatMoney(spent - effective.amount, currency)}）
+                                </span>
+                              ) : (
+                                <span className="ml-1 text-[var(--muted)]">
+                                  （剩 {formatMoney(effective.amount - spent, currency)}）
+                                </span>
+                              )}
                             </>
                           ) : (
                             " · 尚未設定"
                           )}
                         </p>
                         {treat > 0 ? (
-                          <p className="mt-0.5 text-xs font-medium text-amber-800">
+                          <p className="mt-0.5 text-xs font-medium text-amber-800 dark:text-amber-300">
                             含請客 {formatMoney(treat, currency)}
                           </p>
                         ) : null}
@@ -693,7 +711,7 @@ export function BudgetsPage() {
                           disabled={savingKey === key}
                           onClick={() => void saveBudget(category.id, "")}
                           aria-label={`恢復自動計算 ${category.name} 預算`}
-                          className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2 py-1 text-xs text-[var(--muted)] hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-300 transition-colors"
+                          className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2 py-1 text-xs text-[var(--muted)] hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-300 transition-colors active:scale-95"
                           title="移除個別設定，恢復自動換算"
                         >
                           {savingKey === key ? "…" : "恢復自動"}
@@ -709,7 +727,7 @@ export function BudgetsPage() {
                               document.getElementById(`save-budget-${category.id}`)?.focus();
                             });
                           }}
-                          className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--ink)]"
+                          className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--ink)] active:scale-95"
                         >
                           帶入 {formatMoney(effective.amount, currency)}
                         </button>
@@ -739,7 +757,7 @@ export function BudgetsPage() {
                         }}
                         placeholder={
                           effective.isFallback && effective.amount > 0
-                            ? `${effective.amount}（${effective.badgeText}）`
+                            ? `${formatMoney(effective.amount, currency)}（${effective.badgeText}）`
                             : "預算金額"
                         }
                         className="min-h-11 min-w-0 flex-1 rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30"

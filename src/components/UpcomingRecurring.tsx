@@ -61,7 +61,7 @@ export function UpcomingRecurring() {
               className={[
                 "shrink-0 tabular-nums",
                 next.daysUntil <= 0
-                  ? "font-medium text-amber-800"
+                  ? "font-medium text-amber-800 dark:text-amber-300"
                   : "text-[var(--ink)]",
               ].join(" ")}
             >

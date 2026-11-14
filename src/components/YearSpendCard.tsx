@@ -29,7 +29,7 @@ export function YearSpendCard({ year }: { year: number }) {
             支出 {formatMoney(periodSpend(summary), currency)}
           </span>
           <span aria-hidden> · </span>
-          <span className="text-emerald-800">
+          <span className="text-emerald-700 dark:text-emerald-400">
             收入 {formatMoney(summary.income, currency)}
           </span>
           <span aria-hidden> · </span>

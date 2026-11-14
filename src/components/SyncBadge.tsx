@@ -127,7 +127,7 @@ export function SyncBadge() {
       className={[
         "inline-flex min-h-11 max-w-[13rem] flex-col items-end justify-center rounded-xl border px-3 py-1.5 text-left active:bg-[var(--paper)]",
         status === "error"
-          ? "border-rose-300 bg-rose-50 text-rose-800"
+          ? "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300"
           : status === "offline"
             ? "border-zinc-300 bg-zinc-100 text-zinc-800"
             : status === "syncing" || busy
@@ -225,7 +225,7 @@ export function SyncBootBanner() {
       >
         <div className="min-w-0 flex-1">
           <p className="font-medium">同步失敗</p>
-          <p className="mt-0.5 text-rose-800/90">
+          <p className="mt-0.5 text-rose-800/90 dark:text-rose-300/90">
             {message ?? "請檢查網路後再試。本機資料不會丟。"}
           </p>
         </div>

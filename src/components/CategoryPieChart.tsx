@@ -91,7 +91,7 @@ export function CategoryPieChart({
                     {item.name}
                   </span>
                   {item.treatAmount ? (
-                    <span className="block truncate text-[10px] font-medium text-amber-800">
+                    <span className="block truncate text-[10px] font-medium text-amber-800 dark:text-amber-300">
                       含請客 {formatMoney(item.treatAmount, currency)}
                     </span>
                   ) : null}

@@ -509,7 +509,7 @@ export function TransactionList({
                     : tx.type === "expense"
                       ? "text-rose-700"
                       : isHold
-                        ? "text-amber-800"
+                        ? "text-amber-800 dark:text-amber-300"
                         : "text-[var(--ink)]";
                 const category = tx.category_id
                   ? categoryMap[tx.category_id]
@@ -691,7 +691,7 @@ export function TransactionList({
                         {splitPendingRows.length === 1 ? (
                           <button
                             type="button"
-                            className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-emerald-800 active:bg-emerald-50"
+                            className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 active:bg-emerald-50"
                             aria-label={`${splitPendingRows[0].name} 已還`}
                             title={`標記 ${splitPendingRows[0].name} 已還款`}
                             onClick={() => void onSettleSplit(tx, splitPendingRows[0].name)}
@@ -701,7 +701,7 @@ export function TransactionList({
                         ) : splitPendingRows.length > 1 ? (
                           <button
                             type="button"
-                            className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-emerald-800 active:bg-emerald-50"
+                            className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 active:bg-emerald-50"
                             aria-label="分帳全還"
                             title="全部標記已還款"
                             onClick={() => void onSettleAllSplits(tx)}
@@ -759,7 +759,7 @@ export function TransactionList({
                                 <button
                                   type="button"
                                   role="menuitem"
-                                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-emerald-800 active:bg-emerald-50"
+                                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-emerald-700 dark:text-emerald-400 active:bg-emerald-50"
                                   onClick={() => {
                                     setMenuId(null);
                                     void onSettleAllSplits(tx);

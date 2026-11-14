@@ -78,7 +78,7 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
             </div>
             <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5">
               <p className="text-[11px] text-[var(--muted)]">被扣住</p>
-              <p className="mt-0.5 text-sm font-semibold tabular-nums text-amber-800">
+              <p className="mt-0.5 text-sm font-semibold tabular-nums text-amber-800 dark:text-amber-300">
                 {formatMoney(summary.held, currency)}
               </p>
             </div>
