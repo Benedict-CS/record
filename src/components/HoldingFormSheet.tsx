@@ -80,6 +80,10 @@ export function HoldingFormSheet({
       setError("年利率無效");
       return;
     }
+    if (maturity.trim() && startDate && maturity < startDate) {
+      setError("到期日不可早於起息日");
+      return;
+    }
     setSaving(true);
     try {
       await onSubmit({
@@ -128,7 +132,7 @@ export function HoldingFormSheet({
                 type="button"
                 onClick={() => setKind(item.id)}
                 className={[
-                  "min-h-10 rounded-full px-3 text-xs",
+                  "min-h-11 rounded-xl px-3 text-xs transition active:scale-95",
                   kind === item.id
                     ? "bg-[var(--accent)] text-white"
                     : "bg-[var(--paper)] text-[var(--muted)]",
@@ -186,7 +190,7 @@ export function HoldingFormSheet({
                 type="button"
                 onClick={() => setCompounding(item.id)}
                 className={[
-                  "min-h-10 rounded-xl px-1 text-[11px]",
+                  "min-h-11 rounded-xl px-1 text-xs transition active:scale-95",
                   compounding === item.id
                     ? "bg-[var(--ink)] text-[var(--paper)]"
                     : "bg-[var(--paper)] text-[var(--muted)]",

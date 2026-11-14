@@ -315,7 +315,7 @@ export function SearchPage() {
                   key={term}
                   type="button"
                   onClick={() => setInput(term)}
-                  className="max-w-full truncate rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-xs text-[var(--ink)]"
+                  className="max-w-full truncate rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-xs text-[var(--ink)] transition active:scale-95"
                 >
                   {term}
                 </button>

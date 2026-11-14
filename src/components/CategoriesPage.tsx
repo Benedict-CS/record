@@ -97,7 +97,7 @@ function CategorySection({
                         isPinnedLastCategory(category)
                       }
                       aria-label={`將 ${category.name} 上移`}
-                      className="min-h-11 min-w-11 rounded-xl text-base text-[var(--ink)] hover:bg-[var(--paper)] disabled:opacity-30"
+                      className="min-h-11 min-w-11 rounded-xl text-base text-[var(--ink)] hover:bg-[var(--paper)] transition active:scale-95 disabled:opacity-30 disabled:active:scale-100"
                     >
                       <span aria-hidden>↑</span>
                     </button>
@@ -111,7 +111,7 @@ function CategorySection({
                         isPinnedLastCategory(items[index + 1]!)
                       }
                       aria-label={`將 ${category.name} 下移`}
-                      className="min-h-11 min-w-11 rounded-xl text-base text-[var(--ink)] hover:bg-[var(--paper)] disabled:opacity-30"
+                      className="min-h-11 min-w-11 rounded-xl text-base text-[var(--ink)] hover:bg-[var(--paper)] transition active:scale-95 disabled:opacity-30 disabled:active:scale-100"
                     >
                       <span aria-hidden>↓</span>
                     </button>

@@ -68,9 +68,9 @@ export function ExportCsvButton({
             type="button"
             onClick={() => setScope(value)}
             className={[
-              "rounded-md px-2 py-2 text-sm",
+              "min-h-11 rounded-xl px-2 py-2 text-sm transition active:scale-95",
               scope === value
-                ? "bg-[var(--accent)] text-white"
+                ? "bg-[var(--accent)] text-white font-medium"
                 : "bg-[var(--paper)] text-[var(--muted)]",
             ].join(" ")}
           >
@@ -82,7 +82,7 @@ export function ExportCsvButton({
         type="button"
         onClick={onExport}
         disabled={transactions.length === 0}
-        className="w-full rounded-md bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-[var(--paper)] disabled:opacity-50"
+        className="min-h-11 w-full rounded-xl bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-[var(--paper)] transition active:scale-[0.98] disabled:opacity-50"
       >
         {transactions.length === 0 ? "沒有可匯出的紀錄" : label}
       </button>

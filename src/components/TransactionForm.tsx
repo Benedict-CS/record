@@ -396,7 +396,7 @@ export function TransactionForm({
                 if (value !== "expense") setReimbursable(null);
               }}
               className={[
-                "min-h-11 rounded-xl px-2 py-2 text-sm font-medium",
+                "min-h-11 rounded-xl px-2 py-2 text-sm font-medium transition active:scale-95",
                 type === value
                   ? value === "expense"
                     ? "bg-rose-600 text-white"
