@@ -1,4 +1,9 @@
-import { budgetPacing, formatPercentUsed, yearTimeProgress } from "./budget-pacing";
+import {
+  budgetPacing,
+  formatPercentUsed,
+  monthTimeProgress,
+  yearTimeProgress,
+} from "./budget-pacing";
 
 function assert(condition: unknown, label: string): asserts condition {
   if (!condition) throw new Error(label);
@@ -16,6 +21,20 @@ assert(future.timeRatio === 0, "future year is 0%");
 // Current year (2026-11-14 is day ~318 of 365, ~87%)
 const current = yearTimeProgress(2026, "2026-11-14");
 assert(current.timePct >= 86 && current.timePct <= 88, `mid November is ~87%, got ${current.timePct}`);
+
+// Month time progress
+const pastMonth = monthTimeProgress(2026, 10, "2026-11-14");
+assert(pastMonth.timeRatio === 1, "past month is 100%");
+assert(pastMonth.timePct === 100, "past month pct is 100");
+
+const futureMonth = monthTimeProgress(2026, 12, "2026-11-14");
+assert(futureMonth.timeRatio === 0, "future month is 0%");
+
+// Current month (14 of 30 days in November = 46.7% -> 47%)
+const currentMonthProg = monthTimeProgress(2026, 11, "2026-11-14");
+assert(currentMonthProg.totalDays === 30, "November has 30 days");
+assert(currentMonthProg.daysElapsed === 14, "14 days elapsed");
+assert(currentMonthProg.timePct === 47, "14/30 = 47%");
 
 // Percentage formatting
 assert(formatPercentUsed(0, 50000) === "0%", "zero spent is 0%");

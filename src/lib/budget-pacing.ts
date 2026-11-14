@@ -7,6 +7,13 @@ export interface YearTimeProgress {
   totalDays: number;
 }
 
+export interface MonthTimeProgress {
+  timeRatio: number;
+  timePct: number;
+  daysElapsed: number;
+  totalDays: number;
+}
+
 export interface BudgetPacing {
   timeRatio: number;
   timePct: number;
@@ -53,6 +60,49 @@ export function yearTimeProgress(
   const todayTime = new Date(`${todayIso}T12:00:00`).getTime();
   const dayOfYear = Math.floor((todayTime - startOfYear) / 86_400_000) + 1;
   const daysElapsed = Math.min(Math.max(dayOfYear, 1), totalDays);
+  const timeRatio = Math.round((daysElapsed / totalDays) * 1000) / 1000;
+  const timePct = Math.round(timeRatio * 100);
+
+  return {
+    timeRatio,
+    timePct,
+    daysElapsed,
+    totalDays,
+  };
+}
+
+/**
+ * Calculates the portion of `month` in `year` that has elapsed as of `todayIso` (0 to 1).
+ */
+export function monthTimeProgress(
+  year: number,
+  month: number,
+  todayIso = todayLocal(),
+): MonthTimeProgress {
+  const currentYear = Number(todayIso.slice(0, 4));
+  const currentMonth = Number(todayIso.slice(5, 7));
+  const currentDay = Number(todayIso.slice(8, 10));
+  const totalDays = new Date(year, month, 0).getDate();
+
+  if (year < currentYear || (year === currentYear && month < currentMonth)) {
+    return {
+      timeRatio: 1,
+      timePct: 100,
+      daysElapsed: totalDays,
+      totalDays,
+    };
+  }
+
+  if (year > currentYear || (year === currentYear && month > currentMonth)) {
+    return {
+      timeRatio: 0,
+      timePct: 0,
+      daysElapsed: 0,
+      totalDays,
+    };
+  }
+
+  const daysElapsed = Math.min(Math.max(currentDay, 1), totalDays);
   const timeRatio = Math.round((daysElapsed / totalDays) * 1000) / 1000;
   const timePct = Math.round(timeRatio * 100);
 

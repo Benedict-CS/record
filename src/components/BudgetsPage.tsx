@@ -13,7 +13,12 @@ import {
   resolveEffectiveYearBudget,
   type EffectiveBudget,
 } from "@/lib/budget-calc";
-import { budgetPacing, formatPercentUsed, yearTimeProgress } from "@/lib/budget-pacing";
+import {
+  budgetPacing,
+  formatPercentUsed,
+  monthTimeProgress,
+  yearTimeProgress,
+} from "@/lib/budget-pacing";
 import { sortCategories } from "@/lib/category-order";
 import {
   categoryBreakdown,
@@ -192,10 +197,21 @@ export function BudgetsPage() {
     currency,
   ]);
 
-  const timeProgress = useMemo(
-    () => yearTimeProgress(year, today),
-    [year, today],
-  );
+  const isCurrentPeriod =
+    scope === "year"
+      ? year === currentYear
+      : year === currentYear && month === currentMonthNum;
+
+  const activeTimeProgress = useMemo(() => {
+    if (scope === "year") {
+      return yearTimeProgress(year, today);
+    }
+    return monthTimeProgress(year, month, today);
+  }, [scope, year, month, today]);
+
+  const activeTimeRatio = isCurrentPeriod
+    ? activeTimeProgress.timeRatio
+    : undefined;
 
   const summary = useMemo(() => monthSummary(transactions), [transactions]);
   const breakdown = useMemo(
@@ -248,10 +264,15 @@ export function BudgetsPage() {
     return budgetPacing(
       summary.selfPay,
       effectiveOverallBudget.amount,
-      timeProgress.timeRatio,
+      activeTimeProgress.timeRatio,
       currency,
     );
-  }, [effectiveOverallBudget.amount, summary.selfPay, timeProgress.timeRatio, currency]);
+  }, [
+    effectiveOverallBudget.amount,
+    summary.selfPay,
+    activeTimeProgress.timeRatio,
+    currency,
+  ]);
 
   function draftKey(categoryId: string | null) {
     return categoryId ?? "__overall__";
@@ -443,18 +464,14 @@ export function BudgetsPage() {
               <ProgressBar
                 spent={summary.selfPay}
                 budget={effectiveOverallBudget.amount}
-                timeRatio={
-                  scope === "year" && year === currentYear
-                    ? timeProgress.timeRatio
-                    : undefined
-                }
+                timeRatio={activeTimeRatio}
               />
             ) : null}
             {effectiveOverallBudget.amount > 0 && overallPacing ? (
               <div className="mt-3 rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2.5 text-xs">
                 <div className="flex flex-wrap items-baseline justify-between gap-1">
                   <span className="text-[var(--muted)]">
-                    {scope === "year" && year === currentYear ? (
+                    {isCurrentPeriod ? (
                       <>
                         時間已過{" "}
                         <span className="font-semibold text-amber-700 dark:text-amber-400 tabular-nums">
@@ -566,7 +583,7 @@ export function BudgetsPage() {
                     ? `${effectiveOverallBudget.amount}（${effectiveOverallBudget.badgeText}）`
                     : "0"
                 }
-                className="min-h-11 min-w-0 flex-1 rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 outline-none focus:border-[var(--accent)]"
+                className="min-h-11 min-w-0 flex-1 rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30"
               />
               <button
                 id="save-budget-overall"
@@ -702,11 +719,7 @@ export function BudgetsPage() {
                       <ProgressBar
                         spent={spent}
                         budget={effective.amount}
-                        timeRatio={
-                          scope === "year" && year === currentYear
-                            ? timeProgress.timeRatio
-                            : undefined
-                        }
+                        timeRatio={activeTimeRatio}
                       />
                     ) : null}
                     <div className="mt-2 flex gap-2">
@@ -729,7 +742,7 @@ export function BudgetsPage() {
                             ? `${effective.amount}（${effective.badgeText}）`
                             : "預算金額"
                         }
-                        className="min-h-11 min-w-0 flex-1 rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 outline-none focus:border-[var(--accent)]"
+                        className="min-h-11 min-w-0 flex-1 rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30"
                       />
                       <button
                         id={`save-budget-${category.id}`}
