@@ -85,7 +85,7 @@ export function MonthBudgetHint({
                 item.over
                   ? "font-medium text-rose-700 dark:text-rose-400"
                   : item.tight
-                    ? "font-medium text-amber-800 dark:text-amber-300"
+                    ? "font-medium text-amber-700 dark:text-amber-200/90"
                     : "text-[var(--ink)]"
               }
             >

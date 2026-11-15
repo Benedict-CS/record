@@ -509,7 +509,7 @@ export function TransactionList({
                     : tx.type === "expense"
                       ? "text-rose-700 dark:text-rose-400"
                       : isHold
-                        ? "text-amber-800 dark:text-amber-300"
+                        ? "text-amber-700 dark:text-amber-200/80"
                         : "text-[var(--ink)]";
                 const category = tx.category_id
                   ? categoryMap[tx.category_id]
@@ -591,7 +591,7 @@ export function TransactionList({
                       </span>
                     ) : isHold ? (
                       <span
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-amber-100 dark:bg-amber-950/60 text-[10px] font-medium text-amber-900 dark:text-amber-300"
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-amber-500/10 text-[10px] font-medium text-amber-700 dark:text-amber-200/80"
                         aria-hidden
                       >
                         扣
@@ -625,7 +625,7 @@ export function TransactionList({
                           {title}
                         </span>
                         {tx.tag === TREAT_TAG ? (
-                          <span className="shrink-0 rounded-md bg-amber-100 dark:bg-amber-950/60 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 dark:text-amber-300">
+                          <span className="shrink-0 rounded-md bg-violet-100 dark:bg-violet-950/60 px-1.5 py-0.5 text-[10px] font-medium text-violet-800 dark:text-violet-300">
                             請客
                           </span>
                         ) : null}
@@ -658,7 +658,7 @@ export function TransactionList({
                         {isHold && !holdReleased ? (
                           <button
                             type="button"
-                            className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-amber-800 dark:text-amber-300 active:bg-amber-50 dark:active:bg-amber-950/40"
+                            className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-[var(--accent)] hover:underline active:opacity-70"
                             aria-label="已退回"
                             title="已退回"
                             onClick={() => void onRelease(tx)}

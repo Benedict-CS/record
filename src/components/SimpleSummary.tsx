@@ -106,9 +106,9 @@ export function SimpleSummary({
             </span>
           ) : null}
           {heldShown > 0 ? (
-            <span className="text-amber-900/90 dark:text-amber-300">
+            <span className="text-amber-800/90 dark:text-amber-200/80">
               {heldMode === "outstanding" ? "仍扣住：" : "扣住："}
-              <strong className="font-semibold tabular-nums">
+              <strong className="font-semibold tabular-nums text-[var(--ink)]">
                 {formatMoney(heldShown, currency)}
               </strong>
             </span>

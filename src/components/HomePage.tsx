@@ -17,6 +17,7 @@ import {
   findLatestTransactionMonth,
   listTransactionsForMonth,
 } from "@/lib/db/crud";
+import { postDueRecurring } from "@/lib/db/recurring-post";
 import { formatDayHeading, todayLocal } from "@/lib/format";
 import { clampLedgerPeriod } from "@/lib/period-jump";
 import {
@@ -86,6 +87,12 @@ export function HomePage() {
     window.addEventListener("hashchange", openFromHash);
     return () => window.removeEventListener("hashchange", openFromHash);
   }, []);
+
+  // Ensure due recurring transactions are posted whenever user lands on home
+  useEffect(() => {
+    if (!ready || !bookId) return;
+    void postDueRecurring(bookId);
+  }, [ready, bookId]);
 
   // If this month is empty, open the latest month that still has data
   // (once per book). Stay on the real current month when the book is empty.

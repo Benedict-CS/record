@@ -79,10 +79,10 @@ export function UpcomingRecurring() {
   if (upcoming.length === 0) return null;
 
   return (
-    <div className="rounded-2xl border border-amber-200/80 bg-amber-50/50 dark:border-amber-900/40 dark:bg-amber-950/20 p-3">
+    <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-3">
       <div className="flex items-baseline justify-between gap-2">
         <div className="flex items-center gap-1.5">
-          <span className="inline-block h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+          <span className="inline-block h-2 w-2 rounded-full bg-[var(--accent)] animate-pulse" />
           <p className="text-xs font-semibold text-[var(--ink)]">今日固定扣款</p>
         </div>
         <Link
@@ -96,7 +96,7 @@ export function UpcomingRecurring() {
         {upcoming.map(({ rule, next }) => (
           <li
             key={rule.id}
-            className="flex items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-xs"
+            className="flex items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-xs"
           >
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline gap-1.5">
@@ -112,7 +112,7 @@ export function UpcomingRecurring() {
                   ⚠️ {rule.last_error}
                 </p>
               ) : (
-                <p className="mt-0.5 text-[11px] text-amber-800 dark:text-amber-300">
+                <p className="mt-0.5 text-[11px] text-[var(--muted)]">
                   {upcomingChargeLabel(next.daysUntil)}
                 </p>
               )}

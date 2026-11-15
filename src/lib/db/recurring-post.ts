@@ -91,6 +91,25 @@ async function writeGenerated(
       : null;
   const movesBank = input.type === "expense" || input.type === "income";
 
+  let accountId = rule.account_id;
+  const acc = await db.accounts.get(accountId);
+  if (!acc || acc.deleted_at || acc.book_id !== rule.book_id) {
+    const fallbackAcc = await db.accounts
+      .where("book_id")
+      .equals(rule.book_id)
+      .filter((a) => !a.deleted_at)
+      .first();
+    if (fallbackAcc) accountId = fallbackAcc.id;
+  }
+
+  let holdingId = movesBank ? rule.holding_id : null;
+  if (holdingId) {
+    const h = await db.holdings.get(holdingId);
+    if (!h || h.deleted_at || h.book_id !== rule.book_id) {
+      holdingId = null;
+    }
+  }
+
   if (existing && existing.deleted_at) {
     await db.transactions.update(input.id, {
       deleted_at: null,
@@ -98,7 +117,7 @@ async function writeGenerated(
       amount: input.amount,
       date: input.date,
       note: input.note,
-      account_id: rule.account_id,
+      account_id: accountId,
       category_id: rule.category_id,
       holding_id: null,
       hold_status: input.type === "hold" ? "held" : null,
@@ -110,10 +129,10 @@ async function writeGenerated(
       client_id: getClientId(),
       sync_status: "pending",
     });
-    if (movesBank && rule.holding_id) {
+    if (movesBank && holdingId) {
       await updateTransaction(input.id, {
         amount: input.amount,
-        holding_id: rule.holding_id,
+        holding_id: holdingId,
       });
     }
     return;
@@ -125,9 +144,9 @@ async function writeGenerated(
     amount: input.amount,
     date: input.date,
     note: input.note,
-    account_id: rule.account_id,
+    account_id: accountId,
     category_id: rule.category_id,
-    holding_id: movesBank ? rule.holding_id : null,
+    holding_id: holdingId,
     hold_status: input.type === "hold" ? "held" : null,
     reimbursable_amount: reimbursable,
     reimbursement_status: reimbursable ? "pending" : null,
