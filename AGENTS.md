@@ -25,8 +25,9 @@ Deploy with `npm run deploy`. Prefer reading Next.js docs under `node_modules/ne
    - ❌ **絕對禁止泥濘/粉濁淡紫色（Dusty Lavender / Muddy Indigo）**。
    - ❌ **絕對禁止刺眼高亮黃色（Neon / Bright Yellow）**。
    - ❌ **嚴禁系統深色模式污染**：Tailwind 配置 `@variant dark (&:where(.dark, .dark *));`，禁止被 OS dark mode 自動變黑。
-2. **更多頁面（/more）精簡**：
-   - ❌ 徹底移除「帳本」（多帳本管理）與「記帳範本」（收支模板），絕不擅自添加多餘入口。
+2. **更多頁面（/more）絕對精簡鐵則**：
+   - ❌ 嚴格禁止在「更多」出現：「帳本」、「記帳範本」、「帳戶」、「待辦與扣住」、「進階搜尋」。
+   - 僅保留核心：常用管理（分類、預算、每月固定）與帳號設定，絕不擅自添加多餘入口。
 3. **列表圖示規範**：
    - 一律使用「圓形徽章 + 白色 SVG」（`rounded-full !h-7 !w-7`），嚴禁方塊包中文字（如方塊「扣」、方塊「轉」）。
 4. **功能與排版習慣**：

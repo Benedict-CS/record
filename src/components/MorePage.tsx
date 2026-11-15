@@ -7,7 +7,7 @@ import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/components/AuthProvider";
 import { todayLocal } from "@/lib/format";
 import { getMaturingHoldings } from "@/lib/holding-maturity";
-import { useHoldings, useOpenItems } from "@/lib/hooks/useLedgerData";
+import { useHoldings } from "@/lib/hooks/useLedgerData";
 
 interface MoreLinkItem {
   href: string;
@@ -25,7 +25,6 @@ interface MoreSection {
 export function MorePage() {
   const { user } = useAuth();
   const holdings = useHoldings();
-  const openItems = useOpenItems();
   const today = todayLocal();
 
   const maturingHoldings = useMemo(
@@ -48,35 +47,9 @@ export function MorePage() {
           description: "年預算與月預算規劃與進度上限",
         },
         {
-          href: "/accounts",
-          title: "帳戶",
-          description: "現金、銀行與信用卡帳戶管理",
-        },
-      ],
-    },
-    {
-      title: "記帳與進階工具",
-      items: [
-        {
           href: "/recurring",
           title: "每月固定",
           description: "薪水、房貸、固定支出與定期定額",
-        },
-        {
-          href: "/pending",
-          title: "待辦與扣住",
-          description: "待報銷款項、分帳待還與押金扣住",
-          badge:
-            openItems.length > 0
-              ? `${openItems.length} 筆待處理`
-              : undefined,
-          badgeColor:
-            "bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 font-medium",
-        },
-        {
-          href: "/search",
-          title: "進階搜尋",
-          description: "關鍵字、標籤與金額範圍搜尋",
         },
       ],
     },
