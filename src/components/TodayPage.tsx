@@ -115,7 +115,7 @@ export function TodayPage() {
                           ? "text-emerald-700 dark:text-emerald-400"
                           : hold
                             ? "text-amber-800 dark:text-amber-300"
-                            : "text-rose-700",
+                            : "text-rose-700 dark:text-rose-400",
                       ].join(" ")}
                     >
                       {income ? "" : "−"}

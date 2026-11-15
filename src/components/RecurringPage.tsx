@@ -704,7 +704,7 @@ export function RecurringPage({
                     </p>
                     <NextDueLine rule={rule} />
                     {rule.last_error ? (
-                      <p className="mt-1 text-xs text-rose-700">{rule.last_error}</p>
+                      <p className="mt-1 text-xs text-rose-700 dark:text-rose-400">⚠️ {rule.last_error}</p>
                     ) : null}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">

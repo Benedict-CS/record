@@ -609,7 +609,7 @@ export async function createTransaction(
 ): Promise<Transaction> {
   if (input.id) {
     const existing = await db.transactions.get(input.id);
-    if (existing) return existing;
+    if (existing && !existing.deleted_at) return existing;
   }
   if (!isIsoDate(input.date)) {
     throw new Error("請選擇日期");

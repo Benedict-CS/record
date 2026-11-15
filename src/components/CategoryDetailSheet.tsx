@@ -85,7 +85,7 @@ export function CategoryDetailSheet({
   const restCount = rows.length - treatRows.length;
   const restAverage = restCount > 0 ? (total - treatTotal) / restCount : 0;
   const isIncome = kind === "income";
-  const amountColor = isIncome ? "text-emerald-700" : "text-rose-700";
+  const amountColor = isIncome ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400";
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center">
@@ -195,8 +195,8 @@ export function CategoryDetailSheet({
                     <p
                       className={`shrink-0 text-sm font-semibold tabular-nums ${
                         tx.type === "income"
-                          ? "text-emerald-700"
-                          : "text-rose-700"
+                          ? "text-emerald-700 dark:text-emerald-400"
+                          : "text-rose-700 dark:text-rose-400"
                       }`}
                     >
                       {tx.type === "income" ? "+" : "-"}

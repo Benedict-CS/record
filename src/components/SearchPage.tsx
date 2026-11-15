@@ -577,7 +577,7 @@ export function SearchPage() {
               <div className="grid grid-cols-3 gap-2">
                 <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5">
                   <p className="text-[11px] text-[var(--muted)]">實際花掉</p>
-                  <p className="mt-0.5 text-sm font-semibold tabular-nums text-rose-700">
+                  <p className="mt-0.5 text-sm font-semibold tabular-nums text-rose-700 dark:text-rose-400">
                     {formatMoney(totals.expense, currency)}
                   </p>
                 </div>
@@ -589,7 +589,7 @@ export function SearchPage() {
                 </div>
                 <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5">
                   <p className="text-[11px] text-[var(--muted)]">收入合計</p>
-                  <p className="mt-0.5 text-sm font-semibold tabular-nums text-emerald-700">
+                  <p className="mt-0.5 text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
                     {formatMoney(totals.income, currency)}
                   </p>
                 </div>

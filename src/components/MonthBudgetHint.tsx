@@ -83,9 +83,9 @@ export function MonthBudgetHint({
             <span
               className={
                 item.over
-                  ? "font-medium text-rose-700"
+                  ? "font-medium text-rose-700 dark:text-rose-400"
                   : item.tight
-                    ? "font-medium text-amber-800"
+                    ? "font-medium text-amber-800 dark:text-amber-300"
                     : "text-[var(--ink)]"
               }
             >

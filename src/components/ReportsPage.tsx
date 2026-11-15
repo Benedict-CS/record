@@ -672,7 +672,7 @@ export function ReportsPage() {
                     </p>
                   ) : null}
                 </div>
-                <p className="shrink-0 text-lg font-semibold tabular-nums text-rose-700">
+                <p className="shrink-0 text-lg font-semibold tabular-nums text-rose-700 dark:text-rose-400">
                   {formatMoney(topExpense.amount, currency)}
                 </p>
               </div>
@@ -714,7 +714,7 @@ export function ReportsPage() {
                       <span className="w-14 shrink-0 text-sm font-medium tabular-nums text-[var(--ink)]">
                         {row.year}
                       </span>
-                      <span className="min-w-0 flex-1 text-right text-sm tabular-nums text-rose-700">
+                      <span className="min-w-0 flex-1 text-right text-sm tabular-nums text-rose-700 dark:text-rose-400">
                         {formatMoney(row.expense, currency)}
                       </span>
                       <span className="min-w-0 flex-1 text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-400">
@@ -800,7 +800,7 @@ export function ReportsPage() {
                       <span className="w-14 shrink-0 text-sm font-medium tabular-nums text-[var(--ink)]">
                         {row.year}
                       </span>
-                      <span className="min-w-0 flex-1 text-right text-sm tabular-nums text-rose-700">
+                      <span className="min-w-0 flex-1 text-right text-sm tabular-nums text-rose-700 dark:text-rose-400">
                         {formatMoney(row.expense, currency)}
                       </span>
                       <span className="min-w-0 flex-1 text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-400">

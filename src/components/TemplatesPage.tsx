@@ -39,11 +39,11 @@ const TYPE_OPTIONS: { value: TransactionType; label: string }[] = [
 ];
 
 const TYPE_BADGE: Record<TransactionType, string> = {
-  expense: "bg-rose-50 text-rose-700",
-  income: "bg-emerald-50 text-emerald-700",
+  expense: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
+  income: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
   transfer: "bg-[var(--paper)] text-[var(--muted)]",
-  hold: "bg-amber-50 text-amber-900",
-  invest: "bg-sky-50 text-sky-900",
+  hold: "bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-300",
+  invest: "bg-sky-50 text-sky-900 dark:bg-sky-950/40 dark:text-sky-300",
 };
 
 type TemplateDraft = {

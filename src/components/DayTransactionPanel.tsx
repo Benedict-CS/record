@@ -64,13 +64,13 @@ export function DayTransactionPanel({
           {transactions.length > 0 ? (
             <p className="mt-0.5 text-xs text-[var(--muted)] tabular-nums">
               {totals.expense > 0 ? (
-                <span className="text-rose-700">
+                <span className="text-rose-700 dark:text-rose-400">
                   支出 {formatMoney(totals.expense, currency)}
                 </span>
               ) : null}
               {totals.expense > 0 && totals.income > 0 ? <span> · </span> : null}
               {totals.income > 0 ? (
-                <span className="text-emerald-700">
+                <span className="text-emerald-700 dark:text-emerald-400">
                   收入 {formatMoney(totals.income, currency)}
                 </span>
               ) : null}

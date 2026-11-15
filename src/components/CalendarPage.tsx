@@ -274,7 +274,7 @@ export function CalendarPage() {
                     </span>
                     <span className="mt-auto space-y-0.5 px-0.5 pb-0.5">
                       {bucket && bucket.expense > 0 ? (
-                        <span className="block truncate text-[10px] tabular-nums leading-tight text-rose-700">
+                        <span className="block truncate text-[10px] tabular-nums leading-tight text-rose-700 dark:text-rose-400">
                           -{compactMoney(bucket.expense, currency)}
                         </span>
                       ) : null}
@@ -284,7 +284,7 @@ export function CalendarPage() {
                         </span>
                       ) : null}
                       {bucket && bucket.income > 0 ? (
-                        <span className="block truncate text-[10px] tabular-nums leading-tight text-emerald-700">
+                        <span className="block truncate text-[10px] tabular-nums leading-tight text-emerald-700 dark:text-emerald-400">
                           +{compactMoney(bucket.income, currency)}
                         </span>
                       ) : null}

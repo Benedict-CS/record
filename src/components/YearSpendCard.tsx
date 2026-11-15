@@ -25,7 +25,7 @@ export function YearSpendCard({ year }: { year: number }) {
       >
         <span className="shrink-0 font-medium text-[var(--ink)]">{year} 年</span>
         <span className="min-w-0 flex-1 truncate tabular-nums text-[var(--muted)]">
-          <span className="text-rose-700">
+          <span className="text-rose-700 dark:text-rose-400">
             支出 {formatMoney(periodSpend(summary), currency)}
           </span>
           <span aria-hidden> · </span>
