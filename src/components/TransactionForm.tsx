@@ -399,11 +399,11 @@ export function TransactionForm({
                 "min-h-11 rounded-xl px-2 py-2 text-sm font-medium transition active:scale-95",
                 type === value
                   ? value === "expense"
-                    ? "bg-rose-600 text-white"
+                    ? "bg-[#FEF2F2] text-[#DC2626] border-2 border-[#FCA5A5] font-semibold shadow-2xs"
                     : value === "income"
-                      ? "bg-emerald-700 text-white"
-                      : "bg-blue-600 text-white"
-                  : "bg-[var(--paper)] text-[var(--muted)]",
+                      ? "bg-[#F0FDF4] text-[#16A34A] border-2 border-[#86EFAC] font-semibold shadow-2xs"
+                      : "bg-[#F0F7FF] text-[#2563EB] border-2 border-[#93C5FD] font-semibold shadow-2xs"
+                  : "bg-[var(--surface)] text-[var(--muted)] border border-[var(--line)]",
               ].join(" ")}
             >
               {label}

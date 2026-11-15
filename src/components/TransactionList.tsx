@@ -607,7 +607,7 @@ export function TransactionList({
                         className={[
                           "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full shadow-2xs transition-colors",
                           holdReleased
-                            ? "border border-blue-200 dark:border-blue-800/50 bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400"
+                            ? "border border-blue-200 bg-blue-100 text-blue-600"
                             : "bg-blue-600 text-white",
                         ].join(" ")}
                         aria-hidden
@@ -702,7 +702,7 @@ export function TransactionList({
                         {isHold && !holdReleased ? (
                           <button
                             type="button"
-                            className="mr-1 rounded-lg border border-blue-200 dark:border-blue-800/60 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:text-blue-300 transition hover:bg-blue-100 dark:hover:bg-blue-900/60 active:scale-95"
+                            className="mr-1 rounded-lg border border-blue-200 bg-blue-50/90 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700 shadow-2xs transition hover:bg-blue-100 active:bg-blue-200 active:scale-95"
                             aria-label="已退回"
                             title="已退回"
                             onClick={() => void onRelease(tx)}
@@ -713,7 +713,7 @@ export function TransactionList({
                         {reimbPending ? (
                           <button
                             type="button"
-                            className="mr-1 rounded-lg border border-sky-200 dark:border-sky-800/60 bg-sky-50 dark:bg-sky-950/60 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:text-sky-300 transition hover:bg-sky-100 dark:hover:bg-sky-900/60 active:scale-95"
+                            className="mr-1 rounded-lg border border-sky-200 bg-sky-50/90 px-2.5 py-0.5 text-[11px] font-semibold text-sky-700 shadow-2xs transition hover:bg-sky-100 active:bg-sky-200 active:scale-95"
                             aria-label="銷帳"
                             title="銷帳"
                             onClick={() => void onMarkReimbursed(tx)}
@@ -724,7 +724,7 @@ export function TransactionList({
                         {reimbReceived ? (
                           <button
                             type="button"
-                            className="mr-1 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2 py-0.5 text-[11px] font-medium text-[var(--muted)] transition hover:text-[var(--ink)] active:scale-95"
+                            className="mr-1 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--muted)] shadow-2xs transition hover:text-[var(--ink)] active:scale-95"
                             aria-label="取消銷帳"
                             title="取消銷帳"
                             onClick={() => void onUndoReimbursed(tx)}
@@ -735,7 +735,7 @@ export function TransactionList({
                         {splitPendingRows.length === 1 ? (
                           <button
                             type="button"
-                            className="mr-1 rounded-lg border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 transition hover:bg-emerald-100 dark:hover:bg-emerald-900/60 active:scale-95"
+                            className="mr-1 rounded-lg border border-emerald-200 bg-emerald-50/90 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 shadow-2xs transition hover:bg-emerald-100 active:bg-emerald-200 active:scale-95"
                             aria-label={`${splitPendingRows[0].name} 已還`}
                             title={`標記 ${splitPendingRows[0].name} 已還款`}
                             onClick={() => void onSettleSplit(tx, splitPendingRows[0].name)}
@@ -745,7 +745,7 @@ export function TransactionList({
                         ) : splitPendingRows.length > 1 ? (
                           <button
                             type="button"
-                            className="mr-1 rounded-lg border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 transition hover:bg-emerald-100 dark:hover:bg-emerald-900/60 active:scale-95"
+                            className="mr-1 rounded-lg border border-emerald-200 bg-emerald-50/90 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 shadow-2xs transition hover:bg-emerald-100 active:bg-emerald-200 active:scale-95"
                             aria-label="分帳全還"
                             title="全部標記已還款"
                             onClick={() => void onSettleAllSplits(tx)}
@@ -755,7 +755,7 @@ export function TransactionList({
                         ) : isSplit && splitSettled > 0 ? (
                           <button
                             type="button"
-                            className="mr-1 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2 py-0.5 text-[11px] font-medium text-[var(--muted)] transition hover:text-[var(--ink)] active:scale-95"
+                            className="mr-1 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--muted)] shadow-2xs transition hover:text-[var(--ink)] active:scale-95"
                             aria-label="重設分帳為待還"
                             title="重設分帳為待還"
                             onClick={() => void onResetAllSplits(tx)}

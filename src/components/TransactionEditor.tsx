@@ -480,11 +480,11 @@ export function TransactionEditor({
                     "min-h-11 rounded-xl px-2 py-2 text-sm font-medium transition active:scale-95 disabled:opacity-50 disabled:active:scale-100",
                     type === value
                       ? value === "expense"
-                        ? "bg-rose-600 text-white"
+                        ? "bg-[#FEF2F2] text-[#DC2626] border-2 border-[#FCA5A5] font-semibold shadow-2xs"
                         : value === "income"
-                          ? "bg-emerald-700 text-white"
-                          : "bg-blue-600 text-white"
-                      : "bg-[var(--paper)] text-[var(--muted)]",
+                          ? "bg-[#F0FDF4] text-[#16A34A] border-2 border-[#86EFAC] font-semibold shadow-2xs"
+                          : "bg-[#F0F7FF] text-[#2563EB] border-2 border-[#93C5FD] font-semibold shadow-2xs"
+                      : "bg-[var(--surface)] text-[var(--muted)] border border-[var(--line)]",
                   ].join(" ")}
                 >
                   {label}
@@ -638,7 +638,7 @@ export function TransactionEditor({
                 type="button"
                 disabled={releasing}
                 onClick={() => void onRelease()}
-                className="min-h-12 w-full rounded-xl bg-blue-600 text-white px-4 py-2.5 text-sm font-semibold shadow-xs hover:bg-blue-700 active:scale-95 disabled:opacity-60 transition"
+                className="min-h-12 w-full rounded-xl bg-[#F0F7FF] text-[#2563EB] border border-[#BFDBFE] px-4 py-2.5 text-sm font-semibold shadow-2xs hover:bg-[#DBEAFE] active:scale-95 disabled:opacity-60 transition"
               >
                 {releasing ? "處理中…" : "標記退回"}
               </button>
@@ -649,7 +649,7 @@ export function TransactionEditor({
                 type="button"
                 disabled={marking}
                 onClick={() => void onMarkReimbursed()}
-                className="min-h-12 w-full rounded-xl bg-sky-600 text-white px-4 py-2.5 text-sm font-semibold shadow-xs hover:bg-sky-700 active:scale-95 disabled:opacity-60 transition"
+                className="min-h-12 w-full rounded-xl bg-[#F0F9FF] text-[#0284C7] border border-[#BAE6FD] px-4 py-2.5 text-sm font-semibold shadow-2xs hover:bg-[#E0F2FE] active:scale-95 disabled:opacity-60 transition"
               >
                 {marking ? "處理中…" : "銷帳（補助／退稅已收到）"}
               </button>

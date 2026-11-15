@@ -243,12 +243,16 @@ export function HomePage() {
                   aria-pressed={typeFilter === id}
                   onClick={() => setTypeFilter(id)}
                   className={[
-                    "min-h-11 rounded-xl text-xs font-medium",
+                    "min-h-11 rounded-xl text-xs font-semibold transition active:scale-95",
                     typeFilter === id
                       ? id === "hold"
-                        ? "bg-blue-600 text-white"
-                        : "bg-[var(--ink)] text-[var(--paper)]"
-                      : "bg-[var(--surface)] text-[var(--muted)] border border-[var(--line)]",
+                        ? "bg-blue-50 text-blue-700 border-2 border-blue-400 shadow-2xs"
+                        : id === "expense"
+                          ? "bg-rose-50 text-rose-700 border-2 border-rose-400 shadow-2xs"
+                          : id === "income"
+                            ? "bg-emerald-50 text-emerald-700 border-2 border-emerald-400 shadow-2xs"
+                            : "bg-white text-[var(--ink)] border-2 border-[var(--ink)] shadow-2xs"
+                      : "bg-[var(--surface)] text-[var(--muted)] border border-[var(--line)] hover:text-[var(--ink)]",
                   ].join(" ")}
                 >
                   {label}

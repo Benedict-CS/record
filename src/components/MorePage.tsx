@@ -52,11 +52,6 @@ export function MorePage() {
           title: "帳戶",
           description: "現金、銀行與信用卡帳戶管理",
         },
-        {
-          href: "/books",
-          title: "帳本",
-          description: "多帳本管理與切換",
-        },
       ],
     },
     {
@@ -66,11 +61,6 @@ export function MorePage() {
           href: "/recurring",
           title: "每月固定",
           description: "薪水、房貸、固定支出與定期定額",
-        },
-        {
-          href: "/templates",
-          title: "記帳範本",
-          description: "一鍵套用常用收支模板",
         },
         {
           href: "/pending",

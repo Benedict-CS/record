@@ -210,7 +210,11 @@ function GroupCard({
   const actionLabel =
     group.kind === "hold" ? "退回" : group.kind === "split" ? "已還錢" : "銷帳";
   const actionColor =
-    "bg-[var(--ink)] text-[var(--paper)] hover:opacity-90 active:scale-95 shadow-xs";
+    group.kind === "hold"
+      ? "bg-[#F0F7FF] text-[#2563EB] border border-[#BFDBFE] hover:bg-[#DBEAFE] active:scale-95 shadow-2xs"
+      : group.kind === "split"
+        ? "bg-[#F0FDF4] text-[#16A34A] border border-[#BBF7D0] hover:bg-[#DCFCE7] active:scale-95 shadow-2xs"
+        : "bg-[#F0F9FF] text-[#0284C7] border border-[#BAE6FD] hover:bg-[#E0F2FE] active:scale-95 shadow-2xs";
 
   const months = new Set(group.items.map((tx) => tx.date.slice(0, 7))).size;
   const span = months > 1 ? `${months} 個月 · ${group.items.length} 筆` : `${group.items.length} 筆`;
@@ -225,10 +229,10 @@ function GroupCard({
         : "待核銷";
   const badgeColor =
     group.kind === "hold"
-      ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900"
+      ? "bg-blue-50 text-blue-700 border-blue-200"
       : group.kind === "split"
-        ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900"
-        : "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-900";
+        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+        : "bg-sky-50 text-sky-700 border-sky-200";
 
   const singleSubtitle = singleTx
     ? `${formatDayHeading(singleTx.date)}`
