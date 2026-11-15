@@ -653,6 +653,28 @@ export async function createTransaction(
     db.holdings,
     db.accounts,
     async () => {
+      if (input.id) {
+        const inTx = await db.transactions.get(input.id);
+        if (inTx && !inTx.deleted_at) {
+          Object.assign(tx, inTx);
+          return;
+        }
+        if (inTx && inTx.deleted_at) {
+          tx.holding_id = await commitHoldingSpend({
+            bookId,
+            previous: null,
+            next: {
+              type: tx.type,
+              amount: tx.amount,
+              account_id: tx.account_id,
+              holding_id: input.holding_id,
+              deleted: false,
+            },
+          });
+          await db.transactions.update(input.id, tx);
+          return;
+        }
+      }
       tx.holding_id = await commitHoldingSpend({
         bookId,
         previous: null,

@@ -37,7 +37,7 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
   const currency = account?.currency || book?.currency;
 
   return (
-    <AppShell title={account?.name ?? "帳戶明細"}>
+    <AppShell title={account?.name ?? "帳戶明細"} backHref="/accounts">
       {!ready ? (
         <p className="text-sm text-[var(--muted)]">載入本機資料…</p>
       ) : !account ? (

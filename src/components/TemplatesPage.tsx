@@ -356,7 +356,7 @@ export function TemplatesPage() {
   const hasAccounts = accounts.length > 0;
 
   return (
-    <AppShell title="範本">
+    <AppShell title="範本" backHref="/more">
       {!ready ? (
         <p className="text-sm text-[var(--muted)]">載入本機資料…</p>
       ) : (

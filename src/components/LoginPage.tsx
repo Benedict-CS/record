@@ -73,7 +73,7 @@ export function LoginPage() {
   }
 
   return (
-    <AppShell title="登入同步">
+    <AppShell title="登入同步" backHref="/more">
       <div className="space-y-4 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4">
         {!configured ? (
           <div className="space-y-2 text-sm text-[var(--muted)]">

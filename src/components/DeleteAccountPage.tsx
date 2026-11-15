@@ -62,7 +62,7 @@ export function DeleteAccountPage() {
   }
 
   return (
-    <AppShell title="刪除帳號">
+    <AppShell title="刪除帳號" backHref="/settings">
       <div className="space-y-4">
         <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3">
           <h2 className="text-sm font-medium text-[var(--ink)]">會刪掉</h2>

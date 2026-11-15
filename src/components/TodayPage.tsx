@@ -39,7 +39,7 @@ export function TodayPage() {
   const summary = useMemo(() => monthSummary(transactions), [transactions]);
 
   return (
-    <AppShell title="今天">
+    <AppShell title="今天" backHref="/more">
       {!ready ? (
         <p className="text-sm text-[var(--muted)]">載入本機資料…</p>
       ) : (
@@ -51,7 +51,7 @@ export function TodayPage() {
             <div className="mt-2 grid grid-cols-3 gap-1.5">
               <div className="min-w-0 rounded-xl bg-[var(--paper)] px-2 py-2">
                 <p className="text-[11px] text-[var(--muted)]">支出</p>
-                <p className="mt-0.5 truncate text-sm font-semibold tabular-nums text-rose-700">
+                <p className="mt-0.5 truncate text-sm font-semibold tabular-nums text-rose-700 dark:text-rose-400">
                   {formatMoney(periodSpend(summary), currency)}
                 </p>
               </div>

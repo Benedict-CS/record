@@ -86,11 +86,15 @@ export function periodsDue(input: {
 
   const periods: string[] = [];
   let cursor = start;
+  if (input.lastPosted) {
+    const posted = monthIndex(input.lastPosted);
+    if (posted != null) cursor = Math.max(cursor, posted + 1);
+  }
   while (cursor <= end && periods.length < cap) {
     const year = Math.floor((cursor - 1) / 12);
     const month = cursor - year * 12;
     const key = `${year}-${String(month).padStart(2, "0")}`;
-    if (!input.lastPosted || key > input.lastPosted) periods.push(key);
+    periods.push(key);
     cursor += 1;
   }
   return periods;

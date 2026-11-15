@@ -184,37 +184,48 @@ async function postInvest(rule: RecurringRule, period: string) {
   await markRule(rule, { last_posted: period, last_error: null });
 }
 
+const activePostingLocks = new Set<string>();
+
 /** Post every due month for this book's rules. Stops a rule on the first failure. */
 export async function postDueRecurring(
   bookId: string,
   today = todayIso(),
   ruleId?: string,
 ): Promise<number> {
-  const rules = (await db.recurring_rules.where("book_id").equals(bookId).toArray())
-    .filter((row) => !row.deleted_at && (!ruleId || row.id === ruleId));
-  let posted = 0;
-  for (const rule of rules) {
-    const periods = periodsDue({
-      startMonth: rule.start_month,
-      endMonth: rule.end_month,
-      dayOfMonth: rule.day_of_month,
-      lastPosted: rule.last_posted,
-      today,
-    });
-    for (const period of periods) {
-      try {
-        if (rule.kind === "invest") await postInvest(rule, period);
-        else if (rule.kind === "income") await postIncome(rule, period);
-        else await postExpense(rule, period);
-        posted += 1;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "固定扣款失敗";
-        await markRule(rule, { last_error: message });
-        break;
+  const lockKey = `${bookId}:${ruleId ?? "all"}`;
+  if (activePostingLocks.has(lockKey)) {
+    return 0;
+  }
+  activePostingLocks.add(lockKey);
+  try {
+    const rules = (await db.recurring_rules.where("book_id").equals(bookId).toArray())
+      .filter((row) => !row.deleted_at && (!ruleId || row.id === ruleId));
+    let posted = 0;
+    for (const rule of rules) {
+      const periods = periodsDue({
+        startMonth: rule.start_month,
+        endMonth: rule.end_month,
+        dayOfMonth: rule.day_of_month,
+        lastPosted: rule.last_posted,
+        today,
+      });
+      for (const period of periods) {
+        try {
+          if (rule.kind === "invest") await postInvest(rule, period);
+          else if (rule.kind === "income") await postIncome(rule, period);
+          else await postExpense(rule, period);
+          posted += 1;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "固定扣款失敗";
+          await markRule(rule, { last_error: message });
+          break;
+        }
       }
     }
+    return posted;
+  } finally {
+    activePostingLocks.delete(lockKey);
   }
-  return posted;
 }
 
 export async function listRecurringRules(bookId: string): Promise<RecurringRule[]> {

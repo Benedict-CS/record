@@ -50,9 +50,9 @@ export function SimpleSummary({
         <p
           className={`mt-0.5 text-2xl font-bold tracking-tight tabular-nums sm:text-3xl ${
             balance > 0.005
-              ? "text-emerald-700"
+              ? "text-emerald-700 dark:text-emerald-400"
               : balance < -0.005
-                ? "text-rose-700"
+                ? "text-rose-700 dark:text-rose-400"
                 : "text-[var(--ink)]"
           }`}
         >
@@ -82,7 +82,7 @@ export function SimpleSummary({
           />
           <div className="min-w-0">
             <p className="text-[11px] text-[var(--muted)]">{periodLabel}支出</p>
-            <p className="truncate text-sm font-semibold tabular-nums text-rose-700">
+            <p className="truncate text-sm font-semibold tabular-nums text-rose-700 dark:text-rose-400">
               {formatMoney(spend, currency)}
             </p>
           </div>
@@ -98,7 +98,7 @@ export function SimpleSummary({
             </strong>
           </span>
           {pending > 0 ? (
-            <span className="text-sky-900/90">
+            <span className="text-sky-900/90 dark:text-sky-300">
               待核銷：
               <strong className="font-semibold tabular-nums">
                 {formatMoney(pending, currency)}
@@ -106,7 +106,7 @@ export function SimpleSummary({
             </span>
           ) : null}
           {heldShown > 0 ? (
-            <span className="text-amber-900/90">
+            <span className="text-amber-900/90 dark:text-amber-300">
               {heldMode === "outstanding" ? "仍扣住：" : "扣住："}
               <strong className="font-semibold tabular-nums">
                 {formatMoney(heldShown, currency)}

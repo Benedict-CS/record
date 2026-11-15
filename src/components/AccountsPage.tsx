@@ -113,7 +113,7 @@ export function AccountsPage() {
   }
 
   return (
-    <AppShell title="帳戶">
+    <AppShell title="帳戶" backHref="/more">
       {!ready ? (
         <p className="text-sm text-[var(--muted)]">載入本機資料…</p>
       ) : (

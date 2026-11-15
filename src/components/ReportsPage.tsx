@@ -970,8 +970,8 @@ function DeltaCard({
     noPrevious || noCurrent || flat
       ? "text-[var(--muted)]"
       : good
-        ? "text-emerald-700"
-        : "text-rose-700";
+        ? "text-emerald-700 dark:text-emerald-400"
+        : "text-rose-700 dark:text-rose-400";
   const arrow = noPrevious || noCurrent || flat ? "－" : up ? "▲" : "▼";
 
   return (

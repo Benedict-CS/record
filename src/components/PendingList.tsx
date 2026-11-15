@@ -211,10 +211,10 @@ function GroupCard({
     group.kind === "hold" ? "退回" : group.kind === "split" ? "已還錢" : "銷帳";
   const actionColor =
     group.kind === "hold"
-      ? "bg-amber-100 text-amber-950"
+      ? "bg-amber-100 text-amber-950 dark:bg-amber-900/40 dark:text-amber-200"
       : group.kind === "split"
-        ? "bg-emerald-100 text-emerald-950"
-        : "bg-sky-100 text-sky-950";
+        ? "bg-emerald-100 text-emerald-950 dark:bg-emerald-900/40 dark:text-emerald-200"
+        : "bg-sky-100 text-sky-950 dark:bg-sky-900/40 dark:text-sky-200";
 
   const months = new Set(group.items.map((tx) => tx.date.slice(0, 7))).size;
   const span = months > 1 ? `${months} 個月` : `${group.items.length} 筆`;
