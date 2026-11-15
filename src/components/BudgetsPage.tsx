@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useBook } from "@/components/BookProvider";
 import { HoldStepButton } from "@/components/HoldStepButton";
@@ -85,11 +85,19 @@ export function BudgetsPage() {
   const today = todayLocal();
   const currentYear = Number(today.slice(0, 4));
   const currentMonthNum = Number(today.slice(5, 7));
-  const [scope, setScope] = useState<BudgetScope>("month");
+  const [scope, setScope] = useState<BudgetScope>("year");
   const [year, setYear] = useState(() => currentYear);
   const [month, setMonth] = useState(() => currentMonthNum);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [savingKey, setSavingKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const s = params.get("scope");
+    if (s === "month" || s === "year") {
+      setScope(s);
+    }
+  }, []);
 
   const targetMonth = scope === "year" ? 0 : month;
   const allBudgets = useAllBudgetsForYear(year);
@@ -386,8 +394,8 @@ export function BudgetsPage() {
           <div className="grid grid-cols-2 gap-1 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-1">
             {(
               [
-                { id: "month", label: "月預算" },
                 { id: "year", label: "年預算" },
+                { id: "month", label: "月預算" },
               ] as const
             ).map((option) => (
               <button
@@ -455,11 +463,6 @@ export function BudgetsPage() {
                 </span>
               ) : null}
             </p>
-            {treatTotal > 0 ? (
-              <p className="mt-1 text-xs font-medium text-violet-700 dark:text-violet-300">
-                含請客 {formatMoney(treatTotal, currency)}
-              </p>
-            ) : null}
             {summary.held > 0 ? (
               <p className="mt-1 text-xs text-[var(--muted)]">
                 另有暫時扣住{" "}
@@ -545,18 +548,7 @@ export function BudgetsPage() {
                   </p>
                 ) : null}
               </div>
-              {explicitOverallBudget ? (
-                <button
-                  type="button"
-                  disabled={savingKey === draftKey(null)}
-                  onClick={() => void saveBudget(null, "")}
-                  aria-label={scope === "year" ? "恢復自動計算年度總預算" : "恢復自動計算總預算"}
-                  className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2.5 py-1 text-xs text-[var(--muted)] hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-300 transition-colors active:scale-95"
-                  title="移除個別設定，恢復自動換算"
-                >
-                  {savingKey === draftKey(null) ? "…" : "恢復自動"}
-                </button>
-              ) : effectiveOverallBudget.isFallback &&
+              {effectiveOverallBudget.isFallback &&
               effectiveOverallBudget.amount > 0 &&
               !currentDraft(null) ? (
                 <button
@@ -592,7 +584,7 @@ export function BudgetsPage() {
                     ? `${formatMoney(effectiveOverallBudget.amount, currency)}（${effectiveOverallBudget.badgeText}）`
                     : "0"
                 }
-                className="min-h-11 min-w-0 flex-1 rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30"
+                className="min-h-11 min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2 outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30 text-sm"
               />
               <button
                 id="save-budget-overall"
@@ -600,7 +592,7 @@ export function BudgetsPage() {
                 disabled={savingKey === draftKey(null)}
                 onClick={() => void saveBudget(null)}
                 aria-label={scope === "year" ? "儲存年度總預算" : "儲存總預算"}
-                className="touch-target shrink-0 rounded-md bg-[var(--ink)] px-4 text-sm text-[var(--paper)] disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
+                className="touch-target shrink-0 rounded-xl bg-[var(--ink)] px-4 text-sm font-medium text-[var(--paper)] transition active:scale-[0.98] disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
               >
                 {savingKey === draftKey(null) ? "…" : "儲存"}
               </button>
@@ -705,18 +697,7 @@ export function BudgetsPage() {
                           </p>
                         ) : null}
                       </div>
-                      {explicit ? (
-                        <button
-                          type="button"
-                          disabled={savingKey === key}
-                          onClick={() => void saveBudget(category.id, "")}
-                          aria-label={`恢復自動計算 ${category.name} 預算`}
-                          className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2 py-1 text-xs text-[var(--muted)] hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-300 transition-colors active:scale-95"
-                          title="移除個別設定，恢復自動換算"
-                        >
-                          {savingKey === key ? "…" : "恢復自動"}
-                        </button>
-                      ) : effective.isFallback &&
+                      {effective.isFallback &&
                       effective.amount > 0 &&
                       !currentDraft(category.id) ? (
                         <button
@@ -760,7 +741,7 @@ export function BudgetsPage() {
                             ? `${formatMoney(effective.amount, currency)}（${effective.badgeText}）`
                             : "預算金額"
                         }
-                        className="min-h-11 min-w-0 flex-1 rounded-md border border-[var(--line)] bg-[var(--paper)] px-3 py-2 outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30"
+                        className="min-h-11 min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2 outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30 text-sm"
                       />
                       <button
                         id={`save-budget-${category.id}`}
@@ -768,7 +749,7 @@ export function BudgetsPage() {
                         disabled={savingKey === key}
                         onClick={() => void saveBudget(category.id)}
                         aria-label={`儲存 ${category.name} ${scope === "year" ? "年度" : ""}預算`}
-                        className="touch-target shrink-0 rounded-md bg-[var(--ink)] px-4 text-sm text-[var(--paper)] disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
+                        className="touch-target shrink-0 rounded-xl bg-[var(--ink)] px-4 text-sm font-medium text-[var(--paper)] transition active:scale-[0.98] disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
                       >
                         {savingKey === key ? "…" : "儲存"}
                       </button>

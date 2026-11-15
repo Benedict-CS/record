@@ -104,7 +104,7 @@ export function PeriodJump({
                   className={[
                     "min-h-11 rounded-xl text-sm font-medium",
                     selected
-                      ? "bg-[var(--accent)] text-[var(--surface)]"
+                      ? "bg-[var(--accent)] text-white font-semibold"
                       : "border border-[var(--line)] text-[var(--ink)]",
                   ].join(" ")}
                 >

@@ -223,7 +223,7 @@ export function AmountKeypad({
                   "min-h-12 rounded-xl border border-[var(--line)] text-xl font-medium text-[var(--ink)] active:scale-[0.98]",
                   wide ? "col-span-3" : "",
                   key === "clear"
-                    ? "bg-[var(--paper)] text-rose-700"
+                    ? "bg-[var(--paper)] text-rose-700 dark:text-rose-400"
                     : OP_KEYS.has(key)
                       ? "bg-[var(--paper)] text-[var(--accent)]"
                       : "bg-[var(--paper)]",

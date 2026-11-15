@@ -629,7 +629,9 @@ export function TransactionEditor({
               </div>
             ) : null}
 
-            {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+            {error ? (
+              <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>
+            ) : null}
 
             {canRelease ? (
               <button
@@ -647,7 +649,7 @@ export function TransactionEditor({
                 type="button"
                 disabled={marking}
                 onClick={() => void onMarkReimbursed()}
-                className="min-h-12 w-full rounded-xl border border-sky-700/30 bg-sky-50 px-4 py-2.5 text-sm font-medium text-sky-950 disabled:opacity-60"
+                className="min-h-12 w-full rounded-xl border border-sky-700/30 bg-sky-50 px-4 py-2.5 text-sm font-medium text-sky-950 dark:border-sky-800/40 dark:bg-sky-950/40 dark:text-sky-200 disabled:opacity-60"
               >
                 {marking ? "處理中…" : "銷帳（補助／退稅已收到）"}
               </button>
@@ -718,7 +720,7 @@ export function TransactionEditor({
                 ].join(" ")}
               >
                 <svg
-                  className="h-4 w-4 text-rose-700"
+                  className="h-4 w-4 text-rose-700 dark:text-rose-400"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"

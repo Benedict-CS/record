@@ -657,7 +657,7 @@ export function SearchPage() {
               <button
                 type="button"
                 onClick={() => void handleBatchDelete()}
-                className="inline-flex min-h-9 items-center rounded-xl border border-rose-200 bg-rose-50 px-3 text-xs font-medium text-rose-700 transition hover:bg-rose-100 active:scale-95"
+                className="inline-flex min-h-9 items-center rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/40 px-3 text-xs font-medium text-rose-700 dark:text-rose-300 transition hover:bg-rose-100 dark:hover:bg-rose-900/60 active:scale-95"
               >
                 批次刪除
               </button>

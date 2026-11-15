@@ -185,7 +185,7 @@ export function LoginPage() {
               </p>
             ) : null}
             {message ? (
-              <p className="text-sm text-emerald-700" role="status">
+              <p className="text-sm text-emerald-700 dark:text-emerald-400" role="status">
                 {message}
               </p>
             ) : null}

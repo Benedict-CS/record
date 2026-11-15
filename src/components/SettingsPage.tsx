@@ -72,7 +72,7 @@ export function SettingsPage() {
                       {accountLabel(user)}
                     </p>
                   </div>
-                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                  <span className="rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
                     已連線同步
                   </span>
                 </div>
@@ -103,7 +103,7 @@ export function SettingsPage() {
                     </p>
                   ) : null}
                   {passwordMessage ? (
-                    <p className="text-xs text-emerald-700" role="status">
+                    <p className="text-xs text-emerald-700 dark:text-emerald-400" role="status">
                       {passwordMessage}
                     </p>
                   ) : null}
@@ -127,7 +127,7 @@ export function SettingsPage() {
                   <div className="mt-2 text-center">
                     <Link
                       href="/delete-account"
-                      className="inline-flex min-h-11 items-center text-xs text-rose-700/80 underline-offset-2 hover:underline"
+                      className="inline-flex min-h-11 items-center text-xs text-rose-700/80 dark:text-rose-400/80 underline-offset-2 hover:underline"
                     >
                       刪除帳號
                     </Link>

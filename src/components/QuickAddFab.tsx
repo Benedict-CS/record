@@ -26,7 +26,7 @@ export function QuickAddFab() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="quick-add-fab fixed z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent)] text-2xl font-light leading-none text-[var(--paper)] shadow-lg shadow-[rgba(15,122,95,0.35)] transition active:scale-95"
+        className="quick-add-fab fixed z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent)] text-2xl font-light leading-none text-white shadow-lg shadow-[rgba(15,122,95,0.35)] transition active:scale-95"
         aria-label="記一筆"
         title="記一筆"
       >

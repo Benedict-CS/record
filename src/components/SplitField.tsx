@@ -293,7 +293,7 @@ export function SplitField({
               </span>
             </div>
             {settledSum > 0 ? (
-              <div className="flex items-center justify-between text-emerald-700">
+              <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-400">
                 <span>已收回／扣除</span>
                 <span className="tabular-nums font-medium">
                   -{formatMoney(settledSum, currency)}
@@ -317,7 +317,7 @@ export function SplitField({
           </div>
 
           {overBill ? (
-            <p className="text-xs text-rose-600">別人的份額加起來超過這筆總金額</p>
+            <p className="text-xs text-rose-600 dark:text-rose-400">別人的份額加起來超過這筆總金額</p>
           ) : null}
         </div>
       ) : null}

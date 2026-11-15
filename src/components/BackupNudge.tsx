@@ -52,7 +52,7 @@ export function BackupNudge() {
       aria-label="每月備份"
       className="flex min-h-11 min-w-0 flex-1 items-center gap-1 rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-2.5"
     >
-      <p className={`min-w-0 flex-1 truncate text-sm ${error ? "text-rose-700" : "text-[var(--ink)]"}`}>
+      <p className={`min-w-0 flex-1 truncate text-sm ${error ? "text-rose-700 dark:text-rose-400" : "text-[var(--ink)]"}`}>
         {error ?? "還沒備份"}
       </p>
       <button

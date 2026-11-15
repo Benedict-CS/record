@@ -654,7 +654,7 @@ export function RecurringPage({
             </label>
           ) : null}
 
-          {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+          {error ? <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}
           <button
             type="submit"
             disabled={saving}

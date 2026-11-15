@@ -66,8 +66,8 @@ export function MonthBudgetHint({
 
   return (
     <Link
-      href="/budgets"
-      className="block rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5"
+      href="/budgets?scope=month"
+      className="block rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 transition active:scale-[0.99]"
     >
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-xs font-medium text-[var(--ink)]">本月預算</p>

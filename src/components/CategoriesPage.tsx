@@ -315,7 +315,7 @@ export function CategoriesPage() {
               className={[
                 "min-h-12 shrink-0 rounded-2xl border px-4 text-sm font-medium",
                 sortMode
-                  ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--surface)]"
+                  ? "border-[var(--accent)] bg-[var(--accent)] text-white"
                   : "border-[var(--line)] bg-[var(--surface)] text-[var(--ink)]",
               ].join(" ")}
             >

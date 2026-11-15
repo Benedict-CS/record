@@ -400,10 +400,10 @@ export function HoldingsPage() {
               type="button"
               onClick={() => setKindFilter("all")}
               className={[
-                "min-h-11 shrink-0 rounded-full px-3 text-xs",
+                "min-h-11 shrink-0 rounded-full px-3.5 text-xs font-medium transition active:scale-95",
                 kindFilter === "all"
-                  ? "bg-[var(--accent)] text-white"
-                  : "bg-[var(--surface)] text-[var(--muted)]",
+                  ? "bg-[var(--accent)] text-white shadow-xs"
+                  : "border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--ink)]",
               ].join(" ")}
             >
               全部 {holdings.length}
@@ -417,10 +417,10 @@ export function HoldingsPage() {
                   type="button"
                   onClick={() => setKindFilter(item.id)}
                   className={[
-                    "min-h-11 shrink-0 rounded-full px-3 text-xs",
+                    "min-h-11 shrink-0 rounded-full px-3.5 text-xs font-medium transition active:scale-95",
                     kindFilter === item.id
-                      ? "bg-[var(--accent)] text-white"
-                      : "bg-[var(--surface)] text-[var(--muted)]",
+                      ? "bg-[var(--accent)] text-white shadow-xs"
+                      : "border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--ink)]",
                   ].join(" ")}
                 >
                   {item.label} {count}

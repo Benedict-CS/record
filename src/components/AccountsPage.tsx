@@ -241,7 +241,7 @@ export function AccountsPage() {
             <button
               type="button"
               onClick={() => void handleDelete(menuAccount)}
-              className="flex min-h-12 w-full items-center rounded-xl bg-[var(--paper)] px-4 text-sm font-medium text-rose-700"
+              className="flex min-h-12 w-full items-center rounded-xl bg-[var(--paper)] px-4 text-sm font-medium text-rose-700 dark:text-rose-400"
             >
               刪除
             </button>
