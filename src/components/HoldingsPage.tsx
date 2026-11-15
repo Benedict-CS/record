@@ -477,8 +477,8 @@ export function HoldingsPage() {
                                   ? maturityBadge.status === "overdue"
                                     ? "bg-rose-100 font-semibold text-rose-800 dark:bg-rose-950/40 dark:text-rose-300"
                                     : maturityBadge.status === "today"
-                                      ? "bg-amber-500 font-semibold text-white"
-                                      : "bg-amber-100 font-medium text-amber-900 border border-amber-200"
+                                      ? "bg-sky-600 font-semibold text-white"
+                                      : "bg-sky-100 dark:bg-sky-950/40 font-medium text-sky-900 dark:text-sky-200 border border-sky-200 dark:border-sky-800"
                                   : "border border-[var(--line)] bg-[var(--paper)] text-[var(--muted)]",
                               ].join(" ")}
                             >

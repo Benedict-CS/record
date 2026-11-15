@@ -246,7 +246,7 @@ export function HomePage() {
                     "min-h-11 rounded-xl text-xs font-medium",
                     typeFilter === id
                       ? id === "hold"
-                        ? "bg-amber-800 text-white"
+                        ? "bg-indigo-600 text-white"
                         : "bg-[var(--ink)] text-[var(--paper)]"
                       : "bg-[var(--surface)] text-[var(--muted)] border border-[var(--line)]",
                   ].join(" ")}

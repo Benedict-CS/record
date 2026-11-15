@@ -509,7 +509,7 @@ export function TransactionList({
                     : tx.type === "expense"
                       ? "text-rose-700 dark:text-rose-400"
                       : isHold
-                        ? "text-amber-700 dark:text-amber-200/80"
+                        ? "text-indigo-600 dark:text-indigo-400 font-semibold"
                         : "text-[var(--ink)]";
                 const category = tx.category_id
                   ? categoryMap[tx.category_id]
@@ -591,7 +591,7 @@ export function TransactionList({
                       </span>
                     ) : isHold ? (
                       <span
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-amber-500/10 text-[10px] font-medium text-amber-700 dark:text-amber-200/80"
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400"
                         aria-hidden
                       >
                         扣

@@ -58,22 +58,22 @@ export function MorePage() {
         {maturingHoldings.length > 0 ? (
           <Link
             href="/holdings"
-            className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-left transition active:bg-amber-100"
+            className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-sky-200/80 bg-sky-50/80 dark:border-sky-900/40 dark:bg-sky-950/20 px-4 py-3 text-left transition active:bg-sky-100 dark:active:bg-sky-950/40"
           >
             <div className="flex items-center gap-2.5 min-w-0">
               <span className="text-base shrink-0" aria-hidden>
                 ⏳
               </span>
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-amber-950">
+                <p className="text-xs font-semibold text-sky-950 dark:text-sky-100">
                   定存／合約到期提醒（{maturingHoldings.length} 筆）
                 </p>
-                <p className="truncate text-[11px] text-amber-800/90 dark:text-amber-300/90">
+                <p className="truncate text-[11px] text-sky-800/90 dark:text-sky-300">
                   {maturingHoldings[0].holding.name} {maturingHoldings[0].label}
                 </p>
               </div>
             </div>
-            <span className="shrink-0 text-xs font-medium text-amber-900">
+            <span className="shrink-0 text-xs font-medium text-sky-900 dark:text-sky-200">
               前往存款 ›
             </span>
           </Link>

@@ -279,7 +279,7 @@ export function CalendarPage() {
                         </span>
                       ) : null}
                       {bucket && bucket.held > 0 ? (
-                        <span className="block truncate text-[10px] tabular-nums leading-tight text-amber-700 dark:text-amber-200/80">
+                        <span className="block truncate text-[10px] tabular-nums leading-tight font-medium text-indigo-600 dark:text-indigo-400">
                           扣{compactMoney(bucket.held, currency)}
                         </span>
                       ) : null}

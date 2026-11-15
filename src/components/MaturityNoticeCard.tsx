@@ -16,20 +16,20 @@ export function MaturityNoticeCard({
   if (items.length === 0) return null;
 
   return (
-    <div className="rounded-2xl border border-amber-200/80 bg-amber-50/60 p-3.5 sm:p-4 text-[var(--ink)] shadow-2xs">
+    <div className="rounded-2xl border border-sky-200/80 bg-sky-50/60 dark:border-sky-900/40 dark:bg-sky-950/20 p-3.5 sm:p-4 text-[var(--ink)] shadow-2xs">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <span className="text-base" aria-hidden>
             ⏳
           </span>
-          <h2 className="text-sm font-semibold text-amber-950">
+          <h2 className="text-sm font-semibold text-sky-950 dark:text-sky-100">
             定存／合約到期提醒
           </h2>
-          <span className="rounded-full bg-amber-200/80 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+          <span className="rounded-full bg-sky-200/80 dark:bg-sky-900/60 px-2 py-0.5 text-[11px] font-semibold text-sky-900 dark:text-sky-200">
             {items.length}
           </span>
         </div>
-        <p className="text-[11px] text-amber-800/80 dark:text-amber-300/90">點選可查看明細</p>
+        <p className="text-[11px] text-sky-800/80 dark:text-sky-300">點選可查看明細</p>
       </div>
 
       <ul className="mt-2.5 space-y-1.5">
@@ -42,7 +42,7 @@ export function MaturityNoticeCard({
               <button
                 type="button"
                 onClick={() => onSelectHolding?.(holding)}
-                className="flex w-full items-center justify-between gap-2 rounded-xl border border-amber-200/60 bg-[var(--surface)] px-3 py-2 text-left transition hover:border-amber-400 active:bg-amber-50"
+                className="flex w-full items-center justify-between gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-left transition hover:border-sky-400 active:bg-sky-50 dark:active:bg-sky-950/30"
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-[var(--ink)]">
@@ -65,8 +65,8 @@ export function MaturityNoticeCard({
                       isOverdue
                         ? "bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300 font-semibold"
                         : isToday
-                          ? "bg-amber-500 text-white font-semibold"
-                          : "bg-amber-100/80 text-amber-900",
+                          ? "bg-sky-600 text-white font-semibold"
+                          : "bg-sky-100 dark:bg-sky-950/40 text-sky-900 dark:text-sky-200",
                     ].join(" ")}
                   >
                     {label}

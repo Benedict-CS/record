@@ -583,7 +583,7 @@ export function SearchPage() {
                 </div>
                 <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5">
                   <p className="text-[11px] text-[var(--muted)]">被扣住</p>
-                  <p className="mt-0.5 text-sm font-semibold tabular-nums text-amber-700 dark:text-amber-200/80">
+                  <p className="mt-0.5 text-sm font-semibold tabular-nums text-indigo-600 dark:text-indigo-400">
                     {formatMoney(totals.held, currency)}
                   </p>
                 </div>

@@ -211,7 +211,7 @@ function GroupCard({
     group.kind === "hold" ? "退回" : group.kind === "split" ? "已還錢" : "銷帳";
   const actionColor =
     group.kind === "hold"
-      ? "bg-amber-100 text-amber-950 dark:bg-amber-900/40 dark:text-amber-200"
+      ? "bg-indigo-100 text-indigo-950 dark:bg-indigo-900/40 dark:text-indigo-200"
       : group.kind === "split"
         ? "bg-emerald-100 text-emerald-950 dark:bg-emerald-900/40 dark:text-emerald-200"
         : "bg-sky-100 text-sky-950 dark:bg-sky-900/40 dark:text-sky-200";

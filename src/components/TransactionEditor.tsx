@@ -454,7 +454,7 @@ export function TransactionEditor({
 
           <div className="space-y-3">
             {isReleasedHold ? (
-              <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900/80">
+              <p className="rounded-xl border border-indigo-200/50 bg-indigo-50 px-3 py-2 text-xs leading-relaxed text-indigo-900/90 dark:border-indigo-800/40 dark:bg-indigo-950/40 dark:text-indigo-200">
                 這筆扣住已退回。金額與類型已鎖定；帳戶餘額已透過退回紀錄還原。
               </p>
             ) : null}
@@ -483,7 +483,7 @@ export function TransactionEditor({
                         ? "bg-rose-600 text-white"
                         : value === "income"
                           ? "bg-emerald-700 text-white"
-                          : "bg-amber-700 text-white"
+                          : "bg-indigo-600 text-white"
                       : "bg-[var(--paper)] text-[var(--muted)]",
                   ].join(" ")}
                 >
@@ -636,7 +636,7 @@ export function TransactionEditor({
                 type="button"
                 disabled={releasing}
                 onClick={() => void onRelease()}
-                className="min-h-12 w-full rounded-xl border border-amber-700/40 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-900 disabled:opacity-60"
+                className="min-h-12 w-full rounded-xl border border-indigo-600/40 bg-indigo-50 px-4 py-2.5 text-sm font-medium text-indigo-900 dark:border-indigo-800/40 dark:bg-indigo-950/40 dark:text-indigo-200 disabled:opacity-60"
               >
                 {releasing ? "處理中…" : "標記退回"}
               </button>

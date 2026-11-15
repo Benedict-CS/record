@@ -204,7 +204,7 @@ export function SplitField({
                     const next = drafts.map((d) => ({ ...d, settled: false }));
                     commit(next);
                   }}
-                  className="font-medium text-amber-800 dark:text-amber-400 hover:underline"
+                  className="font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
                 >
                   全部待還
                 </button>
@@ -254,7 +254,7 @@ export function SplitField({
                     "min-h-11 shrink-0 rounded-xl border px-2 text-xs font-medium transition-colors",
                     row.settled
                       ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:text-emerald-400 active:bg-emerald-100"
-                      : "border-amber-300 bg-amber-50 text-amber-900 active:bg-amber-100",
+                      : "border-indigo-300 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 active:bg-indigo-100",
                   ].join(" ")}
                   title={row.settled ? "已還款（點擊切換為待還）" : "待還款（點擊切換為已還）"}
                 >
@@ -301,7 +301,7 @@ export function SplitField({
               </div>
             ) : null}
             {pendingSum > 0 ? (
-              <div className="flex items-center justify-between text-amber-800 dark:text-amber-300">
+              <div className="flex items-center justify-between text-indigo-600 dark:text-indigo-400">
                 <span>待還款（將列入待處理）</span>
                 <span className="tabular-nums font-medium">
                   {formatMoney(pendingSum, currency)}

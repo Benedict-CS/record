@@ -21,7 +21,7 @@ const LABELS: Record<SyncUiStatus, string> = {
 
 const DOTS: Record<SyncUiStatus, string> = {
   offline: "bg-zinc-500",
-  syncing: "bg-amber-500 animate-pulse",
+  syncing: "bg-sky-500 animate-pulse",
   synced: "bg-emerald-600",
   error: "bg-rose-500",
   local: "bg-sky-500",
@@ -131,7 +131,7 @@ export function SyncBadge() {
           : status === "offline"
             ? "border-zinc-300 bg-zinc-100 text-zinc-800"
             : status === "syncing" || busy
-              ? "border-amber-200 bg-amber-50 text-amber-900"
+              ? "border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/40 text-sky-900 dark:text-sky-200"
               : "border-[var(--line)] bg-[var(--surface)] text-[var(--muted)]",
       ].join(" ")}
       title={
@@ -210,7 +210,7 @@ export function SyncBootBanner() {
       <p
         role="status"
         aria-live="polite"
-        className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-950"
+        className="rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/40 px-3 py-2 text-xs leading-relaxed text-sky-950 dark:text-sky-200"
       >
         正在載入雲端資料… 請稍候，同步完成後明細會自動出現。
       </p>
