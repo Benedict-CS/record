@@ -70,19 +70,19 @@ export function QuickTemplateBar() {
                   onClick={() => void onApply(template)}
                   aria-label={`用範本記一筆：${template.name}`}
                   className={[
-                    "flex min-h-11 flex-col justify-center rounded-full border px-3.5 py-1.5 text-left whitespace-nowrap disabled:opacity-60",
+                    "flex min-h-11 flex-col justify-center rounded-full border px-3.5 py-1.5 text-left whitespace-nowrap transition active:scale-95 disabled:opacity-60",
                     done
-                      ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--paper)]"
+                      ? "border-[var(--accent)] bg-[var(--accent)] text-white shadow-xs"
                       : "border-[var(--line)] bg-[var(--surface)] text-[var(--ink)]",
                   ].join(" ")}
                 >
                   <span className="text-sm font-medium">
-                    {done ? "已記錄" : template.name}
+                    {done ? "已記錄 ✓" : template.name}
                   </span>
                   <span
                     className={[
                       "text-xs tabular-nums",
-                      done ? "text-[var(--paper)]" : "text-[var(--muted)]",
+                      done ? "text-white/90" : "text-[var(--muted)]",
                     ].join(" ")}
                   >
                     {TYPE_SIGN[template.type]}

@@ -154,7 +154,7 @@ export function CategoryDetailSheet({
           </div>
         </div>
         {treatTotal > 0 ? (
-          <p className="border-b border-[var(--line)] px-4 py-2 text-xs text-violet-800 dark:text-violet-300">
+          <p className="border-b border-[var(--line)] px-4 py-2 text-xs text-rose-700 dark:text-rose-300">
             請客 {formatMoney(treatTotal, currency)} · {treatRows.length} 筆
             {restCount > 0
               ? `，其餘平均 ${formatMoney(restAverage, currency)}`
@@ -181,7 +181,7 @@ export function CategoryDetailSheet({
                       <p className="flex items-center gap-1.5 text-sm font-medium tabular-nums text-[var(--ink)]">
                         <span>{tx.date}</span>
                         {tx.tag === TREAT_TAG ? (
-                          <span className="rounded-md bg-violet-100 dark:bg-violet-950/60 px-1.5 py-0.5 text-[10px] font-medium text-violet-800 dark:text-violet-300">
+                          <span className="rounded-md border border-rose-200/60 bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-300">
                             請客
                           </span>
                         ) : null}

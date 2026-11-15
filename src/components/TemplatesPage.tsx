@@ -42,7 +42,7 @@ const TYPE_BADGE: Record<TransactionType, string> = {
   expense: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
   income: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
   transfer: "bg-[var(--paper)] text-[var(--muted)]",
-  hold: "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300",
+  hold: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
   invest: "bg-sky-50 text-sky-900 dark:bg-sky-950/40 dark:text-sky-300",
 };
 

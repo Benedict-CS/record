@@ -667,7 +667,7 @@ export function ReportsPage() {
                     占支出 {topExpense.percent.toFixed(1)}%
                   </p>
                   {topExpense.treatAmount ? (
-                    <p className="mt-1 text-xs font-medium text-violet-700 dark:text-violet-300">
+                    <p className="mt-1 text-xs font-medium text-rose-700 dark:text-rose-400">
                       含請客 {formatMoney(topExpense.treatAmount, currency)}
                     </p>
                   ) : null}
@@ -889,7 +889,7 @@ export function ReportsPage() {
                               {item.name}
                             </span>
                             {item.treatAmount ? (
-                              <span className="block truncate text-[10px] font-medium text-violet-700 dark:text-violet-300">
+                              <span className="block truncate text-[10px] font-medium text-rose-700 dark:text-rose-400">
                                 含請客 {formatMoney(item.treatAmount, currency)}
                               </span>
                             ) : null}

@@ -73,7 +73,7 @@ export function TodayPage() {
           <div className="grid grid-cols-2 gap-2">
             <Link
               href="/#quick-add"
-              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[var(--accent)] px-3 text-sm font-semibold text-[var(--surface)] active:scale-[0.98]"
+              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[var(--accent)] px-3 text-sm font-semibold text-white shadow-xs transition active:scale-[0.98]"
             >
               記一筆
             </Link>
@@ -114,7 +114,7 @@ export function TodayPage() {
                         income
                           ? "text-emerald-700 dark:text-emerald-400"
                           : hold
-                            ? "text-indigo-600 dark:text-indigo-400"
+                            ? "text-blue-600 dark:text-blue-400"
                             : "text-rose-700 dark:text-rose-400",
                       ].join(" ")}
                     >

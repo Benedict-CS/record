@@ -78,7 +78,7 @@ export function DayTransactionPanel({
                 <span>
                   {" "}
                   ·{" "}
-                  <span className="font-medium text-indigo-600 dark:text-indigo-400">
+                  <span className="font-medium text-blue-600 dark:text-blue-400">
                     扣住 {formatMoney(totals.held, currency)}
                   </span>
                 </span>

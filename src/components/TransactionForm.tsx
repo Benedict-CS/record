@@ -402,7 +402,7 @@ export function TransactionForm({
                     ? "bg-rose-600 text-white"
                     : value === "income"
                       ? "bg-emerald-700 text-white"
-                      : "bg-indigo-600 text-white"
+                      : "bg-blue-600 text-white"
                   : "bg-[var(--paper)] text-[var(--muted)]",
               ].join(" ")}
             >

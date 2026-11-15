@@ -454,7 +454,7 @@ export function TransactionEditor({
 
           <div className="space-y-3">
             {isReleasedHold ? (
-              <p className="rounded-xl border border-indigo-200/50 bg-indigo-50 px-3 py-2 text-xs leading-relaxed text-indigo-900/90 dark:border-indigo-800/40 dark:bg-indigo-950/40 dark:text-indigo-200">
+              <p className="rounded-xl border border-blue-200/60 bg-blue-50/80 px-3 py-2 text-xs leading-relaxed text-blue-950 dark:border-blue-800/40 dark:bg-blue-950/40 dark:text-blue-200">
                 這筆扣住已退回。金額與類型已鎖定；帳戶餘額已透過退回紀錄還原。
               </p>
             ) : null}
@@ -483,7 +483,7 @@ export function TransactionEditor({
                         ? "bg-rose-600 text-white"
                         : value === "income"
                           ? "bg-emerald-700 text-white"
-                          : "bg-indigo-600 text-white"
+                          : "bg-blue-600 text-white"
                       : "bg-[var(--paper)] text-[var(--muted)]",
                   ].join(" ")}
                 >
@@ -638,7 +638,7 @@ export function TransactionEditor({
                 type="button"
                 disabled={releasing}
                 onClick={() => void onRelease()}
-                className="min-h-12 w-full rounded-xl border border-indigo-600/40 bg-indigo-50 px-4 py-2.5 text-sm font-medium text-indigo-900 dark:border-indigo-800/40 dark:bg-indigo-950/40 dark:text-indigo-200 disabled:opacity-60"
+                className="min-h-12 w-full rounded-xl bg-blue-600 text-white px-4 py-2.5 text-sm font-semibold shadow-xs hover:bg-blue-700 active:scale-95 disabled:opacity-60 transition"
               >
                 {releasing ? "處理中…" : "標記退回"}
               </button>
@@ -649,7 +649,7 @@ export function TransactionEditor({
                 type="button"
                 disabled={marking}
                 onClick={() => void onMarkReimbursed()}
-                className="min-h-12 w-full rounded-xl border border-sky-700/30 bg-sky-50 px-4 py-2.5 text-sm font-medium text-sky-950 dark:border-sky-800/40 dark:bg-sky-950/40 dark:text-sky-200 disabled:opacity-60"
+                className="min-h-12 w-full rounded-xl bg-sky-600 text-white px-4 py-2.5 text-sm font-semibold shadow-xs hover:bg-sky-700 active:scale-95 disabled:opacity-60 transition"
               >
                 {marking ? "處理中…" : "銷帳（補助／退稅已收到）"}
               </button>

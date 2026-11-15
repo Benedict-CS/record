@@ -81,7 +81,7 @@ export function MorePage() {
               ? `${openItems.length} 筆待處理`
               : undefined,
           badgeColor:
-            "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300",
+            "bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 font-medium",
         },
         {
           href: "/search",

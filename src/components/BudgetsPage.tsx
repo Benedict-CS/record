@@ -68,7 +68,7 @@ function ProgressBar({
       />
       {timeRatio !== undefined && timeRatio > 0 && timeRatio < 1 ? (
         <div
-          className="absolute top-0 bottom-0 w-1 -ml-0.5 rounded-full bg-indigo-500 shadow-xs"
+          className="absolute top-0 bottom-0 w-1 -ml-0.5 rounded-full bg-amber-500 shadow-xs"
           style={{ left: `${Math.min(timeRatio * 100, 100)}%` }}
           title={`時間進度 ${Math.round(timeRatio * 100)}%`}
         />
@@ -466,7 +466,7 @@ export function BudgetsPage() {
             {summary.held > 0 ? (
               <p className="mt-1 text-xs text-[var(--muted)]">
                 另有暫時扣住{" "}
-                <span className="font-semibold tabular-nums text-indigo-600 dark:text-indigo-400">
+                <span className="font-semibold tabular-nums text-blue-600 dark:text-blue-400">
                   {formatMoney(summary.held, currency)}
                 </span>
                 ，不計入預算
@@ -486,7 +486,7 @@ export function BudgetsPage() {
                     {isCurrentPeriod ? (
                       <>
                         時間已過{" "}
-                        <span className="font-semibold text-indigo-600 dark:text-indigo-400 tabular-nums">
+                        <span className="font-semibold text-amber-600 dark:text-amber-400 tabular-nums">
                           {overallPacing.timePct}%
                         </span>
                         {" · 預算已用 "}
@@ -682,7 +682,7 @@ export function BudgetsPage() {
                           )}
                         </p>
                         {treat > 0 ? (
-                          <p className="mt-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">
+                          <p className="mt-0.5 text-xs font-medium text-rose-700 dark:text-rose-400">
                             含請客 {formatMoney(treat, currency)}
                           </p>
                         ) : null}

@@ -436,29 +436,31 @@ export function TransactionList({
                 </p>
                 <div className="flex shrink-0 items-center gap-1">
                   <p className="text-[11px] tabular-nums text-[var(--muted)]">
-                    {dayExpense > 0
-                      ? `花 ${formatMoney(dayExpense, currency)}`
-                      : null}
+                    {dayExpense > 0 ? (
+                      <span>花 {formatMoney(dayExpense, currency)}</span>
+                    ) : null}
                     {dayExpense > 0 && dayHeld > 0 ? " · " : null}
-                    {dayHeld > 0
-                      ? `扣 ${formatMoney(dayHeld, currency)}`
-                      : null}
-                    {(dayExpense > 0 || dayHeld > 0) && dayIncome > 0
-                      ? " · "
-                      : null}
-                    {dayIncome > 0
-                      ? `收 ${formatMoney(dayIncome, currency)}`
-                      : null}
+                    {dayHeld > 0 ? (
+                      <span className="font-medium text-blue-600 dark:text-blue-400">
+                        扣 {formatMoney(dayHeld, currency)}
+                      </span>
+                    ) : null}
+                    {(dayExpense > 0 || dayHeld > 0) && dayIncome > 0 ? " · " : null}
+                    {dayIncome > 0 ? (
+                      <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                        收 {formatMoney(dayIncome, currency)}
+                      </span>
+                    ) : null}
                   </p>
                   {onAddForDate ? (
                     <button
                       type="button"
-                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent)] active:bg-[color-mix(in_srgb,var(--accent)_24%,transparent)]"
+                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-sm font-medium text-[var(--accent)] transition-transform active:scale-90 hover:bg-[color-mix(in_srgb,var(--accent)_22%,transparent)]"
                       aria-label={`在 ${formatDayHeading(group.date)} 記一筆`}
                       title="記這一天"
                       onClick={() => onAddForDate(group.date)}
                     >
-                      <IconPlus className="h-[18px] w-[18px]" />
+                      <IconPlus className="h-4 w-4" />
                     </button>
                   ) : null}
                 </div>
@@ -509,7 +511,7 @@ export function TransactionList({
                     : tx.type === "expense"
                       ? "text-rose-700 dark:text-rose-400"
                       : isHold
-                        ? "text-indigo-600 dark:text-indigo-400 font-semibold"
+                        ? "text-blue-600 dark:text-blue-400 font-semibold"
                         : "text-[var(--ink)]";
                 const category = tx.category_id
                   ? categoryMap[tx.category_id]
@@ -520,7 +522,7 @@ export function TransactionList({
                         accountMap[tx.transfer_account_id ?? ""] ?? "帳戶"
                       }`
                     : isHold
-                      ? `扣住：${tx.note.trim() || "未命名"}`
+                      ? tx.note.trim() || "暫時扣住"
                       : tx.type === "invest"
                         ? tx.note.trim() || "定期定額"
                         : category?.name ?? TYPE_LABEL[tx.type];
@@ -584,17 +586,59 @@ export function TransactionList({
                     ) : null}
                     {tx.type === "transfer" ? (
                       <span
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--paper)] text-[10px] font-medium text-[var(--muted)]"
+                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-600 text-white shadow-2xs"
                         aria-hidden
+                        title="轉帳"
                       >
-                        轉
+                        <svg
+                          className="h-3.5 w-3.5 stroke-current stroke-2"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                          />
+                        </svg>
                       </span>
                     ) : isHold ? (
                       <span
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400"
+                        className={[
+                          "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full shadow-2xs transition-colors",
+                          holdReleased
+                            ? "border border-blue-200 dark:border-blue-800/50 bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400"
+                            : "bg-blue-600 text-white",
+                        ].join(" ")}
                         aria-hidden
+                        title={holdReleased ? "扣住已退回" : "暫時扣住"}
                       >
-                        扣
+                        {holdReleased ? (
+                          <svg
+                            className="h-3.5 w-3.5 stroke-current stroke-[2.2]"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        ) : (
+                          <svg
+                            className="h-3.5 w-3.5 stroke-current stroke-2"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <rect x="5" y="11" width="14" height="10" rx="2" />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M8 11V7a4 4 0 0 1 8 0v4"
+                            />
+                          </svg>
+                        )}
                       </span>
                     ) : (
                       <CategoryIcon
@@ -625,7 +669,7 @@ export function TransactionList({
                           {title}
                         </span>
                         {tx.tag === TREAT_TAG ? (
-                          <span className="shrink-0 rounded-md bg-violet-100 dark:bg-violet-950/60 px-1.5 py-0.5 text-[10px] font-medium text-violet-800 dark:text-violet-300">
+                          <span className="shrink-0 rounded-md border border-rose-200/60 bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-300">
                             請客
                           </span>
                         ) : null}
@@ -658,7 +702,7 @@ export function TransactionList({
                         {isHold && !holdReleased ? (
                           <button
                             type="button"
-                            className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-[var(--accent)] hover:underline active:opacity-70"
+                            className="mr-1 rounded-lg border border-blue-200 dark:border-blue-800/60 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:text-blue-300 transition hover:bg-blue-100 dark:hover:bg-blue-900/60 active:scale-95"
                             aria-label="已退回"
                             title="已退回"
                             onClick={() => void onRelease(tx)}
@@ -669,7 +713,7 @@ export function TransactionList({
                         {reimbPending ? (
                           <button
                             type="button"
-                            className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-sky-700 dark:text-sky-300 active:bg-sky-50 dark:active:bg-sky-950/40"
+                            className="mr-1 rounded-lg border border-sky-200 dark:border-sky-800/60 bg-sky-50 dark:bg-sky-950/60 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:text-sky-300 transition hover:bg-sky-100 dark:hover:bg-sky-900/60 active:scale-95"
                             aria-label="銷帳"
                             title="銷帳"
                             onClick={() => void onMarkReimbursed(tx)}
@@ -680,7 +724,7 @@ export function TransactionList({
                         {reimbReceived ? (
                           <button
                             type="button"
-                            className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-[var(--muted)] active:bg-[var(--paper)]"
+                            className="mr-1 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2 py-0.5 text-[11px] font-medium text-[var(--muted)] transition hover:text-[var(--ink)] active:scale-95"
                             aria-label="取消銷帳"
                             title="取消銷帳"
                             onClick={() => void onUndoReimbursed(tx)}
@@ -691,7 +735,7 @@ export function TransactionList({
                         {splitPendingRows.length === 1 ? (
                           <button
                             type="button"
-                            className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 active:bg-emerald-50"
+                            className="mr-1 rounded-lg border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 transition hover:bg-emerald-100 dark:hover:bg-emerald-900/60 active:scale-95"
                             aria-label={`${splitPendingRows[0].name} 已還`}
                             title={`標記 ${splitPendingRows[0].name} 已還款`}
                             onClick={() => void onSettleSplit(tx, splitPendingRows[0].name)}
@@ -701,7 +745,7 @@ export function TransactionList({
                         ) : splitPendingRows.length > 1 ? (
                           <button
                             type="button"
-                            className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 active:bg-emerald-50"
+                            className="mr-1 rounded-lg border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 transition hover:bg-emerald-100 dark:hover:bg-emerald-900/60 active:scale-95"
                             aria-label="分帳全還"
                             title="全部標記已還款"
                             onClick={() => void onSettleAllSplits(tx)}
@@ -711,7 +755,7 @@ export function TransactionList({
                         ) : isSplit && splitSettled > 0 ? (
                           <button
                             type="button"
-                            className="mr-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-[var(--muted)] active:bg-[var(--paper)]"
+                            className="mr-1 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2 py-0.5 text-[11px] font-medium text-[var(--muted)] transition hover:text-[var(--ink)] active:scale-95"
                             aria-label="重設分帳為待還"
                             title="重設分帳為待還"
                             onClick={() => void onResetAllSplits(tx)}

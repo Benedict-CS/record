@@ -210,32 +210,29 @@ function GroupCard({
   const actionLabel =
     group.kind === "hold" ? "退回" : group.kind === "split" ? "已還錢" : "銷帳";
   const actionColor =
-    group.kind === "hold"
-      ? "bg-indigo-100 text-indigo-950 dark:bg-indigo-900/40 dark:text-indigo-200"
-      : group.kind === "split"
-        ? "bg-emerald-100 text-emerald-950 dark:bg-emerald-900/40 dark:text-emerald-200"
-        : "bg-sky-100 text-sky-950 dark:bg-sky-900/40 dark:text-sky-200";
+    "bg-[var(--ink)] text-[var(--paper)] hover:opacity-90 active:scale-95 shadow-xs";
 
   const months = new Set(group.items.map((tx) => tx.date.slice(0, 7))).size;
-  const span = months > 1 ? `${months} 個月` : `${group.items.length} 筆`;
-  const detail =
-    group.kind === "hold"
-      ? `${span} · 暫時扣住`
-      : group.kind === "split"
-        ? `${span} · 待還款`
-        : `${span} · 待核銷`;
+  const span = months > 1 ? `${months} 個月 · ${group.items.length} 筆` : `${group.items.length} 筆`;
 
   const singleTx = group.items[0];
-  const singleNote = singleTx?.note?.trim();
+  const displayTitle = group.title.replace(/^扣住：/, "");
+  const badgeLabel =
+    group.kind === "hold"
+      ? "暫時扣住"
+      : group.kind === "split"
+        ? "待還款"
+        : "待核銷";
+  const badgeColor =
+    group.kind === "hold"
+      ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900"
+      : group.kind === "split"
+        ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900"
+        : "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-900";
+
   const singleSubtitle = singleTx
-    ? [
-        singleNote || null,
-        formatDayHeading(singleTx.date),
-        formatMoney(group.amount, currency),
-      ]
-        .filter(Boolean)
-        .join(" · ")
-    : formatMoney(group.amount, currency);
+    ? `${formatDayHeading(singleTx.date)}`
+    : "";
 
   function itemAmount(tx: Transaction): number {
     if (group.kind === "hold") return tx.amount;
@@ -259,43 +256,100 @@ function GroupCard({
   }
 
   return (
-    <li className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">
-      <div className="flex items-center gap-2 px-3 py-2.5">
+    <li className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)] transition hover:border-[var(--muted)]/40">
+      <div className="flex items-center gap-3 px-3.5 py-3">
+        <span
+          className={[
+            "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white shadow-2xs",
+            group.kind === "hold"
+              ? "bg-blue-600"
+              : group.kind === "split"
+                ? "bg-emerald-600"
+                : "bg-sky-600",
+          ].join(" ")}
+          aria-hidden
+        >
+          {group.kind === "hold" ? (
+            <svg
+              className="h-4 w-4 stroke-current stroke-2"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <rect x="5" y="11" width="14" height="10" rx="2" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M8 11V7a4 4 0 0 1 8 0v4"
+              />
+            </svg>
+          ) : group.kind === "split" ? (
+            <svg
+              className="h-4 w-4 stroke-current stroke-2"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+              />
+            </svg>
+          ) : (
+            <svg
+              className="h-4 w-4 stroke-current stroke-2"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+              />
+            </svg>
+          )}
+        </span>
         <button
           type="button"
           onClick={onToggle}
           className="min-w-0 flex-1 text-left"
           aria-expanded={expanded}
         >
-          <p className="truncate text-sm font-medium text-[var(--ink)]">{group.title}</p>
-          <p className="mt-0.5 text-[11px] text-[var(--muted)]">
-            {many ? (
-              <>
-                {detail}
-                {" · "}
-                <span className="tabular-nums">{formatMoney(group.amount, currency)}</span>
-              </>
-            ) : (
-              singleSubtitle
-            )}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <p className="truncate text-sm font-semibold text-[var(--ink)]">
+              {displayTitle}
+            </p>
+            <span
+              className={`inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium border ${badgeColor}`}
+            >
+              {badgeLabel}
+            </span>
+          </div>
+          <p className="mt-0.5 text-xs text-[var(--muted)]">
+            <span className="font-semibold tabular-nums text-[var(--ink)]">
+              {formatMoney(group.amount, currency)}
+            </span>
+            <span className="mx-1.5 opacity-50">·</span>
+            <span>{many ? span : singleSubtitle}</span>
           </p>
         </button>
-        {!many ? (
+        <div className="flex shrink-0 items-center gap-1.5">
+          {!many ? (
+            <button
+              type="button"
+              onClick={() => onView(group.items[0])}
+              className="inline-flex min-h-9 items-center rounded-xl border border-[var(--line)] bg-[var(--paper)] px-2.5 text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)] transition active:scale-95"
+            >
+              明細
+            </button>
+          ) : null}
           <button
             type="button"
-            onClick={() => onView(group.items[0])}
-            className="inline-flex min-h-10 shrink-0 items-center rounded-xl px-2 text-xs text-[var(--accent)] hover:underline"
+            onClick={handleAction}
+            className={`inline-flex min-h-9 items-center rounded-xl px-3.5 text-xs font-semibold shadow-xs transition active:scale-95 ${actionColor}`}
           >
-            看
+            {many ? `全部${actionLabel}` : actionLabel}
           </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={handleAction}
-          className={`inline-flex min-h-10 shrink-0 items-center rounded-xl px-3 text-xs font-medium ${actionColor}`}
-        >
-          {many ? `全部${actionLabel}` : actionLabel}
-        </button>
+        </div>
       </div>
       {expanded && many ? (
         <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
@@ -316,7 +370,7 @@ function GroupCard({
               <button
                 type="button"
                 onClick={() => handleActionOne(tx)}
-                className="inline-flex min-h-10 shrink-0 items-center rounded-xl px-3 text-xs font-medium text-[var(--muted)]"
+                className="inline-flex min-h-9 shrink-0 items-center rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2.5 text-xs font-medium text-[var(--ink)] transition active:scale-95"
               >
                 {actionLabel}
               </button>
