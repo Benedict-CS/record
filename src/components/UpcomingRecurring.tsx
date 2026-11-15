@@ -1,17 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useBook } from "@/components/BookProvider";
+import { useToast } from "@/components/ToastProvider";
 import { formatMoney, todayLocal } from "@/lib/format";
 import { useRecurringRules } from "@/lib/hooks/useLedgerData";
 import { nextUpcomingCharge, upcomingChargeLabel } from "@/lib/recurring";
+import { postDueRecurring } from "@/lib/db/recurring-post";
+import { runSync } from "@/lib/sync/engine";
+import type { RecurringRule } from "@/lib/types";
 
 export function UpcomingRecurring() {
-  const { book } = useBook();
+  const { book, bookId } = useBook();
   const rules = useRecurringRules();
+  const { show } = useToast();
   const today = todayLocal();
   const currency = book?.currency;
+  const [postingId, setPostingId] = useState<string | null>(null);
 
   const upcoming = useMemo(() => {
     return rules
@@ -33,43 +39,95 @@ export function UpcomingRecurring() {
       .slice(0, 4);
   }, [rules, today]);
 
+  // Auto-post due items when detected
+  useEffect(() => {
+    if (!bookId || upcoming.length === 0) return;
+    let cancelled = false;
+    void postDueRecurring(bookId, today).then((count) => {
+      if (!cancelled && count > 0) void runSync();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [bookId, today, upcoming.length]);
+
+  const handlePostNow = useCallback(
+    async (event: React.MouseEvent, rule: RecurringRule) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!bookId || postingId) return;
+      setPostingId(rule.id);
+      try {
+        const count = await postDueRecurring(bookId, today, rule.id);
+        void runSync();
+        if (count > 0) {
+          show(`已入帳 ${rule.name}`, { variant: "success" });
+        } else {
+          show(`${rule.name} 本期已入帳過`, { variant: "success" });
+        }
+      } catch (err) {
+        show(err instanceof Error ? err.message : "入帳失敗", {
+          variant: "error",
+        });
+      } finally {
+        setPostingId(null);
+      }
+    },
+    [bookId, today, postingId, show],
+  );
+
   if (upcoming.length === 0) return null;
 
   return (
-    <Link
-      href="/recurring"
-      className="block rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5"
-    >
+    <div className="rounded-2xl border border-amber-200/80 bg-amber-50/50 dark:border-amber-900/40 dark:bg-amber-950/20 p-3">
       <div className="flex items-baseline justify-between gap-2">
-        <p className="text-xs font-medium text-[var(--ink)]">今日固定扣款</p>
-        <p className="text-[11px] text-[var(--accent)]">每月固定 ›</p>
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+          <p className="text-xs font-semibold text-[var(--ink)]">今日固定扣款</p>
+        </div>
+        <Link
+          href="/recurring"
+          className="min-h-9 inline-flex items-center text-[11px] font-medium text-[var(--accent)] hover:underline active:scale-95"
+        >
+          每月固定 ›
+        </Link>
       </div>
-      <ul className="mt-1.5 space-y-0.5">
+      <ul className="mt-2 space-y-2">
         {upcoming.map(({ rule, next }) => (
           <li
             key={rule.id}
-            className="flex items-baseline justify-between gap-2 text-[11px]"
+            className="flex items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-xs"
           >
-            <span className="min-w-0 truncate text-[var(--muted)]">
-              {rule.name}
-              <span className="tabular-nums">
-                {" · "}
-                {formatMoney(rule.amount, currency)}
-              </span>
-            </span>
-            <span
-              className={[
-                "shrink-0 tabular-nums",
-                next.daysUntil <= 0
-                  ? "font-medium text-amber-800 dark:text-amber-300"
-                  : "text-[var(--ink)]",
-              ].join(" ")}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline gap-1.5">
+                <span className="truncate font-medium text-[var(--ink)]">
+                  {rule.name}
+                </span>
+                <span className="shrink-0 tabular-nums text-[var(--muted)]">
+                  {formatMoney(rule.amount, currency)}
+                </span>
+              </div>
+              {rule.last_error ? (
+                <p className="mt-0.5 text-[11px] text-rose-600 dark:text-rose-400 truncate">
+                  ⚠️ {rule.last_error}
+                </p>
+              ) : (
+                <p className="mt-0.5 text-[11px] text-amber-800 dark:text-amber-300">
+                  {upcomingChargeLabel(next.daysUntil)}
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              disabled={postingId === rule.id}
+              onClick={(e) => void handlePostNow(e, rule)}
+              className="shrink-0 min-h-9 min-w-[76px] rounded-xl bg-[var(--accent)] px-3 py-1.5 text-center text-xs font-medium text-white shadow-xs hover:opacity-90 active:scale-95 disabled:opacity-60"
             >
-              {upcomingChargeLabel(next.daysUntil)}
-            </span>
+              {postingId === rule.id ? "入帳中…" : rule.last_error ? "重試" : "立即入帳"}
+            </button>
           </li>
         ))}
       </ul>
-    </Link>
+    </div>
   );
 }

@@ -82,7 +82,7 @@ async function writeGenerated(
   },
 ) {
   const existing = await db.transactions.get(input.id);
-  if (existing) return;
+  if (existing && !existing.deleted_at) return;
   const reimbursable =
     input.type === "expense" &&
     rule.reimbursable_amount != null &&
@@ -90,6 +90,35 @@ async function writeGenerated(
       ? Math.min(rule.reimbursable_amount, input.amount)
       : null;
   const movesBank = input.type === "expense" || input.type === "income";
+
+  if (existing && existing.deleted_at) {
+    await db.transactions.update(input.id, {
+      deleted_at: null,
+      type: input.type,
+      amount: input.amount,
+      date: input.date,
+      note: input.note,
+      account_id: rule.account_id,
+      category_id: rule.category_id,
+      holding_id: null,
+      hold_status: input.type === "hold" ? "held" : null,
+      reimbursable_amount: reimbursable,
+      reimbursement_status: reimbursable ? "pending" : null,
+      target_holding_id: null,
+      tag: null,
+      updated_at: nowIso(),
+      client_id: getClientId(),
+      sync_status: "pending",
+    });
+    if (movesBank && rule.holding_id) {
+      await updateTransaction(input.id, {
+        amount: input.amount,
+        holding_id: rule.holding_id,
+      });
+    }
+    return;
+  }
+
   await createTransaction(rule.book_id, {
     id: input.id,
     type: input.type,
@@ -149,39 +178,8 @@ async function postInvest(rule: RecurringRule, period: string) {
   const [year, month] = period.split("-").map(Number);
   const id = recurringTransactionId(rule.id, period);
   const existing = await db.transactions.get(id);
-  if (!existing) {
-    const tx = {
-      id,
-      user_id: getOwnerId(),
-      updated_at: nowIso(),
-      deleted_at: null,
-      client_id: getClientId(),
-      sync_status: "pending" as const,
-      book_id: rule.book_id,
-      type: "invest" as const,
-      amount: rule.amount,
-      date: dueDate(year, month, rule.day_of_month),
-      note: rule.name,
-      account_id: rule.account_id,
-      category_id: null,
-      transfer_account_id: null,
-      hold_status: null,
-      release_transaction_id: null,
-      reimbursable_amount: null,
-      reimbursement_status: null,
-      holding_id: rule.holding_id,
-      tag: null,
-      target_holding_id: rule.target_holding_id,
-    };
-    await db.transaction("rw", db.transactions, db.holdings, async () => {
-      await applyInvestMove({
-        bookId: rule.book_id,
-        sourceId: rule.holding_id!,
-        targetId: rule.target_holding_id!,
-        amount: rule.amount,
-      });
-      await db.transactions.add(tx);
-    });
+  if (!existing || existing.deleted_at) {
+    await alignInvest(rule, id, dueDate(year, month, rule.day_of_month));
   }
   await markRule(rule, { last_posted: period, last_error: null });
 }
@@ -190,9 +188,10 @@ async function postInvest(rule: RecurringRule, period: string) {
 export async function postDueRecurring(
   bookId: string,
   today = todayIso(),
+  ruleId?: string,
 ): Promise<number> {
   const rules = (await db.recurring_rules.where("book_id").equals(bookId).toArray())
-    .filter((row) => !row.deleted_at);
+    .filter((row) => !row.deleted_at && (!ruleId || row.id === ruleId));
   let posted = 0;
   for (const rule of rules) {
     const periods = periodsDue({

@@ -111,8 +111,38 @@ export function RecurringPage({
   const [holdingId, setHoldingId] = useState("");
   const [targetId, setTargetId] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [postingRuleId, setPostingRuleId] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!bookId) return;
+    let cancelled = false;
+    void postDueRecurring(bookId).then((count) => {
+      if (!cancelled && count > 0) void runSync();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [bookId]);
+
+  async function handlePostSingle(rule: RecurringRule) {
+    if (!bookId || postingRuleId) return;
+    setPostingRuleId(rule.id);
+    try {
+      const posted = await postDueRecurring(bookId, todayLocal(), rule.id);
+      void runSync();
+      if (posted > 0) {
+        show(`已入帳 ${rule.name}`, { variant: "success" });
+      } else {
+        show(`${rule.name} 本期已入帳過`, { variant: "success" });
+      }
+    } catch (err) {
+      show(err instanceof Error ? err.message : "入帳失敗", { variant: "error" });
+    } finally {
+      setPostingRuleId(null);
+    }
+  }
   const rememberedAccount = useRememberedAccount(bookId);
   const rememberedHolding = useRememberedHolding(bookId);
   const chosenAccountId = preferredStoredId(
@@ -677,18 +707,26 @@ export function RecurringPage({
                       <p className="mt-1 text-xs text-rose-700">{rule.last_error}</p>
                     ) : null}
                   </div>
-                  <div className="flex shrink-0 gap-3">
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handlePostSingle(rule)}
+                      disabled={postingRuleId === rule.id}
+                      className="min-h-9 rounded-lg bg-[var(--accent)]/10 px-2.5 py-1 text-xs font-medium text-[var(--accent)] hover:bg-[var(--accent)]/20 active:scale-95 disabled:opacity-60"
+                    >
+                      {postingRuleId === rule.id ? "入帳中…" : rule.last_error ? "重試" : "立即入帳"}
+                    </button>
                     <button
                       type="button"
                       onClick={() => beginEdit(rule)}
-                      className="text-xs text-[var(--accent)]"
+                      className="min-h-9 px-1 text-xs text-[var(--accent)] active:scale-95"
                     >
                       編輯
                     </button>
                     <button
                       type="button"
                       onClick={() => void onDelete(rule)}
-                      className="text-xs text-rose-700"
+                      className="min-h-9 px-1 text-xs text-rose-700 dark:text-rose-400 active:scale-95"
                     >
                       停止
                     </button>

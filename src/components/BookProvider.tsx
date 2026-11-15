@@ -13,7 +13,7 @@ import {
 import { liveQuery } from "dexie";
 import { listBooks } from "@/lib/db/crud";
 import { postDueRecurring } from "@/lib/db/recurring-post";
-import { runSync } from "@/lib/sync/engine";
+import { runSync, subscribeSyncStatus } from "@/lib/sync/engine";
 import { getOwnerId, readActiveBookId, writeActiveBookId } from "@/lib/db/owner";
 import { ensureSeedData } from "@/lib/db/seed";
 import type { Book } from "@/lib/types";
@@ -140,11 +140,47 @@ export function BookProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!ready || !bookId) return;
     let cancelled = false;
-    void postDueRecurring(bookId).then((count) => {
-      if (!cancelled && count > 0) void runSync();
+
+    const triggerPost = () => {
+      if (cancelled) return;
+      void postDueRecurring(bookId).then((count) => {
+        if (!cancelled && count > 0) void runSync();
+      });
+    };
+
+    // 1. Initial run on book ready
+    triggerPost();
+
+    // 2. Window focus and visibility changes (e.g. mobile PWA wakes up from background)
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        triggerPost();
+      }
+    };
+    const onFocus = () => triggerPost();
+    const onOnline = () => triggerPost();
+
+    window.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("online", onOnline);
+
+    // 3. Cloud sync listener: when cloud sync completes pulling rules, auto-post due items
+    const unsubSync = subscribeSyncStatus((status) => {
+      if (status === "synced") {
+        triggerPost();
+      }
     });
+
+    // 4. Periodic check every 60s for day rollover while keeping the app open
+    const interval = window.setInterval(triggerPost, 60_000);
+
     return () => {
       cancelled = true;
+      window.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", onOnline);
+      unsubSync();
+      window.clearInterval(interval);
     };
   }, [ready, bookId]);
 
